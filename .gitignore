@@ -25,6 +25,7 @@ apps/api/prisma/*.db-journal
 
 # Internal clean-room inputs. These references are not public product assets.
 references/
+release-artifacts/
 
 # Original handoff inventories become stale once development starts.
 checksums.sha256

@@ -72,6 +72,15 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 
 `.github/workflows/ci.yml` 会在 push/PR 时执行类型检查、单元测试、默认集成测试和构建；`container-images.yml` 在 `main`、`v*` Tag 或手动触发时将 API/Web 镜像发布到 GitHub Container Registry。GitHub 负责代码、CI/CD 与镜像，真正的常驻运行仍需 Linux 主机或兼容的容器平台。
 
+发布源码包不要压缩整个工作目录。先确保工作区已提交且干净，再运行：
+
+```powershell
+pnpm security:secrets
+pnpm release:archive
+```
+
+归档脚本只从当前 Git commit 取已跟踪文件，并拒绝 `.env`、依赖、构建产物、缓存、测试报告和内部 `references/`；产物写入被忽略的 `release-artifacts/`。CI 也会对每次 push/PR 执行同一高置信 Secret 扫描与 frozen-lockfile 安装。
+
 ## 环境变量
 
 `.env.example` 是本地开发模板，`.env.production.example` 是单机容器部署模板；两者都不包含真实 Secret：

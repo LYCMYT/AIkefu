@@ -145,6 +145,7 @@
 - V1 transport mutex 仍是单 API 进程互斥；多副本部署需 DB / Redis fencing token 或平台幂等协议。
 - 未接入真实电商平台私有 API、Cookie、Token、真实账号或原产品代码；所有平台事件与数据均为合成 Mock。
 - 已新增单机生产风格 `docker-compose.prod.yml`、API/Web Dockerfile、Nginx 同源 `/api`/`/ws` 反代、Secret 模板与 GitHub Actions/GHCR 流程；不把公网主机尚未选定误报为已在线部署。
+- Release Hygiene 已新增跨平台 tracked-file Secret 扫描与 `git archive` 白名单源码包脚本；CI 在 frozen install 前后执行可重复门禁，归档拒绝 `.env`、依赖、构建产物、测试报告与内部参考材料。
 
 ## Release
 - [x] Docker Compose 一键启动
