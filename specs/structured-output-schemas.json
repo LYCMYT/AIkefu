@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI Structured Output Schemas",
+  "$defs": {
+    "IntentTask": {
+      "type": "object",
+      "required": [
+        "intent",
+        "riskLevel",
+        "requiredContext",
+        "requiredTools"
+      ],
+      "properties": {
+        "intent": {
+          "type": "string",
+          "enum": [
+            "FAQ_QUERY",
+            "PRODUCT_QUERY",
+            "INVENTORY_QUERY",
+            "SIZE_RECOMMENDATION",
+            "SHIPPING_POLICY",
+            "ORDER_QUERY",
+            "LOGISTICS_QUERY",
+            "AFTER_SALES_QUERY",
+            "REFUND_REQUEST",
+            "EXCHANGE_REQUEST",
+            "PRODUCT_RECOMMENDATION",
+            "HUMAN_REQUEST",
+            "COMPLAINT",
+            "UNKNOWN"
+          ]
+        },
+        "riskLevel": {
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ]
+        },
+        "requiredContext": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "enum": [
+              "PRODUCT",
+              "SKU",
+              "ORDER",
+              "LOGISTICS",
+              "AFTER_SALES",
+              "CUSTOMER_MEMORY"
+            ]
+          }
+        },
+        "requiredKnowledge": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "STORE",
+              "PRODUCT"
+            ]
+          }
+        },
+        "requiredTools": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "GET_PRODUCT",
+              "GET_INVENTORY",
+              "GET_ORDER",
+              "GET_LOGISTICS",
+              "GET_AFTER_SALES",
+              "TRANSFER_HUMAN",
+              "ADD_ORDER_REMARK",
+              "PROPOSE_COMPENSATION"
+            ]
+          }
+        },
+        "dependsOnTaskIndex": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "IntentPlan": {
+      "type": "object",
+      "required": [
+        "tasks"
+      ],
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/IntentTask"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": false
+    },
+    "RiskResult": {
+      "type": "object",
+      "required": [
+        "riskLevel",
+        "reasons",
+        "recommendedMode"
+      ],
+      "properties": {
+        "riskLevel": {
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8
+        },
+        "recommendedMode": {
+          "enum": [
+            "AUTO",
+            "ASSIST",
+            "MANUAL"
+          ]
+        },
+        "sensitiveIntent": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ImageAnalysis": {
+      "type": "object",
+      "required": [
+        "scene",
+        "observations",
+        "confidence",
+        "requiresHuman"
+      ],
+      "properties": {
+        "scene": {
+          "enum": [
+            "PRODUCT_DAMAGE",
+            "PRODUCT_APPEARANCE",
+            "SHIPPING_LABEL",
+            "ORDER_SCREENSHOT",
+            "UNRELATED",
+            "UNKNOWN"
+          ]
+        },
+        "observations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "containsPII": {
+          "type": "boolean"
+        },
+        "recommendedIntent": {
+          "type": "string"
+        },
+        "requiresHuman": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "KnowledgeCandidate": {
+      "type": "object",
+      "required": [
+        "question",
+        "answer",
+        "scope",
+        "candidateType",
+        "shouldCreate"
+      ],
+      "properties": {
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "scope": {
+          "enum": [
+            "STORE",
+            "PRODUCT"
+          ]
+        },
+        "productId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "candidateType": {
+          "enum": [
+            "NEW_KNOWLEDGE",
+            "FACTUAL_CORRECTION",
+            "KNOWLEDGE_ENRICHMENT"
+          ]
+        },
+        "shouldCreate": {
+          "type": "boolean"
+        },
+        "rejectionReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "containsTemporaryCommitment": {
+          "type": "boolean"
+        },
+        "containsPII": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConversationSummary": {
+      "type": "object",
+      "required": [
+        "narrativeSummary",
+        "activeTopic",
+        "resolvedFacts",
+        "openQuestions",
+        "deprecatedFacts"
+      ],
+      "properties": {
+        "narrativeSummary": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "activeTopic": {
+          "type": "string"
+        },
+        "activeProductId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activeOrderId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resolvedFacts": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "value",
+              "sourceMessageId"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {},
+              "sourceMessageId": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "ACTIVE",
+                  "SUPERSEDED"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "openQuestions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12
+        },
+        "deprecatedFacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20
+        }
+      },
+      "additionalProperties": false
+    },
+    "ActionProposal": {
+      "type": "object",
+      "required": [
+        "type",
+        "riskLevel",
+        "targetEntityType",
+        "targetEntityId",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "MARK_READ",
+            "CREATE_INTERNAL_TASK",
+            "TRANSFER_HUMAN",
+            "ADD_ORDER_REMARK",
+            "PROPOSE_COMPENSATION",
+            "REFUND",
+            "EXCHANGE"
+          ]
+        },
+        "riskLevel": {
+          "enum": [
+            "READ",
+            "LOW_WRITE",
+            "MEDIUM_WRITE",
+            "HIGH_RISK"
+          ]
+        },
+        "targetEntityType": {
+          "type": "string"
+        },
+        "targetEntityId": {
+          "type": "string"
+        },
+        "payload": {
+          "type": "object"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "evidenceIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "QualityReview": {
+      "type": "object",
+      "required": [
+        "relevance",
+        "completeness",
+        "groundedness",
+        "tone",
+        "risk",
+        "result"
+      ],
+      "properties": {
+        "relevance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "completeness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "groundedness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "tone": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "risk": {
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ]
+        },
+        "result": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NEEDS_HUMAN"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "schemas": {
+    "IntentPlan": {
+      "$ref": "#/$defs/IntentPlan"
+    },
+    "RiskResult": {
+      "$ref": "#/$defs/RiskResult"
+    },
+    "ImageAnalysis": {
+      "$ref": "#/$defs/ImageAnalysis"
+    },
+    "KnowledgeCandidate": {
+      "$ref": "#/$defs/KnowledgeCandidate"
+    },
+    "ConversationSummary": {
+      "$ref": "#/$defs/ConversationSummary"
+    },
+    "ActionProposal": {
+      "$ref": "#/$defs/ActionProposal"
+    },
+    "QualityReview": {
+      "$ref": "#/$defs/QualityReview"
+    }
+  }
+}

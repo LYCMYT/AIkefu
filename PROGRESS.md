@@ -1,0 +1,164 @@
+# 开发进度
+
+## Phase 01｜基础工程与多租户骨架
+- [x] Monorepo 初始化（React/Vite、NestJS、contracts、core、mock-douyin）
+- [x] PostgreSQL / Redis / MinIO Docker Compose 与 PostgreSQL extension 初始化
+- [x] Workspace 自动创建、Reset、24h 无访问过期清理
+- [x] Seed 数据导入（2 店 / 4 Buyer / 10 Product / 10 Order / 80 Knowledge / 2 Workflow）
+- [x] 基础 REST / WebSocket（Workspace 鉴权、定时复核、心跳）
+- [x] Workspace / Tenant / Shop 隔离测试
+
+### Phase 01 验证记录（2026-08-26）
+
+- 状态：实现完成并通过当前环境 Gate；已按用户持续执行指令进入后续阶段。
+- `pnpm typecheck`：通过。
+- `pnpm test:unit`：2 suites / 3 tests 通过。
+- `pnpm test:integration`：2 suites / 7 tests 通过。
+- `pnpm build`：API、Web、contracts、core、mock-douyin 全部通过。
+- `prisma validate`：通过；Migration 为 `20260826120000_phase_01_foundation`。
+- 覆盖：A/B Workspace 隔离、Reset A 不影响 B、无 token 拒绝、伪造 shopId 拒绝、Seed 重复 Reset 幂等、过期清理、WS 鉴权/心跳/过期断开。
+
+### Phase 01 已知问题 / 风险
+
+- 2026-08-27 重启后 Docker Desktop Linux engine 已正常运行；PostgreSQL / pgvector、Redis、MinIO 三个 Compose 服务均为 healthy，18 个 Prisma migration 已实际 deploy，Workspace 隔离/Reset/过期清理已在真实 PostgreSQL integration 中复验。
+- Redis 与 MinIO 在本阶段只完成基础设施定义；队列和附件业务按冻结路线留到后续 Phase。
+- 当前交接目录不是 Git repository，因此没有创建 Phase 01 commit。
+- 未接入任何真实电商平台私有接口、Cookie、Token、真实账号或原产品代码；`MockDouyin` 仅包含无凭据 capability descriptor，消息能力留到 Phase 02。
+
+## Phase 02｜消息管线与客服工作台
+- [x] MockDouyinAdapter
+- [x] Message Normalize / Deduplicate
+- [x] 1 秒 Reorder Buffer
+- [x] Persistent TurnBuffer（2 秒 / 5 秒）
+- [x] Buyer Simulator
+- [x] Workbench 实时消息
+- [x] Conversation / Message 状态
+
+### Phase 02 验证记录（2026-08-27）
+
+- 状态：代码与当前可运行 Gate 完成；已自动进入 Phase 03。
+- `pnpm typecheck`：5 个工作区包全部通过。
+- `pnpm test:unit`：17 tests 通过（Core 10、MockDouyin 3、Web 3、API 1）。
+- `pnpm test:integration`：3 suites / 15 tests 通过。
+- `pnpm build`：API、Web、contracts、core、mock-douyin 全部通过。
+- `prisma validate` / `prisma generate`：通过；Migration 为 `20260827120000_phase_02_message_workbench`，已与 Phase 01 → 当前 Schema 的 diff 复核一致。
+- 浏览器验收：`/workbench` 桌面与 390×844 窄屏、`/buyer-simulator` 390×844 窄屏均完成加载、错误态和横向溢出检查；无 API 时显示可恢复错误态。
+- 覆盖：Message 去重与有序提交、1 秒缺口降级与一次 Reconcile、2 秒/5 秒 TurnBuffer、重启恢复、迟到消息独立 Turn、编辑/撤回上下文失效、商品/订单卡上下文回退、Workspace/店铺/Buyer 隔离、REST 快照与 Workspace-scoped WS、Mock Adapter 凭据拒绝。
+
+### Phase 02 已知问题 / 环境复验项
+
+- Docker/Redis/BullMQ 已在真实连接态运行；Outbox、Receipt、`DISPATCHING` 回收、TurnBuffer 与 ReplyJob 消费均通过真实基础设施 integration。无 Redis 时仍保留同进程调度降级。
+- 未接入任何真实电商平台私有接口、Cookie、Token、真实账号或原产品代码；所有消息和卡片事件均由合成 `MockDouyinAdapter` 产生。
+
+## Phase 03｜知识、商品学习与 AI
+- [x] 商品同步和 ProductContext
+- [x] ProductLearningJob
+- [x] Excel / CSV 知识导入
+- [x] Knowledge Version / Index Status
+- [x] Hybrid RAG
+- [x] AI Runtime 与 Structured Output
+- [x] Conversation Memory / Summary / Facts
+- [x] Attachment 生命周期、合成识图与 Context Sanitizer
+- [x] KnowledgeCandidate / KnowledgeConflict 显式治理
+- [x] 独立审查 Hardening：最终只读复审 PASS，无可复现 P0 / P1
+
+### Phase 03 验证记录（2026-08-27）
+
+- 状态：实现、全仓 Gate 与 Terra max 独立只读复审全部通过；已自动进入 Phase 04。
+- `pnpm typecheck`：5 个工作区包全部通过。
+- `pnpm test:unit`：187 tests 通过（Core 31、MockDouyin 3、Web 8、API 145）。
+- `pnpm test:integration`：5 suites / 17 tests 通过；另 1 suite / 3 个真实基础设施测试按显式环境开关跳过。
+- `pnpm build`：API、Web、contracts、core、mock-douyin 全部通过。
+- `prisma validate` / `prisma generate`：通过；Migration 为 `20260828120000_phase_03_knowledge_ai` 与 `20260828130000_phase_03_attachment_intent`，包含 pgvector `vector(1536)` + HNSW/trigram、Candidate / Conflict、ConversationMemory、Attachment durable intent、AIInvocation / AIUsage / AIInvocationEvidence。
+- OpenAPI / WebSocket 契约：59 paths / 52 schemas / 135 refs / 0 missing；23 events / 3 typed bindings。
+- Phase 03 Eval：冻结 Case 01 / 02 / 03 / 20 / 21 的确定性断言 5/5 通过。
+- 浏览器验收：使用合成 QA API 检查 `/admin/products`、`/admin/knowledge` 完整数据态及知识导入对话框；桌面和 390×844 窄屏均无页面级横向溢出。无 API 时两页均显示可恢复 Foundation 错误态。
+- 覆盖：Workspace / Tenant / Shop / Product 硬过滤、CSV / XLSX 预览与逐行独立事务、Import / ProductLearning 租约和崩溃恢复、READY 原子版本切换、软删除、TopK ≤ 3、BM25 + pgvector 融合、动态库存/价格/订单/物流/预售承诺在 Import / RAG / ProductLearning 三入口禁入、持久化 Evidence、Candidate / Conflict 显式治理与历史版本 winner 防护、ConversationMemory late/edit/recall 同事务 DIRTY + DB 扫描/CAS 重建、附件 durable intent / 会话 CAS / 解码与 15 天清理 / PII 清洗、图片默认本地分析且仅服务端精确 opt-in 可外发、Knowledge/Product/Usage WS 事件。
+
+### Phase 03 已知问题 / 环境复验项
+
+- Phase 03 Migration、pgvector/HNSW、PostgreSQL-backed 检索、MinIO 上传/签名下载/删除与 Redis 队列已在本机真实基础设施中复验通过；浏览器也已连接同一真实 Workspace API。
+- AI Runtime 与 Embedding 均提供显式服务器端 Provider Gateway 配置边界，并以确定性离线 Provider 做无凭据回退；已验证非协作 Provider 强制超时、重试一次、fallback 一次、结构化修复一次、失败关闭、熔断、PII/Secret 清洗、Invocation/Usage/Evidence 持久化。当前未提供外部模型凭据，因此真实模型、真实 embedding 与真实图片多模态仍是外部复验项，不冒充已通过。
+- 未接入任何真实电商平台私有接口、Cookie、Token、真实账号或原产品代码；商品、知识、图片与 Eval 数据全部为合成数据。
+- 独立审查登记 3 项非阻断 P2：pgvector SQL 前推 ENABLED / activeVersion 过滤、XLSX 解压炸弹资源限制、Memory DIRTY 扫描 lease / backoff / 稳定排序；不阻断 Phase 04，将在后续可靠性/发布硬化中处理。
+
+## Phase 04｜人机协同与可靠性
+- [x] Context Resolver（Card / 明确文本优先、动态 Product/SKU/Order、持久化两轮 ClarificationBundle）
+- [x] TaskBundle（最多 4 Task、READ 并行、Partial / Blocking / Coalescing）
+- [x] AUTO / ASSIST / MANUAL（Shop ceiling、override、DEGRADED、humanActive、风险只能收紧）
+- [x] AI Draft + Human Final（5 分钟 TTL、Edit Type、Receipt 后可见投影）
+- [x] CustomerMemory 人工维护（Workspace / Tenant / Shop / Buyer scope、PII/动态事实禁入、过期过滤）
+- [x] KnowledgeCandidate（人工事实纠正与 Human Final 同一 durable boundary）
+- [x] SendGuard（message / sequence / contextVersion / humanActive / mode / forbidden term / idempotency）
+- [x] ProcessingOutbox / SendOutbox（Receipt、CANCELLED、SENT、UNCERTAIN、重复防护）
+- [x] Recovery Worker（ReplyJob、SendOutbox、TurnBuffer、ProcessingOutbox、Receipt projection）
+- [x] Scheduled welcome / closing message（尾游标、BUYER-only Turn、恢复与取消）
+
+### Phase 04 验证记录（2026-08-27）
+
+- 状态：实现、当前环境全仓 Gate 与 Terra max 独立只读复审全部通过；P0 / P1 为 0，已自动进入 Phase 05。
+- `pnpm typecheck`：5 个工作区包全部通过。
+- `pnpm test:unit`：309 tests 通过（Core 51、MockDouyin 3、Web 23、API 232）。
+- `pnpm test:integration`：6 suites / 32 tests 通过；另 2 suites / 7 个真实基础设施测试按显式环境开关跳过。
+- `pnpm build`：API、Web、contracts、core、mock-douyin 全部通过。
+- `prisma validate` / `prisma generate`：通过；新增 Phase 04 migrations：Reply reliability、Draft、SendOutbox、CustomerMemory、clarification rounds、transport fence。
+- Case 04～10 production-service reliability harness：15/15 通过。覆盖三消息单 Turn/单 Job、生成中补消息与偏远地区知识、双 Buyer 并行、双店 Evidence 隔离、多订单两轮澄清后转人工、ASSIST/Human Final/Candidate/takeover/resume、GENERATING 恢复与 SENDING→UNCERTAIN 无重发。
+- AppModule：真实 `tsc` CJS 构建产物 DI compile 通过；MessageApplication、SendOutbox、Control、Runtime、Invalidation 共用同一 `ConversationTransportMutex` singleton。
+- 覆盖：动态库存/订单事实不走 RAG、实体选择与更新互斥、失效后幂等 replan、AUTO READY + SendOutbox 原子提交、旧 Job 关联 AI Outbox 取消/纵深校验、Mock transport 与上下文 writer 线性化、AI 回执投影为 `ASSISTANT`。
+
+### Phase 04 已知问题 / 环境复验项
+
+- 当前 V1 的 transport mutex 是单 API 进程内互斥；多 API 副本部署前需增加 DB / Redis fencing token 或平台幂等协议。当前冻结范围不声称多实例生产级线性化。
+- ProcessingOutbox / Scheduled Message 的 `DISPATCHING` 回收阈值为 1 秒，健康慢 worker 可能被重复投递；下游 receipt / idempotency 阻止重复效果。后续可升级 lease heartbeat 或更长 TTL。
+- CustomerMemory disable 的 `{id,status}` 回执已在 Phase 05 统一为显式 contract union，Web 按旧实体合并状态；Phase 04 登记的 DTO P2 已关闭。
+- `phase04.real-infra.integration-spec.ts` 已在真实 PostgreSQL / Redis 环境运行通过。外部模型凭据仍未配置，默认使用确定性离线 Provider；这不阻塞本地 V1 Demo。
+- 未接入任何真实电商平台私有接口、Cookie、Token、真实账号或原产品代码；所有 transport、库存、订单、Buyer、知识与图片均为合成 Mock 数据。
+
+## Phase 05｜Workflow、质量与展示
+- [x] Workflow Engine
+- [x] Human Approval
+- [x] Manual Quality Review
+- [x] Reply Incident / Regression Eval
+- [x] Developer Trace
+- [x] Scenario Lab 8 场景
+- [x] 数据看板 / AI Usage
+- [x] 10 个 Demo Case 当前环境生产服务链门禁通过
+
+### Phase 05 验证记录（2026-08-27）
+
+- 状态：Phase 05 V1 实现与当前环境 Gate 完成；未扩大真实平台、多人客服、生产 SLA 等冻结外范围。
+- `pnpm typecheck`：5 个工作区包全部通过。
+- `pnpm test:unit`：432 tests 通过（Contracts 6、Core 55、MockDouyin 3、Web 56、API 312）。
+- `pnpm test:integration`：11 suites / 45 tests 全部通过，包含真实 PostgreSQL / pgvector / Redis / MinIO / BullMQ opt-in suites。
+- `RUN_REAL_INFRA_E2E=1 pnpm test:e2e`：真实连接态 3/3 通过；4 条离线 Foundation 降级专用用例按互斥环境设计跳过。
+- `pnpm build`：API、Web、contracts、core、mock-douyin 全部通过；构建后 `AppModule` Nest DI compile 通过。
+- `prisma validate` / `prisma generate`：通过；Phase 05 迁移覆盖 Workflow / Proposal / Quality / Incident / Eval / Correction Receipt / Retention Privacy。
+- Workflow：8 节点图验证、不可变发布版本、Router、TaskResult→唯一 Composer、Approval/Proposal、Recovery、canonical WS 事件与可视化编辑器已闭环。
+- 质量/事故/Trace：Manual Quality Review、AI Judge fail-closed、Incident 修正回执、36 个固定 Eval Case、MESSAGE / USER_TURN / SEND_GUARD / SEND_RECEIPT 四链 Trace 聚合与递归脱敏已完成。
+- Scenario / Demo Cases：Case 01～10 的当前环境生产服务 harness 通过。Case 07 两店并发真实走 `ReplyRuntimeService → KnowledgeService → ReplyEvidence → TraceService`，KnowledgeItem / Version / Evidence / Trace 无跨店引用。
+- 展示/隐私：`/admin` 真实 Workspace 概览、`/admin/shops`、`/admin/privacy`、15/45/90 天保留策略与 Workspace-scoped Delete Customer Data 已完成；无数据时不伪造 KPI。
+
+### Phase 05 已知环境复验项
+
+- Docker / WSL2 环境已打通，PostgreSQL / pgvector、Redis、MinIO、BullMQ、全部 migration、45 个 integration 与真实连接态浏览器 E2E 均已实际运行通过。
+- 未配置外部模型或 embedding 凭据；AI、Embedding 与图片默认使用离线/本地 Provider。外部模型是可选扩展，不属于默认本地 V1 Demo 的完成前提。
+- V1 transport mutex 仍是单 API 进程互斥；多副本部署需 DB / Redis fencing token 或平台幂等协议。
+- 未接入真实电商平台私有 API、Cookie、Token、真实账号或原产品代码；所有平台事件与数据均为合成 Mock。
+- 已新增单机生产风格 `docker-compose.prod.yml`、API/Web Dockerfile、Nginx 同源 `/api`/`/ws` 反代、Secret 模板与 GitHub Actions/GHCR 流程；不把公网主机尚未选定误报为已在线部署。
+
+## Release
+- [x] Docker Compose 一键启动
+- [x] README 启动说明
+- [x] 当前环境自动测试通过
+- [ ] 在线部署
+- [ ] 3 分钟演示脚本验证
+
+### Release 环境验证记录（2026-08-27）
+
+- Docker Desktop 29.7.2 / WSL2 已运行，Compose 中 PostgreSQL、Redis、MinIO 均为 `healthy`。
+- 18 个 Prisma migrations 已真实部署；`prisma generate`、`prisma validate`、全仓 build 与 typecheck 通过。
+- 432 unit、45 real-infra integration、3 real-infra Playwright E2E 通过。
+- 应用已常驻启动：Web `http://localhost:5173`、API `http://localhost:3000`；应用内浏览器确认 `API READY · 实时已连接`。
+- Scenario Lab 八个固定合成场景已从真实浏览器界面逐一运行并全部 `SUCCEEDED`。
+- 独立生产验证项目的 Web/API/PostgreSQL/pgvector/Redis/MinIO 5 容器全部 `healthy`；18 migrations、`/healthz`、SPA fallback、同源 REST Workspace 创建、Socket.IO heartbeat、Redis 密码与 Nginx 安全响应头实测通过。验证容器/网络/卷已定向清理，本地开发栈保留。
+- 当前总进度：44 / 46（95.7%）。剩余在线部署与完整 3 分钟人工走台；均不扩大 V1，也不接真实电商私有接口。

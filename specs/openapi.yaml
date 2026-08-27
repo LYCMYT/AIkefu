@@ -1,0 +1,2983 @@
+openapi: 3.1.0
+info:
+  title: AI Customer Service Demo API
+  version: 1.0.0
+  description: >
+    Frozen V1 API draft for the Web-first e-commerce AI customer service demo.
+    All endpoints are scoped to an anonymous Demo Workspace.
+servers:
+  - url: /api
+security:
+  - DemoWorkspaceToken: []
+
+tags:
+  - name: Workspace
+  - name: Shops
+  - name: Products
+  - name: Knowledge
+  - name: Conversations
+  - name: Buyer Simulator
+  - name: Attachments
+  - name: Workflows
+  - name: Quality
+  - name: Incidents
+  - name: Trace
+  - name: Usage
+  - name: Scenarios
+  - name: Privacy
+
+paths:
+  /demo/workspaces:
+    post:
+      tags: [Workspace]
+      security: []
+      summary: Create an anonymous demo workspace
+      responses:
+        "201":
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceSession"
+
+  /demo/workspaces/current:
+    get:
+      tags: [Workspace]
+      summary: Get current workspace
+      responses:
+        "200":
+          description: Current workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+
+  /demo/workspaces/current/reset:
+    post:
+      tags: [Workspace]
+      summary: Reset current workspace to seed state
+      responses:
+        "202":
+          description: Reset accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /bootstrap:
+    get:
+      tags: [Workspace]
+      summary: Get bootstrap snapshot for current UI
+      responses:
+        "200":
+          description: Bootstrap payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bootstrap"
+
+  /shops:
+    get:
+      tags: [Shops]
+      summary: List shops
+      responses:
+        "200":
+          description: Shops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shop"
+    post:
+      tags: [Shops]
+      summary: Add a demo shop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, templateKey]
+              properties:
+                platform:
+                  type: string
+                  enum: [DOUYIN_DEMO]
+                templateKey:
+                  type: string
+      responses:
+        "201":
+          description: Shop created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+
+  /shops/{shopId}:
+    parameters:
+      - $ref: "#/components/parameters/ShopId"
+    get:
+      tags: [Shops]
+      summary: Get a shop
+      responses:
+        "200":
+          description: Shop
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+    patch:
+      tags: [Shops]
+      summary: Update mutable shop fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated shop
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+
+  /shops/{shopId}/ai-mode:
+    parameters:
+      - $ref: "#/components/parameters/ShopId"
+    patch:
+      tags: [Shops]
+      summary: Change shop AI ceiling mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode:
+                  $ref: "#/components/schemas/ShopAIMode"
+      responses:
+        "200":
+          description: Updated shop
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+
+  /shops/{shopId}/settings:
+    parameters:
+      - $ref: "#/components/parameters/ShopId"
+    get:
+      tags: [Shops]
+      summary: Get shop settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShopSettings"
+    put:
+      tags: [Shops]
+      summary: Replace shop settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShopSettingsInput"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShopSettings"
+
+  /shops/{shopId}/products:
+    parameters:
+      - $ref: "#/components/parameters/ShopId"
+    get:
+      tags: [Products]
+      summary: List products for shop
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+
+  /shops/{shopId}/products/sync:
+    parameters:
+      - $ref: "#/components/parameters/ShopId"
+    post:
+      tags: [Products]
+      summary: Sync dynamic product facts from MockDouyinAdapter
+      responses:
+        "202":
+          description: Product sync accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductSyncResult"
+
+  /shops/{shopId}/dynamic-facts/products/{productId}/skus/{skuId}/inventory:
+    parameters:
+      - $ref: "#/components/parameters/ShopId"
+      - $ref: "#/components/parameters/ProductId"
+      - $ref: "#/components/parameters/SkuId"
+    patch:
+      tags: [Scenarios]
+      summary: Update synthetic SKU inventory for Scenario Lab
+      description: >
+        Mock-only dynamic-fact mutation. This endpoint updates the fixed
+        MockDouyinAdapter state and never connects to a real platform or
+        consumes platform credentials.
+      x-demo-only: true
+      x-synthetic: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DynamicFactInventoryCommand"
+      responses:
+        "202":
+          description: Synthetic inventory mutation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DynamicFactMutationAccepted"
+
+  /shops/{shopId}/dynamic-facts/orders/{orderId}/status:
+    parameters:
+      - $ref: "#/components/parameters/ShopId"
+      - $ref: "#/components/parameters/OrderId"
+    patch:
+      tags: [Scenarios]
+      summary: Update synthetic order status for Scenario Lab
+      description: >
+        Mock-only dynamic-fact mutation. Status is restricted to the fixed
+        demo order lifecycle and never reaches a real platform.
+      x-demo-only: true
+      x-synthetic: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DynamicFactOrderStatusCommand"
+      responses:
+        "202":
+          description: Synthetic order status mutation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DynamicFactMutationAccepted"
+
+  /shops/{shopId}/product-learning-jobs:
+    parameters:
+      - $ref: "#/components/parameters/ShopId"
+    post:
+      tags: [Products]
+      summary: Start or retry a shop-scoped product learning job
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductLearningInput"
+      responses:
+        "202":
+          description: Product learning job accepted or current job snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductLearningJob"
+    get:
+      tags: [Products]
+      summary: List product learning jobs for a shop
+      responses:
+        "200":
+          description: Product learning job snapshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductLearningJob"
+
+  /products/{productId}/learn:
+    parameters:
+      - $ref: "#/components/parameters/ProductId"
+    post:
+      tags: [Products]
+      summary: Force product learning through its shop-scoped job
+      parameters:
+        - in: query
+          name: shopId
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Product learning job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductLearningJob"
+
+  /products/{productId}/mock-state:
+    parameters:
+      - $ref: "#/components/parameters/ProductId"
+    patch:
+      tags: [Products]
+      summary: Update mock product state for admin or scenario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                inventoryBySku:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                status:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /knowledge:
+    get:
+      tags: [Knowledge]
+      summary: List active and historical knowledge
+      parameters:
+        - in: query
+          name: shopId
+          schema:
+            type: string
+        - in: query
+          name: productId
+          schema:
+            type: string
+        - in: query
+          name: scope
+          schema:
+            type: string
+            enum: [STORE, PRODUCT]
+        - in: query
+          name: businessStatus
+          schema:
+            $ref: "#/components/schemas/KnowledgeBusinessStatus"
+      responses:
+        "200":
+          description: Knowledge items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeItem"
+    post:
+      tags: [Knowledge]
+      summary: Create manual knowledge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeCreateInput"
+      responses:
+        "201":
+          description: Knowledge created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeItem"
+
+  /knowledge/{knowledgeId}:
+    parameters:
+      - $ref: "#/components/parameters/KnowledgeId"
+    patch:
+      tags: [Knowledge]
+      summary: Create a new version of knowledge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeUpdateInput"
+      responses:
+        "202":
+          description: New version indexing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeRevisionResult"
+    delete:
+      tags: [Knowledge]
+      summary: Soft delete knowledge
+      parameters:
+        - in: query
+          name: shopId
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Soft deleted
+
+  /knowledge/{knowledgeId}/reindex:
+    parameters:
+      - $ref: "#/components/parameters/KnowledgeId"
+    post:
+      tags: [Knowledge]
+      summary: Retry knowledge indexing
+      parameters:
+        - in: query
+          name: shopId
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Reindex accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeVersion"
+
+  /knowledge/imports:
+    post:
+      tags: [Knowledge]
+      summary: Upload Excel or CSV knowledge file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [shopId, file]
+              properties:
+                shopId:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "202":
+          description: Import job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeImportAccepted"
+
+  /knowledge/imports/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      tags: [Knowledge]
+      summary: Get import preview and status
+      responses:
+        "200":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeImportJob"
+
+  /knowledge/imports/{importId}/commit:
+    parameters:
+      - $ref: "#/components/parameters/ImportId"
+    post:
+      tags: [Knowledge]
+      summary: Commit the valid rows of a previewed knowledge import
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                shopId: { type: string }
+      responses:
+        "201":
+          description: Import committed with row outcomes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeImportJob"
+
+  /knowledge/search:
+    post:
+      tags: [Knowledge]
+      summary: Search scoped knowledge with Hybrid RAG
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeSearchInput"
+      responses:
+        "200":
+          description: Retrieval status and evidence snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSearchResult"
+
+  /knowledge/candidates:
+    get:
+      tags: [Knowledge]
+      summary: List knowledge candidates
+      parameters:
+        - in: query
+          name: shopId
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Candidates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeCandidate"
+
+  /knowledge/candidates/{candidateId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/CandidateId"
+    post:
+      tags: [Knowledge]
+      summary: Approve candidate and create knowledge
+      parameters:
+        - in: query
+          name: shopId
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Candidate approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /knowledge/candidates/{candidateId}/reject:
+    parameters:
+      - $ref: "#/components/parameters/CandidateId"
+    post:
+      tags: [Knowledge]
+      summary: Reject candidate
+      parameters:
+        - in: query
+          name: shopId
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Rejected
+
+  /knowledge/conflicts:
+    get:
+      tags: [Knowledge]
+      summary: List knowledge conflicts
+      parameters:
+        - in: query
+          name: shopId
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conflicts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeConflict"
+
+  /knowledge/conflicts/{conflictId}:
+    parameters:
+      - in: path
+        name: conflictId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Knowledge]
+      summary: Get one scoped knowledge conflict with immutable version snapshots
+      responses:
+        "200":
+          description: Conflict detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeConflict"
+
+  /knowledge/conflicts/{conflictId}/resolve:
+    parameters:
+      - in: path
+        name: conflictId
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Knowledge]
+      summary: Resolve a conflict
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution]
+              properties:
+                shopId:
+                  type: string
+                resolution:
+                  type: string
+                  enum: [KEEP_LEFT, KEEP_RIGHT, MERGE, CUSTOM]
+                customQuestion:
+                  type: string
+                customAnswer:
+                  type: string
+      responses:
+        "202":
+          description: Resolution accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /conversations:
+    get:
+      tags: [Conversations]
+      summary: List conversations
+      parameters:
+        - in: query
+          name: shopId
+          schema:
+            type: string
+        - in: query
+          name: state
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationSummary"
+
+  /conversations/{conversationId}:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    get:
+      tags: [Conversations]
+      summary: Get complete conversation snapshot
+      responses:
+        "200":
+          description: Conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationSnapshot"
+
+  /conversations/{conversationId}/mode:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    post:
+      tags: [Conversations]
+      summary: Change conversation override mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId, mode]
+              properties:
+                shopId:
+                  type: string
+                mode:
+                  $ref: "#/components/schemas/ConversationMode"
+      responses:
+        "202":
+          description: Mode change accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationControlResult"
+
+  /conversations/{conversationId}/reply/regenerate:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    post:
+      tags: [Conversations]
+      summary: Regenerate an ASSIST draft from current state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId]
+              properties:
+                shopId:
+                  type: string
+      responses:
+        "202":
+          description: Regeneration accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /conversations/{conversationId}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    post:
+      tags: [Conversations]
+      summary: Send a human message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId, text]
+              properties:
+                shopId:
+                  type: string
+                text:
+                  type: string
+                  maxLength: 2000
+                sourceDraftId:
+                  type: string
+                editType:
+                  $ref: "#/components/schemas/ReplyDraftEditType"
+      responses:
+        "202":
+          description: Human message accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HumanFinalAccepted"
+
+  /conversations/{conversationId}/takeover:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    post:
+      tags: [Conversations]
+      summary: Put current conversation in MANUAL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId]
+              properties:
+                shopId:
+                  type: string
+      responses:
+        "202":
+          description: Takeover accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationControlResult"
+
+  /conversations/{conversationId}/resume-ai:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    post:
+      tags: [Conversations]
+      summary: Explicitly resume AI for current conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId]
+              properties:
+                shopId:
+                  type: string
+      responses:
+        "202":
+          description: AI resume accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationControlResult"
+
+  /buyers/{buyerId}/memories:
+    parameters:
+      - $ref: "#/components/parameters/BuyerId"
+    get:
+      tags: [Conversations]
+      summary: List customer memories
+      parameters:
+        - in: query
+          name: shopId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Memories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomerMemory"
+    post:
+      tags: [Conversations]
+      summary: Manually create customer memory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerMemoryInput"
+      responses:
+        "201":
+          description: Memory created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerMemory"
+
+  /memories/{memoryId}:
+    parameters:
+      - in: path
+        name: memoryId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Conversations]
+      summary: Update customer memory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerMemoryInput"
+      responses:
+        "200":
+          description: Memory updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerMemory"
+    delete:
+      tags: [Conversations]
+      summary: Delete customer memory
+      parameters:
+        - in: query
+          name: shopId
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  /memories/{memoryId}/disable:
+      parameters:
+        - in: path
+          name: memoryId
+          required: true
+          schema: { type: string }
+      post:
+        tags: [Conversations]
+        summary: Disable customer memory without deleting its audit record
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerMemoryDisableInput"
+        responses:
+          "200":
+            description: Memory disabled
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: "#/components/schemas/CustomerMemory"
+                    - $ref: "#/components/schemas/CustomerMemoryStatusResult"
+
+  /buyers/{buyerId}/customer-data:
+    parameters:
+      - $ref: "#/components/parameters/BuyerId"
+    delete:
+      tags: [Privacy]
+      summary: Delete and anonymize customer data
+      description: >
+        Deletes or anonymizes customer data in the current anonymous Demo Workspace.
+        The operation removes conversation content, attachments, CustomerMemory and
+        related KnowledgeCandidate records, anonymizes identifiable Buyer and order
+        fields, and preserves only non-identifying aggregates and minimal audit facts.
+        No platform credentials or private platform data are accepted by this route.
+      x-demo-only: true
+      responses:
+        "200":
+          description: Customer data deletion completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDataDeletionResult"
+
+  /buyer/messages:
+    post:
+      tags: [Buyer Simulator]
+      summary: Send a buyer message into MockDouyinAdapter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuyerMessageInput"
+      responses:
+        "202":
+          description: Message accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /buyer/messages/{messageId}:
+    parameters:
+      - $ref: "#/components/parameters/MessageId"
+    patch:
+      tags: [Buyer Simulator]
+      summary: Edit a buyer message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+      responses:
+        "202":
+          description: Edit accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /buyer/messages/{messageId}/recall:
+    parameters:
+      - $ref: "#/components/parameters/MessageId"
+    post:
+      tags: [Buyer Simulator]
+      summary: Recall a buyer message
+      responses:
+        "202":
+          description: Recall accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /buyer/cards/product:
+    post:
+      tags: [Buyer Simulator]
+      summary: Send a product card
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId, buyerId, productId]
+              properties:
+                shopId:
+                  type: string
+                buyerId:
+                  type: string
+                productId:
+                  type: string
+      responses:
+        "202":
+          description: Product card accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /buyer/cards/order:
+    post:
+      tags: [Buyer Simulator]
+      summary: Send an order card
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId, buyerId, orderId]
+              properties:
+                shopId:
+                  type: string
+                buyerId:
+                  type: string
+                orderId:
+                  type: string
+      responses:
+        "202":
+          description: Order card accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /attachments:
+    post:
+      tags: [Attachments]
+      summary: Upload an image attachment
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [shopId, buyerId, file]
+              properties:
+                shopId:
+                  type: string
+                buyerId:
+                  type: string
+                conversationId:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Attachment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+
+  /attachments/{attachmentId}/signed-url:
+    parameters:
+      - in: path
+        name: attachmentId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: shopId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Attachments]
+      summary: Create a short-lived signed URL
+      responses:
+        "200":
+          description: Signed URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, expiresAt]
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                  expiresAt:
+                    type: string
+                    format: date-time
+
+  /attachments/{attachmentId}:
+    parameters:
+      - in: path
+        name: attachmentId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: shopId
+        required: true
+        schema:
+          type: string
+    delete:
+      tags: [Attachments]
+      summary: Delete an attachment in the selected shop
+      responses:
+        "200":
+          description: Attachment deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+
+  /workflows:
+    parameters:
+      - in: query
+        name: shopId
+        required: false
+        description: Optional shop scope for shop-bound workflow definitions.
+        schema: { type: string }
+    get:
+      tags: [Workflows]
+      summary: List workflows
+      responses:
+        "200":
+          description: Workflows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Workflow"
+    post:
+      tags: [Workflows]
+      summary: Create a workflow draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+      responses:
+        "201":
+          description: Workflow created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+
+  /workflows/{workflowId}:
+    parameters:
+      - $ref: "#/components/parameters/WorkflowId"
+    get:
+      tags: [Workflows]
+      summary: Get one workflow and its current draft/active version
+      responses:
+        "200":
+          description: Workflow snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /workflows/{workflowId}/draft:
+    parameters:
+      - $ref: "#/components/parameters/WorkflowId"
+    put:
+      tags: [Workflows]
+      summary: Save workflow draft graph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkflowGraph"
+      responses:
+        "200":
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+
+  /workflows/{workflowId}/publish:
+    parameters:
+      - $ref: "#/components/parameters/WorkflowId"
+    post:
+      tags: [Workflows]
+      summary: Validate and publish a new immutable workflow version
+      responses:
+        "201":
+          description: Published version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowVersion"
+
+  /workflows/{workflowId}/enable:
+    parameters:
+      - $ref: "#/components/parameters/WorkflowId"
+    post:
+      tags: [Workflows]
+      summary: Enable a published workflow
+      responses:
+        "202":
+          description: Enable operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /workflows/{workflowId}/disable:
+    parameters:
+      - $ref: "#/components/parameters/WorkflowId"
+    post:
+      tags: [Workflows]
+      summary: Disable a workflow
+      responses:
+        "202":
+          description: Disable operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /workflows/{workflowId}/test-run:
+    parameters:
+      - $ref: "#/components/parameters/WorkflowId"
+    post:
+      tags: [Workflows]
+      summary: Run workflow against synthetic context
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversationId]
+              properties:
+                conversationId:
+                  type: string
+      responses:
+        "202":
+          description: Test run accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /workflow-runs:
+    parameters:
+      - in: query
+        name: workflowId
+        required: false
+        schema: { type: string }
+      - in: query
+        name: conversationId
+        required: false
+        schema: { type: string }
+      - in: query
+        name: status
+        required: false
+        schema:
+          type: string
+          enum: [PENDING, RUNNING, WAITING_APPROVAL, RECOVERING, COMPLETED, FAILED, STALE, CANCELLED]
+    get:
+      tags: [Workflows]
+      summary: List workflow runs
+      responses:
+        "200":
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkflowRun"
+
+  /workflow-runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      tags: [Workflows]
+      summary: Get one immutable workflow run with node runs
+      responses:
+        "200":
+          description: Workflow run snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowRun"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /action-proposals/{proposalId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/ProposalId"
+    post:
+      tags: [Workflows]
+      summary: Approve proposal, revalidate, then execute
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveActionProposalInput"
+      responses:
+        "202":
+          description: Approval accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /action-proposals/{proposalId}/reject:
+    parameters:
+      - $ref: "#/components/parameters/ProposalId"
+    post:
+      tags: [Workflows]
+      summary: Reject proposal
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectActionProposalInput"
+      responses:
+        "202":
+          description: Rejection operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /quality/reviews:
+    parameters:
+      - in: query
+        name: conversationId
+        required: false
+        schema: { type: string }
+    get:
+      tags: [Quality]
+      summary: List manual quality reviews
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QualityReview"
+    post:
+      tags: [Quality]
+      summary: Manually start a conversation quality review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversationId]
+              properties:
+                conversationId:
+                  type: string
+      responses:
+        "202":
+          description: Review accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /quality/reviews/{reviewId}:
+    parameters:
+      - $ref: "#/components/parameters/ReviewId"
+    get:
+      tags: [Quality]
+      summary: Get one quality review snapshot
+      responses:
+        "200":
+          description: Quality review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QualityReview"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /quality/reviews/{reviewId}/conclusion:
+    parameters:
+      - $ref: "#/components/parameters/ReviewId"
+    post:
+      tags: [Quality]
+      summary: Submit the human conclusion for an actionable quality review
+      description: The review resource determines workspace, tenant and shop scope; callers submit only the bounded result.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QualityConclusionInput"
+      responses:
+        "202":
+          description: Human conclusion operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /replies/{replyId}/incidents:
+    parameters:
+      - $ref: "#/components/parameters/ReplyId"
+    post:
+      tags: [Incidents]
+      summary: Mark an AI reply as incorrect
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [errorType, severity]
+              properties:
+                errorType:
+                  type: string
+                severity:
+                  type: string
+                  enum: [LOW, MEDIUM, HIGH]
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: Incident created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyIncident"
+
+  /incidents:
+    parameters:
+      - in: query
+        name: conversationId
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: status
+        required: false
+        schema:
+          type: string
+          enum: [OPEN, CORRECTION_DRAFTED, CORRECTED, ROOT_CAUSE_FIXED, REGRESSION_ADDED, RESOLVED]
+      - in: query
+        name: severity
+        required: false
+        schema:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+    get:
+      tags: [Incidents]
+      summary: List reply incidents
+      responses:
+        "200":
+          description: Incidents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReplyIncident"
+
+  /incidents/{incidentId}/correction:
+    parameters:
+      - in: path
+        name: incidentId
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Incidents]
+      summary: Save or send a human correction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [correctedAnswer]
+              properties:
+                correctedAnswer:
+                  type: string
+                sendToBuyer:
+                  type: boolean
+                  default: false
+      responses:
+        "202":
+          description: Correction accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /incidents/{incidentId}/root-cause:
+    parameters:
+      - $ref: "#/components/parameters/IncidentId"
+    post:
+      tags: [Incidents]
+      summary: Record the human root cause for an unresolved incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RootCauseInput"
+      responses:
+        "202":
+          description: Root cause operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /incidents/{incidentId}/add-regression:
+    parameters:
+      - $ref: "#/components/parameters/IncidentId"
+    post:
+      tags: [Incidents]
+      summary: Attach a regression case to an incident
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddIncidentRegressionInput"
+      responses:
+        "202":
+          description: Regression operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /incidents/{incidentId}/resolve:
+    parameters:
+      - $ref: "#/components/parameters/IncidentId"
+    post:
+      tags: [Incidents]
+      summary: Resolve an incident after correction and governance
+      responses:
+        "202":
+          description: Resolve operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /replies/{replyId}/trace:
+    parameters:
+      - $ref: "#/components/parameters/ReplyId"
+    get:
+      tags: [Trace]
+      summary: Get structured developer trace for a reply
+      parameters:
+        - in: query
+          name: trace
+          required: true
+          description: Explicit opt-in for the developer-only trace view.
+          schema:
+            type: string
+            enum: ["1"]
+      responses:
+        "200":
+          description: Trace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeveloperTrace"
+
+  /conversations/{conversationId}/trace:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    get:
+      tags: [Trace]
+      summary: Get structured developer trace for a conversation
+      parameters:
+        - in: query
+          name: trace
+          required: true
+          description: Explicit opt-in for the developer-only trace view.
+          schema:
+            type: string
+            enum: ["1"]
+      responses:
+        "200":
+          description: Trace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeveloperTrace"
+
+  /usage:
+    get:
+      tags: [Usage]
+      summary: Get current workspace AI usage
+      responses:
+        "200":
+          description: Usage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageSummary"
+
+  /scenarios:
+    x-demo-only: true
+    x-synthetic: true
+    description: Fixed eight-scenario synthetic lab; state is isolated to the current Demo Workspace.
+    get:
+      tags: [Scenarios]
+      summary: List scenario definitions and status
+      responses:
+        "200":
+          description: Scenarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Scenario"
+
+  /scenarios/{scenarioKey}/run:
+    parameters:
+      - $ref: "#/components/parameters/ScenarioKey"
+    x-demo-only: true
+    x-synthetic: true
+    post:
+      tags: [Scenarios]
+      summary: Run a scenario in current workspace
+      responses:
+        "202":
+          description: Scenario accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+  /scenarios/{scenarioKey}/reset:
+    parameters:
+      - $ref: "#/components/parameters/ScenarioKey"
+    x-demo-only: true
+    x-synthetic: true
+    post:
+      tags: [Scenarios]
+      summary: Reset scenario state
+      responses:
+        "202":
+          description: Reset accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationAccepted"
+
+components:
+  securitySchemes:
+    DemoWorkspaceToken:
+      type: apiKey
+      in: header
+      name: X-Demo-Workspace-Token
+
+  responses:
+    NotFound:
+      description: Resource not found in the current Demo Workspace
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  parameters:
+    ShopId:
+      in: path
+      name: shopId
+      required: true
+      schema: { type: string }
+    ProductId:
+      in: path
+      name: productId
+      required: true
+      schema: { type: string }
+    SkuId:
+      in: path
+      name: skuId
+      required: true
+      schema: { type: string }
+    OrderId:
+      in: path
+      name: orderId
+      required: true
+      schema: { type: string }
+    KnowledgeId:
+      in: path
+      name: knowledgeId
+      required: true
+      schema: { type: string }
+    CandidateId:
+      in: path
+      name: candidateId
+      required: true
+      schema: { type: string }
+    JobId:
+      in: path
+      name: jobId
+      required: true
+      schema: { type: string }
+    ImportId:
+      in: path
+      name: importId
+      required: true
+      schema: { type: string }
+    ConversationId:
+      in: path
+      name: conversationId
+      required: true
+      schema: { type: string }
+    BuyerId:
+      in: path
+      name: buyerId
+      required: true
+      schema: { type: string }
+    MessageId:
+      in: path
+      name: messageId
+      required: true
+      schema: { type: string }
+    WorkflowId:
+      in: path
+      name: workflowId
+      required: true
+      schema: { type: string }
+    RunId:
+      in: path
+      name: runId
+      required: true
+      schema: { type: string }
+    ProposalId:
+      in: path
+      name: proposalId
+      required: true
+      schema: { type: string }
+    ReviewId:
+      in: path
+      name: reviewId
+      required: true
+      schema: { type: string }
+    IncidentId:
+      in: path
+      name: incidentId
+      required: true
+      schema: { type: string }
+    ReplyId:
+      in: path
+      name: replyId
+      required: true
+      schema: { type: string }
+    ScenarioKey:
+      in: path
+      name: scenarioKey
+      required: true
+      schema: { type: string }
+
+  schemas:
+    WorkspaceSession:
+      type: object
+      required: [workspace, token]
+      properties:
+        workspace:
+          $ref: "#/components/schemas/Workspace"
+        token:
+          type: string
+
+    Workspace:
+      type: object
+      required: [id, status, expiresAt]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [ACTIVE, EXPIRED, DELETED] }
+        expiresAt: { type: string, format: date-time }
+
+    Bootstrap:
+      type: object
+      required: [workspace, shops, buyers, featureFlags]
+      properties:
+        workspace:
+          $ref: "#/components/schemas/Workspace"
+        shops:
+          type: array
+          items:
+            $ref: "#/components/schemas/Shop"
+        buyers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Buyer"
+        featureFlags:
+          type: object
+          additionalProperties:
+            type: boolean
+
+    ShopAIMode:
+      type: string
+      enum: [AUTO_ALLOWED, ASSIST_ONLY, MANUAL_ONLY]
+
+    ConversationMode:
+      type: string
+      enum: [AUTO, ASSIST, MANUAL, HOLD]
+
+    Shop:
+      type: object
+      required: [id, name, platform, aiMode, connectionState]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        platform: { type: string, enum: [DOUYIN_DEMO] }
+        aiMode:
+          $ref: "#/components/schemas/ShopAIMode"
+        connectionState:
+          type: string
+          enum: [CONNECTED, RECONNECTING, RECONCILING, DEGRADED, DISCONNECTED]
+        enabled: { type: boolean }
+        todayConversationCount: { type: integer }
+
+    ShopSettingsInput:
+      type: object
+      additionalProperties: false
+      properties:
+        tone: { type: string }
+        logisticsPolicy: { type: string }
+        shippingPolicy: { type: string }
+        afterSalesPolicy: { type: string }
+        welcomeMessage: { type: string }
+        closingMessages:
+          type: object
+          additionalProperties:
+            type: string
+        transferKeywords:
+          type: array
+          items: { type: string }
+        forbiddenTerms:
+          type: array
+          items:
+            type: object
+            required: [term]
+            properties:
+              term: { type: string }
+              replacement: { type: string }
+
+    ShopSettings:
+      allOf:
+        - $ref: "#/components/schemas/ShopSettingsInput"
+        - type: object
+          required: [shopId]
+          properties:
+            shopId: { type: string }
+
+    Product:
+      type: object
+      required: [id, shopId, externalProductId, title, status]
+      properties:
+        id: { type: string }
+        shopId: { type: string }
+        externalProductId: { type: string }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string }
+        recommendable: { type: boolean }
+        learningStatus: { type: string }
+        skus:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductSku"
+
+    ProductSku:
+      type: object
+      required: [id, externalSkuId, price, inventory]
+      properties:
+        id: { type: string }
+        externalSkuId: { type: string }
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+        price: { type: number }
+        inventory: { type: integer }
+        status: { type: string }
+
+    DynamicFactInventoryCommand:
+      type: object
+      additionalProperties: false
+      required: [inventory]
+      properties:
+        inventory: { type: integer, minimum: 0 }
+
+    DynamicFactOrderStatus:
+      type: string
+      enum: [WAITING_SHIPMENT, SHIPPED, COMPLETED]
+
+    DynamicFactOrderStatusCommand:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/DynamicFactOrderStatus"
+
+    DynamicFactMutationAccepted:
+      type: object
+      additionalProperties: false
+      required: [status, operationId]
+      properties:
+        status: { type: string, enum: [ACCEPTED] }
+        operationId: { type: string }
+
+    ProductSyncResult:
+      type: object
+      required: [status, synthetic, productsSynced]
+      properties:
+        status: { type: string, enum: [SUCCEEDED] }
+        synthetic: { type: boolean }
+        productsSynced: { type: integer, minimum: 0 }
+
+    ProductLearningInput:
+      type: object
+      additionalProperties: false
+      properties:
+        productIds:
+          type: array
+          items: { type: string }
+        retryFailed: { type: boolean }
+
+    ProductLearningJobItem:
+      type: object
+      required: [productId, status]
+      properties:
+        productId: { type: string }
+        status: { type: string, enum: [PENDING, PROCESSING, SUCCEEDED, FAILED, OUTDATED] }
+        reason: { type: string, nullable: true }
+
+    ProductLearningJobTotals:
+      type: object
+      required: [total, created, updated, skipped, failed]
+      properties:
+        total: { type: integer, minimum: 0 }
+        created: { type: integer, minimum: 0 }
+        updated: { type: integer, minimum: 0 }
+        skipped: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+
+    ProductLearningJob:
+      type: object
+      required: [id, shopId, status, totals, items]
+      properties:
+        id: { type: string }
+        shopId: { type: string }
+        status: { type: string, enum: [PENDING, RUNNING, PARTIAL_SUCCESS, SUCCEEDED, FAILED] }
+        totals:
+          $ref: "#/components/schemas/ProductLearningJobTotals"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductLearningJobItem"
+
+    KnowledgeCreateInput:
+      type: object
+      required: [shopId, question, answer]
+      properties:
+        shopId: { type: string }
+        productId: { type: string }
+        question: { type: string }
+        answer: { type: string }
+        effectiveFrom: { type: string, format: date-time }
+        effectiveTo: { type: string, format: date-time }
+
+    KnowledgeUpdateInput:
+      type: object
+      properties:
+        shopId: { type: string }
+        question: { type: string }
+        answer: { type: string }
+        effectiveFrom: { type: string, format: date-time }
+        effectiveTo: { type: string, format: date-time }
+        businessStatus:
+          $ref: "#/components/schemas/KnowledgeBusinessStatus"
+
+    KnowledgeBusinessStatus:
+      type: string
+      enum: [DRAFT, ENABLED, DISABLED, OUTDATED, CONFLICTED, DELETED]
+
+    KnowledgeItem:
+      type: object
+      required: [id, shopId, scope, sourceType, businessStatus]
+      properties:
+        id: { type: string }
+        shopId: { type: string }
+        productId: { type: string }
+        scope: { type: string, enum: [STORE, PRODUCT] }
+        sourceType: { type: string, enum: [MANUAL, HUMAN_REVIEWED, AUTO_LEARNED] }
+        businessStatus:
+          $ref: "#/components/schemas/KnowledgeBusinessStatus"
+        activeVersion:
+          $ref: "#/components/schemas/KnowledgeVersion"
+
+    KnowledgeVersion:
+      type: object
+      required: [id, version, question, answer, indexStatus]
+      properties:
+        id: { type: string }
+        version: { type: integer }
+        question: { type: string }
+        answer: { type: string }
+        indexStatus: { type: string, enum: [PENDING, INDEXING, READY, FAILED] }
+        effectiveFrom: { type: string, format: date-time }
+        effectiveTo: { type: string, format: date-time }
+
+    KnowledgeImportJob:
+      type: object
+      required: [id, shopId, status, totals, rows]
+      properties:
+        id: { type: string }
+        shopId: { type: string }
+        status: { type: string }
+        totals:
+          type: object
+          required: [total, valid, duplicate, conflict, error]
+          properties:
+            total: { type: integer }
+            valid: { type: integer }
+            duplicate: { type: integer }
+            conflict: { type: integer }
+            error: { type: integer }
+        committedAt: { type: string, format: date-time, nullable: true }
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/KnowledgeImportRow"
+
+    KnowledgeImportAccepted:
+      type: object
+      required: [operationId, importId, status]
+      properties:
+        operationId: { type: string }
+        importId: { type: string }
+        status: { type: string, enum: [ACCEPTED, QUEUED] }
+
+    KnowledgeImportRow:
+      type: object
+      required: [rowNumber, scope, question, answer, status]
+      properties:
+        rowNumber: { type: integer }
+        scope: { type: string, enum: [STORE, PRODUCT] }
+        productId: { type: string, nullable: true }
+        productExternalId: { type: string, nullable: true }
+        question: { type: string }
+        answer: { type: string }
+        status: { type: string, enum: [VALID, DUPLICATE, CONFLICT, ERROR, COMMITTED, SKIPPED] }
+        reason: { type: string, nullable: true }
+        committedKnowledgeItemId: { type: string, nullable: true }
+
+    KnowledgeSearchInput:
+      type: object
+      required: [shopId, query]
+      properties:
+        shopId: { type: string }
+        query: { type: string }
+        scope: { type: string, enum: [STORE, PRODUCT] }
+        productId: { type: string }
+        topK: { type: integer, minimum: 1, maximum: 3 }
+
+    ReplyEvidenceSnapshot:
+      type: object
+      required: [itemId, versionId, version, source, scope, contentSnapshot, retrievalScore]
+      properties:
+        itemId: { type: string }
+        versionId: { type: string }
+        version: { type: integer }
+        source: { type: string, enum: [MANUAL, HUMAN_REVIEWED, AUTO_LEARNED] }
+        scope: { type: string, enum: [STORE, PRODUCT] }
+        productId: { type: string, nullable: true }
+        contentSnapshot:
+          type: object
+          required: [question, answer]
+          properties:
+            question: { type: string }
+            answer: { type: string }
+        retrievalScore: { type: number }
+
+    KnowledgeSearchResult:
+      type: object
+      required: [status, evidence, conflictItemIds]
+      properties:
+        status: { type: string, enum: [EVIDENCE, NO_EVIDENCE, CONFLICTED, DYNAMIC_FACT_REQUIRED] }
+        evidence:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplyEvidenceSnapshot"
+        conflictItemIds:
+          type: array
+          items: { type: string }
+
+    KnowledgeRevisionResult:
+      type: object
+      required: [status, knowledgeId, version]
+      properties:
+        status: { type: string, enum: [UPDATED, CONFLICTED] }
+        knowledgeId: { type: string }
+        activeVersionId: { type: string, nullable: true }
+        version:
+          $ref: "#/components/schemas/KnowledgeVersion"
+
+    KnowledgeConflictSide:
+      type: object
+      required: [itemId, versionId, question, answer]
+      properties:
+        itemId: { type: string }
+        versionId: { type: string }
+        version: { type: integer }
+        question: { type: string }
+        answer: { type: string }
+        indexStatus: { type: string, enum: [PENDING, INDEXING, READY, FAILED] }
+
+    KnowledgeCandidateStatus:
+      type: string
+      enum: [PENDING, APPROVED, PUBLISHED, REJECTED, DUPLICATE, CONFLICTED]
+
+    KnowledgeConflictStatus:
+      type: string
+      enum: [OPEN, RESOLVED, IGNORED]
+
+    KnowledgeConflictResolution:
+      type: string
+      enum: [KEEP_LEFT, KEEP_RIGHT, MERGE, CUSTOM]
+
+    KnowledgeCandidate:
+      type: object
+      required: [id, source, proposedQuestion, proposedAnswer, status]
+      properties:
+        id: { type: string }
+        shopId: { type: string }
+        source: { type: string }
+        proposedQuestion: { type: string }
+        proposedAnswer: { type: string }
+        productId: { type: string, nullable: true }
+        status:
+          $ref: "#/components/schemas/KnowledgeCandidateStatus"
+        duplicateOfId: { type: string, nullable: true }
+        conflictWithId: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+
+    KnowledgeConflict:
+      type: object
+      required: [id, leftVersionId, rightVersionId, status]
+      properties:
+        id: { type: string }
+        shopId: { type: string }
+        leftItemId: { type: string }
+        rightItemId: { type: string }
+        leftVersionId: { type: string }
+        rightVersionId: { type: string }
+        left:
+          $ref: "#/components/schemas/KnowledgeConflictSide"
+        right:
+          $ref: "#/components/schemas/KnowledgeConflictSide"
+        status:
+          $ref: "#/components/schemas/KnowledgeConflictStatus"
+        resolution: { type: object, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time }
+
+    ReplyJobStatus:
+      type: string
+      enum: [PENDING, GENERATING, FAST_PATH_READY, WAITING_HUMAN, SENT, CANCELLING, STALE, EXPIRED, CANCELLED, FAILED, RECOVERY_PENDING]
+
+    ReplyDraftStatus:
+      type: string
+      enum: [GENERATING, WAITING_HUMAN, STALE, EXPIRED, FAILED, SENT, CANCELLED]
+
+    ReplyDraftEditType:
+      type: string
+      enum: [STYLE_EDIT, FACTUAL_CORRECTION, KNOWLEDGE_ENRICHMENT]
+
+    ReplyDraft:
+      type: object
+      required: [id, replyJobId, aiDraft, status, sourceContextVersion]
+      properties:
+        id: { type: string }
+        replyJobId: { type: string }
+        aiDraft: { type: string }
+        humanFinal: { type: string, nullable: true }
+        editType:
+          allOf:
+            - $ref: "#/components/schemas/ReplyDraftEditType"
+          nullable: true
+        status:
+          $ref: "#/components/schemas/ReplyDraftStatus"
+        sourceContextVersion: { type: integer }
+        sourceLastMessageId: { type: string, nullable: true }
+        sourceSequence: { type: integer, nullable: true }
+        generatedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        staleReason: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+
+    ReplyJob:
+      type: object
+      required: [id, conversationId, status, mode]
+      properties:
+        id: { type: string }
+        conversationId: { type: string }
+        userTurnId: { type: string, nullable: true }
+        status:
+          $ref: "#/components/schemas/ReplyJobStatus"
+        mode:
+          $ref: "#/components/schemas/ConversationMode"
+        sourceLastMessageId: { type: string, nullable: true }
+        sourceSequence: { type: integer, nullable: true }
+        sourceContextVersion: { type: integer, nullable: true }
+        needsReplanReason: { type: string, nullable: true }
+        abortReason: { type: string, nullable: true }
+        provider: { type: string, nullable: true }
+        model: { type: string, nullable: true }
+        promptVersion: { type: string, nullable: true }
+        ragStrategy: { type: string, nullable: true }
+        tokenUsage:
+          type: object
+          properties:
+            inputTokens: { type: integer }
+            outputTokens: { type: integer }
+        fallbackUsed: { type: boolean }
+        draft:
+          allOf:
+            - $ref: "#/components/schemas/ReplyDraft"
+          nullable: true
+        currentDraft:
+          allOf:
+            - $ref: "#/components/schemas/ReplyDraft"
+          nullable: true
+        sendOutbox:
+          allOf:
+            - $ref: "#/components/schemas/SendOutbox"
+          nullable: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SendOutboxStatus:
+      type: string
+      enum: [PENDING, SENDING, SENT, FAILED, UNCERTAIN, CANCELLED]
+
+    SendOutbox:
+      type: object
+      required: [id, idempotencyKey, status]
+      properties:
+        id: { type: string }
+        conversationId: { type: string }
+        replyJobId: { type: string, nullable: true }
+        idempotencyKey: { type: string }
+        expectedLastMessageId: { type: string, nullable: true }
+        expectedSequence: { type: integer, nullable: true }
+        expectedContextVersion: { type: integer, nullable: true }
+        status:
+          $ref: "#/components/schemas/SendOutboxStatus"
+        receipt:
+          type: object
+          nullable: true
+          properties:
+            externalMessageId: { type: string }
+            platformMessageId: { type: string }
+            sentAt: { type: string, format: date-time }
+        failureCode: { type: string, nullable: true }
+        failureReason: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Task:
+      type: object
+      required: [id, userTurnId, intent, riskLevel, requiredContext, status, blocking]
+      properties:
+        id: { type: string }
+        userTurnId: { type: string }
+        intent: { type: string }
+        riskLevel: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        requiredContext:
+          type: array
+          items: { type: string }
+        requiredKnowledge:
+          type: array
+          items: { type: string }
+        requiredTools:
+          type: array
+          items: { type: string }
+        ownerWorkflowRunId: { type: string, nullable: true }
+        status: { type: string }
+        result: { type: object, nullable: true }
+        blocking: { type: boolean }
+
+    TaskBundle:
+      type: object
+      required: [id, userTurnId, status, tasks]
+      properties:
+        id: { type: string }
+        userTurnId: { type: string }
+        status: { type: string, enum: [ALL_RESOLVED, PARTIAL_RESOLVED, NEEDS_CLARIFICATION, HIGH_RISK, FAILED] }
+        tasks:
+          type: array
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/Task"
+
+    CustomerMemoryDisableInput:
+      type: object
+      required: [shopId]
+      properties:
+        shopId: { type: string }
+        reason: { type: string }
+
+    ConversationControlResult:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        overrideMode:
+          allOf:
+            - $ref: "#/components/schemas/ConversationMode"
+          nullable: true
+        humanActive: { type: boolean }
+        resumed: { type: boolean }
+
+    HumanFinalAccepted:
+      type: object
+      required: [sendOutboxId]
+      properties:
+        sendOutboxId: { type: string }
+        candidateId: { type: string }
+        status: { type: string, enum: [ACCEPTED, QUEUED] }
+
+    ConversationSummary:
+      type: object
+      required: [id, shopId, buyer, state, effectiveMode, contextVersion]
+      properties:
+        id: { type: string }
+        shopId: { type: string }
+        buyer:
+          $ref: "#/components/schemas/Buyer"
+        state: { type: string }
+        effectiveMode:
+          $ref: "#/components/schemas/ConversationMode"
+        contextVersion: { type: integer }
+        humanActive: { type: boolean }
+        needsReplan: { type: boolean }
+        activeReplyJob:
+          $ref: "#/components/schemas/ReplyJob"
+        sendOutbox:
+          $ref: "#/components/schemas/SendOutbox"
+        unreadCount: { type: integer }
+        lastMessage:
+          $ref: "#/components/schemas/Message"
+
+    ConversationSnapshot:
+      allOf:
+        - $ref: "#/components/schemas/ConversationSummary"
+        - type: object
+          properties:
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/Message"
+            productContext:
+              type: object
+            customerContext:
+              type: object
+            summary:
+              type: object
+            currentDraft:
+              $ref: "#/components/schemas/ReplyDraft"
+            taskBundle:
+              $ref: "#/components/schemas/TaskBundle"
+            customerMemories:
+              type: array
+              items:
+                $ref: "#/components/schemas/CustomerMemory"
+
+    Message:
+      type: object
+      required: [id, conversationId, role, kind, status, sequence, sentAt]
+      properties:
+        id: { type: string }
+        conversationId: { type: string }
+        externalMessageId: { type: string }
+        sequence: { type: integer }
+        role: { type: string, enum: [BUYER, AI, HUMAN, SYSTEM] }
+        kind: { type: string, enum: [TEXT, IMAGE, GOODS_CARD, ORDER_CARD, SYSTEM] }
+        status: { type: string, enum: [ACTIVE, RECALLED, DELETED, EDITED] }
+        content:
+          type: object
+        sentAt: { type: string, format: date-time }
+        receivedAt: { type: string, format: date-time }
+
+    Buyer:
+      type: object
+      required: [id, externalBuyerId, displayName]
+      properties:
+        id: { type: string }
+        externalBuyerId: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+
+    CustomerMemoryInput:
+      type: object
+      required: [shopId, type, key, value]
+      properties:
+        shopId: { type: string }
+        type:
+          type: string
+          enum: [PREFERENCE, PRODUCT_PREFERENCE, ONGOING_CASE]
+        key: { type: string }
+        value:
+          type: object
+        expiresAt:
+          type: string
+          format: date-time
+
+    CustomerMemory:
+      allOf:
+        - $ref: "#/components/schemas/CustomerMemoryInput"
+        - type: object
+          required: [id, buyerId, status]
+          properties:
+            id: { type: string }
+            buyerId: { type: string }
+            status: { type: string, enum: [ACTIVE, DISABLED, DELETED] }
+
+    CustomerMemoryStatusResult:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [ACTIVE, DISABLED, DELETED] }
+
+    CustomerDataDeletionResult:
+      type: object
+      required: [buyerId, status, deleted, anonymized, preserved, completedAt]
+      properties:
+        buyerId: { type: string, description: Opaque request reference only }
+        status: { type: string, enum: [COMPLETED] }
+        deleted:
+          type: object
+          required: [conversations, messages, attachments, customerMemories, knowledgeCandidates]
+          properties:
+            conversations: { type: integer, minimum: 0 }
+            messages: { type: integer, minimum: 0 }
+            attachments: { type: integer, minimum: 0 }
+            customerMemories: { type: integer, minimum: 0 }
+            knowledgeCandidates: { type: integer, minimum: 0 }
+        anonymized:
+          type: object
+          required: [buyers, orders]
+          properties:
+            buyers: { type: integer, minimum: 0 }
+            orders: { type: integer, minimum: 0 }
+        preserved:
+          type: object
+          required: [anonymousAggregates, auditFacts]
+          properties:
+            anonymousAggregates: { type: integer, minimum: 0 }
+            auditFacts: { type: integer, minimum: 0 }
+        completedAt: { type: string, format: date-time }
+
+    BuyerMessageInput:
+      type: object
+      required: [shopId, buyerId, kind]
+      properties:
+        shopId: { type: string }
+        buyerId: { type: string }
+        kind: { type: string, enum: [TEXT, IMAGE] }
+        text: { type: string }
+        attachmentId: { type: string }
+        sentAt: { type: string, format: date-time }
+        forcedSequence: { type: integer }
+        duplicateExternalMessageId: { type: string }
+
+    Attachment:
+      type: object
+      required: [id, mimeType, size, status, expiresAt]
+      properties:
+        id: { type: string }
+        mimeType: { type: string }
+        size: { type: integer }
+        status: { type: string, enum: [ACTIVE, EXPIRED, DELETED] }
+        containsPII: { type: boolean }
+        expiresAt: { type: string, format: date-time }
+        analysis:
+          type: object
+
+    Workflow:
+      type: object
+      required: [id, name, type, priority, status]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        tenantId: { type: string }
+        shopId: { type: [string, 'null'] }
+        name: { type: string }
+        type: { type: string }
+        priority: { type: integer, minimum: 0 }
+        status: { type: string, enum: [DRAFT, PUBLISHED, DISABLED] }
+        activeVersionId: { type: [string, 'null'] }
+        draftVersion:
+          oneOf:
+            - $ref: "#/components/schemas/WorkflowVersion"
+            - type: 'null'
+        activeVersion:
+          oneOf:
+            - $ref: "#/components/schemas/WorkflowVersion"
+            - type: 'null'
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateWorkflowInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, minLength: 1 }
+        type: { type: string, minLength: 1 }
+        shopId: { type: string }
+        priority: { type: integer, minimum: 0 }
+
+    WorkflowVersion:
+      type: object
+      required: [id, workflowId, version, graph]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        tenantId: { type: string }
+        workflowId: { type: string }
+        version: { type: integer, minimum: 0 }
+        graph:
+          $ref: "#/components/schemas/WorkflowGraph"
+        publishedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    WorkflowSettings:
+      type: object
+      required: [maxSteps, timeoutMs]
+      properties:
+        maxSteps: { type: integer, minimum: 1, maximum: 20 }
+        timeoutMs: { type: integer, minimum: 1, maximum: 30000 }
+
+    WorkflowGraph:
+      type: object
+      required: [nodes, edges, settings]
+      properties:
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [id, type, position, config]
+            properties:
+              id: { type: string, minLength: 1 }
+              type:
+                type: string
+                enum:
+                  [TRIGGER, CONDITION, QUERY_PRODUCT, QUERY_ORDER, QUERY_LOGISTICS, AI_GENERATE, HUMAN_APPROVAL, END]
+              position:
+                type: object
+                required: [x, y]
+                properties:
+                  x: { type: number }
+                  y: { type: number }
+              config:
+                type: object
+                additionalProperties: true
+        edges:
+          type: array
+          items:
+            type: object
+            required: [id, source, target]
+            properties:
+              id: { type: string, minLength: 1 }
+              source: { type: string, minLength: 1 }
+              target: { type: string, minLength: 1 }
+              condition: { type: string, enum: ["true", "false"] }
+        settings:
+          $ref: "#/components/schemas/WorkflowSettings"
+
+    NodeRun:
+      type: object
+      required: [id, workflowRunId, nodeId, status, retryCount]
+      properties:
+        id: { type: string }
+        workflowRunId: { type: string }
+        nodeId: { type: string }
+        status: { type: string, enum: [PENDING, RUNNING, SUCCEEDED, FAILED, WAITING_APPROVAL, STALE, SKIPPED] }
+        input: { type: [object, 'null'] }
+        output: { type: [object, 'null'] }
+        errorCode: { type: [string, 'null'] }
+        retryCount: { type: integer, minimum: 0 }
+        startedAt: { type: [string, 'null'], format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        durationMs: { type: [integer, 'null'], minimum: 0 }
+
+    WorkflowRun:
+      type: object
+      required: [id, shopId, conversationId, workflowVersionId, taskIds, contextVersion, completedNodeIds, status, startedAt]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        tenantId: { type: string }
+        shopId: { type: string }
+        conversationId: { type: string }
+        workflowVersionId: { type: string }
+        taskIds:
+          type: array
+          items: { type: string }
+        contextVersion: { type: integer, minimum: 0 }
+        currentNodeId: { type: [string, 'null'] }
+        completedNodeIds:
+          type: array
+          items: { type: string }
+        status:
+          type: string
+          enum: [PENDING, RUNNING, WAITING_APPROVAL, RECOVERING, COMPLETED, FAILED, STALE, CANCELLED]
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        nodeRuns:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeRun"
+        proposals:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionProposal"
+
+    WorkflowTestRunInput:
+      type: object
+      required: [conversationId]
+      properties:
+        conversationId: { type: string }
+
+    ActionProposal:
+      type: object
+      required: [id, shopId, conversationId, type, riskLevel, targetEntityType, targetEntityId, contextVersion, status]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        tenantId: { type: string }
+        shopId: { type: string }
+        conversationId: { type: string }
+        workflowRunId: { type: [string, 'null'] }
+        type: { type: string, enum: [MARK_READ, CREATE_INTERNAL_TASK, TRANSFER_HUMAN, ADD_ORDER_REMARK, PROPOSE_COMPENSATION, REFUND, EXCHANGE] }
+        riskLevel: { type: string, enum: [READ, LOW_WRITE, MEDIUM_WRITE, HIGH_RISK] }
+        targetEntityType: { type: string }
+        targetEntityId: { type: string }
+        payload: { type: object, additionalProperties: true }
+        evidenceIds:
+          type: array
+          items: { type: string }
+        contextVersion: { type: integer, minimum: 0 }
+        status: { type: string, enum: [PROPOSED, POLICY_CHECKED, WAITING_APPROVAL, APPROVED, REVALIDATING, EXECUTING, SUCCEEDED, REJECTED, STALE, FAILED, UNCERTAIN, CANCELLED] }
+        approvedBy: { type: [string, 'null'] }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        receipt: { type: [object, 'null'], additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ApproveActionProposalInput:
+      type: object
+      properties:
+        expectedContextVersion: { type: integer, minimum: 0 }
+        idempotencyKey: { type: string, minLength: 1 }
+
+    RejectActionProposalInput:
+      type: object
+      properties:
+        reason: { type: string }
+
+    QualityDeterministicCheck:
+      type: object
+      required: [key, passed]
+      properties:
+        key: { type: string }
+        passed: { type: boolean }
+        reason: { type: string }
+
+    QualityDeterministicResult:
+      type: object
+      required: [passed, checks]
+      properties:
+        passed: { type: boolean }
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/QualityDeterministicCheck"
+
+    QualityJudgeResult:
+      type: object
+      required: [relevance, completeness, groundedness, tone, risk, result]
+      properties:
+        relevance: { type: number, minimum: 0, maximum: 1 }
+        completeness: { type: number, minimum: 0, maximum: 1 }
+        groundedness: { type: number, minimum: 0, maximum: 1 }
+        tone: { type: number, minimum: 0, maximum: 1 }
+        risk: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        result: { type: string, enum: [PASS, FAIL, NEEDS_HUMAN] }
+        reasons:
+          type: array
+          items: { type: string }
+
+    QualityReview:
+      type: object
+      required: [id, conversationId, status]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        tenantId: { type: string }
+        conversationId: { type: string }
+        status: { type: string, enum: [PENDING, RUNNING, AUTO_REVIEWED, PASS, FAIL, NEEDS_HUMAN] }
+        deterministicResult:
+          oneOf:
+            - $ref: "#/components/schemas/QualityDeterministicResult"
+            - type: 'null'
+        judgeResult:
+          oneOf:
+            - $ref: "#/components/schemas/QualityJudgeResult"
+            - type: 'null'
+        humanResult: { type: [string, 'null'], enum: [PASS, FAIL, NEEDS_HUMAN, null] }
+        sampleSize: { type: integer, minimum: 0 }
+        metrics:
+          type: object
+          additionalProperties: { type: number }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+
+    StartQualityReviewInput:
+      type: object
+      required: [conversationId]
+      properties:
+        conversationId: { type: string }
+
+    QualityConclusionInput:
+      type: object
+      required: [result]
+      additionalProperties: false
+      properties:
+        result: { type: string, enum: [PASS, FAIL, NEEDS_HUMAN] }
+
+    ReplyIncident:
+      type: object
+      required: [id, replyId, errorType, severity, originalAnswer, status]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        tenantId: { type: string }
+        conversationId: { type: string }
+        replyId: { type: string }
+        replyJobId: { type: string }
+        errorType: { type: string }
+        severity: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        sourceType: { type: [string, 'null'] }
+        originalAnswer: { type: string }
+        correctedAnswer: { type: [string, 'null'] }
+        rootCause: { type: [string, 'null'] }
+        status: { type: string, enum: [OPEN, CORRECTION_DRAFTED, CORRECTED, ROOT_CAUSE_FIXED, REGRESSION_ADDED, RESOLVED] }
+        regressionCaseId: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+
+    CreateReplyIncidentInput:
+      type: object
+      required: [errorType, severity]
+      properties:
+        errorType: { type: string }
+        severity: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        notes: { type: string }
+
+    CorrectionInput:
+      type: object
+      required: [correctedAnswer]
+      properties:
+        correctedAnswer: { type: string }
+        sendToBuyer: { type: boolean, default: false }
+
+    RootCauseInput:
+      type: object
+      required: [rootCause]
+      additionalProperties: false
+      properties:
+        rootCause: { type: string, minLength: 1, maxLength: 1000 }
+
+    AddIncidentRegressionInput:
+      type: object
+      properties:
+        caseId: { type: string }
+
+    TraceEvent:
+      type: object
+      required: [id, traceId, stage, payload, createdAt]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        tenantId: { type: string }
+        shopId: { type: [string, 'null'] }
+        conversationId: { type: [string, 'null'] }
+        replyJobId: { type: [string, 'null'] }
+        traceId: { type: string }
+        stage: { type: string }
+        payload: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    DeveloperTrace:
+      type: object
+      required: [traceId, events]
+      properties:
+        traceId: { type: string }
+        workspaceId: { type: string }
+        conversationId: { type: string }
+        replyId: { type: string }
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraceEvent"
+        rawMessages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        userTurn: { type: object, additionalProperties: true }
+        taskBundle: { type: object, additionalProperties: true }
+        contextResolver: { type: object, additionalProperties: true }
+        factContext: { type: object, additionalProperties: true }
+        evidence:
+          type: array
+          items: { type: object, additionalProperties: true }
+        replyPolicy: { type: object, additionalProperties: true }
+        workflow: { type: object, additionalProperties: true }
+        sendGuard: { type: object, additionalProperties: true }
+        aiRuntime: { type: object, additionalProperties: true }
+        quality: { type: object, additionalProperties: true }
+
+    UsageSummary:
+      type: object
+      required: [calls, inputTokens, outputTokens, estimatedCost, failures, fallbacks, fastPathReplies, byPurpose]
+      properties:
+        calls: { type: integer }
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
+        estimatedCost: { type: number }
+        failures: { type: integer }
+        fallbacks: { type: integer }
+        fastPathReplies: { type: integer }
+        byPurpose:
+          type: object
+          additionalProperties:
+            type: object
+            required: [calls, inputTokens, outputTokens, failures, fallbacks]
+            properties:
+              calls: { type: integer }
+              inputTokens: { type: integer }
+              outputTokens: { type: integer }
+              failures: { type: integer }
+              fallbacks: { type: integer }
+
+    Scenario:
+      type: object
+      required: [key, name, status, synthetic]
+      properties:
+        key:
+          type: string
+          enum: [continuous_messages, message_during_generation, two_buyers, two_shops, duplicate_and_reorder, ai_timeout_fallback, service_restart_recovery, realtime_state_change]
+        name: { type: string }
+        status: { type: string, enum: [READY, RUNNING, SUCCEEDED, FAILED, RESETTING] }
+        synthetic: { type: boolean, const: true }
+        description: { type: string }
+        expectedResult: { type: string }
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScenarioStep"
+        traceId: { type: [string, 'null'] }
+        lastRunAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ScenarioStep:
+      type: object
+      required: [key, label, status]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [PENDING, RUNNING, SUCCEEDED, FAILED, SKIPPED] }
+        expected: { type: string }
+        actual: { type: string }
+
+    OperationAccepted:
+      type: object
+      required: [operationId, status]
+      properties:
+        operationId: { type: string }
+        status: { type: string, enum: [ACCEPTED, QUEUED] }
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+            details: { type: object }

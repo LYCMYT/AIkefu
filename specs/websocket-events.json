@@ -1,0 +1,555 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WebSocketEventEnvelope",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "workspaceId",
+    "entityType",
+    "entityId",
+    "entityVersion",
+    "occurredAt",
+    "payload"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string"
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "MESSAGE_RECEIVED",
+        "MESSAGE_EDITED",
+        "MESSAGE_RECALLED",
+        "CONVERSATION_UPDATED",
+        "TURN_BUFFER_UPDATED",
+        "USER_TURN_CREATED",
+        "REPLY_JOB_STARTED",
+        "REPLY_JOB_STREAM",
+        "REPLY_JOB_WAITING_HUMAN",
+        "REPLY_JOB_STALE",
+        "REPLY_JOB_EXPIRED",
+        "REPLY_SENT",
+        "WORKFLOW_RUN_UPDATED",
+        "WORKFLOW_NODE_UPDATED",
+        "ACTION_PROPOSAL_UPDATED",
+        "PRODUCT_UPDATED",
+        "ORDER_UPDATED",
+        "KNOWLEDGE_UPDATED",
+        "QUALITY_REVIEW_UPDATED",
+        "REPLY_INCIDENT_UPDATED",
+        "SHOP_CONNECTION_CHANGED",
+        "USAGE_UPDATED",
+        "SCENARIO_UPDATED"
+      ]
+    },
+    "workspaceId": {
+      "type": "string"
+    },
+    "entityType": {
+      "type": "string"
+    },
+    "entityId": {
+      "type": "string"
+    },
+    "entityVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object"
+    },
+    "requestId": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "eventType": { "const": "PRODUCT_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ProductUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "KNOWLEDGE_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/KnowledgeUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "USAGE_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/UsageUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "REPLY_JOB_STARTED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ReplyJobStartedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "REPLY_JOB_STREAM" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ReplyJobStreamPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "REPLY_JOB_WAITING_HUMAN" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ReplyJobWaitingHumanPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "REPLY_JOB_STALE" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ReplyJobStalePayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "REPLY_JOB_EXPIRED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ReplyJobExpiredPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "REPLY_SENT" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ReplySentPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "CONVERSATION_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ConversationUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "ORDER_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/OrderUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "WORKFLOW_RUN_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/WorkflowRunUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "WORKFLOW_NODE_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/WorkflowNodeUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "ACTION_PROPOSAL_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ActionProposalUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "QUALITY_REVIEW_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/QualityReviewUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "REPLY_INCIDENT_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ReplyIncidentUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "SCENARIO_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ScenarioUpdatedPayload" } } }
+    }
+  ],
+  "$defs": {
+    "MessageReceivedPayload": {
+      "type": "object",
+      "required": [
+        "conversationId",
+        "message"
+      ],
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        },
+        "message": {
+          "type": "object"
+        }
+      }
+    },
+    "ReplyJobStreamPayload": {
+      "type": "object",
+      "required": [
+        "conversationId",
+        "replyJobId",
+        "chunk",
+        "sequence"
+      ],
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        },
+        "replyJobId": {
+          "type": "string"
+        },
+        "chunk": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "integer"
+        }
+      }
+    },
+    "ReplyJobStartedPayload": {
+      "type": "object",
+      "required": ["conversationId", "replyJob"],
+      "properties": {
+        "conversationId": { "type": "string" },
+        "replyJob": { "type": "object" }
+      }
+    },
+    "ReplyJobWaitingHumanPayload": {
+      "type": "object",
+      "required": ["conversationId", "replyJobId", "draft"],
+      "properties": {
+        "conversationId": { "type": "string" },
+        "replyJobId": { "type": "string" },
+        "draft": { "type": "object" }
+      }
+    },
+    "ReplyJobStalePayload": {
+      "type": "object",
+      "required": ["conversationId", "replyJobId"],
+      "properties": {
+        "conversationId": { "type": "string" },
+        "replyJobId": { "type": "string" },
+        "reason": { "type": "string" },
+        "contextVersion": { "type": "integer" }
+      }
+    },
+    "ReplyJobExpiredPayload": {
+      "type": "object",
+      "required": ["conversationId", "replyJobId"],
+      "properties": {
+        "conversationId": { "type": "string" },
+        "replyJobId": { "type": "string" },
+        "draftId": { "type": "string" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ReplySentPayload": {
+      "type": "object",
+      "required": ["conversationId"],
+      "properties": {
+        "conversationId": { "type": "string" },
+        "replyJobId": { "type": "string" },
+        "sendOutboxId": { "type": "string" },
+        "message": { "type": "object" },
+        "receipt": { "type": "object" },
+        "sendOutbox": { "type": "object" }
+      }
+    },
+    "ConversationUpdatedPayload": {
+      "type": "object",
+      "required": ["conversationId"],
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        },
+        "conversation": {
+          "type": "object",
+          "required": [
+            "id",
+            "shopId",
+            "effectiveMode",
+            "contextVersion"
+          ],
+          "properties": {
+            "id": { "type": "string" },
+            "workspaceId": { "type": "string" },
+            "tenantId": { "type": "string" },
+            "shopId": { "type": "string" },
+            "buyerId": { "type": "string" },
+            "state": { "type": "string" },
+            "mode": { "enum": ["AUTO", "ASSIST", "MANUAL", "HOLD"] },
+            "overrideMode": { "enum": ["AUTO", "ASSIST", "MANUAL", "HOLD", null] },
+            "effectiveMode": { "enum": ["AUTO", "ASSIST", "MANUAL", "HOLD"] },
+            "syncState": { "type": "string" },
+            "contextVersion": { "type": "integer" },
+            "lastCommittedSequence": { "type": "integer" },
+            "activeTopic": { "type": ["string", "null"] },
+            "currentProductId": { "type": ["string", "null"] },
+            "currentOrderId": { "type": ["string", "null"] },
+            "humanActive": { "type": "boolean" },
+            "needsReplan": { "type": "boolean" },
+            "activeReplyJobId": { "type": ["string", "null"] },
+            "activeReplyJob": { "type": ["object", "null"] },
+            "currentDraft": { "type": ["object", "null"] },
+            "sendOutbox": { "type": ["object", "null"] },
+            "buyer": { "type": "object" },
+            "unreadCount": { "type": "integer" },
+            "lastMessage": { "type": "object" },
+            "createdAt": { "type": "string", "format": "date-time" },
+            "updatedAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "refresh": {
+          "const": true
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["conversation"],
+          "not": { "required": ["refresh"] }
+        },
+        {
+          "required": ["refresh"],
+          "not": { "required": ["conversation"] }
+        }
+      ]
+    },
+    "OrderUpdatedPayload": {
+      "type": "object",
+      "required": ["shopId", "orderId"],
+      "properties": {
+        "shopId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "order": { "type": "object" },
+        "contextVersion": { "type": "integer" }
+      }
+    },
+    "WorkflowRunUpdatedPayload": {
+      "type": "object",
+      "required": ["workflowRun"],
+      "properties": {
+        "workflowRun": {
+          "type": "object",
+          "required": [
+            "id",
+            "shopId",
+            "conversationId",
+            "workflowVersionId",
+            "taskIds",
+            "contextVersion",
+            "completedNodeIds",
+            "status",
+            "startedAt"
+          ],
+          "properties": {
+            "id": { "type": "string" },
+            "workspaceId": { "type": "string" },
+            "tenantId": { "type": "string" },
+            "shopId": { "type": "string" },
+            "conversationId": { "type": "string" },
+            "workflowVersionId": { "type": "string" },
+            "taskIds": { "type": "array", "items": { "type": "string" } },
+            "contextVersion": { "type": "integer", "minimum": 0 },
+            "currentNodeId": { "type": ["string", "null"] },
+            "completedNodeIds": { "type": "array", "items": { "type": "string" } },
+            "status": { "enum": ["PENDING", "RUNNING", "WAITING_APPROVAL", "RECOVERING", "COMPLETED", "FAILED", "STALE", "CANCELLED"] },
+            "startedAt": { "type": "string", "format": "date-time" },
+            "finishedAt": { "type": ["string", "null"], "format": "date-time" }
+          }
+        }
+      }
+    },
+    "WorkflowNodeUpdatedPayload": {
+      "type": "object",
+      "required": ["workflowRunId", "nodeRun"],
+      "properties": {
+        "workflowRunId": { "type": "string" },
+        "nodeRun": {
+          "type": "object",
+          "required": ["id", "workflowRunId", "nodeId", "status", "retryCount"],
+          "properties": {
+            "id": { "type": "string" },
+            "workflowRunId": { "type": "string" },
+            "nodeId": { "type": "string" },
+            "status": { "enum": ["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "WAITING_APPROVAL", "STALE", "SKIPPED"] },
+            "input": { "type": ["object", "null"] },
+            "output": { "type": ["object", "null"] },
+            "errorCode": { "type": ["string", "null"] },
+            "retryCount": { "type": "integer", "minimum": 0 },
+            "durationMs": { "type": ["integer", "null"], "minimum": 0 }
+          }
+        }
+      }
+    },
+    "ActionProposalUpdatedPayload": {
+      "type": "object",
+      "required": ["proposal"],
+      "properties": {
+        "proposal": { "$ref": "#/$defs/ActionProposal" }
+      }
+    },
+    "QualityReviewUpdatedPayload": {
+      "type": "object",
+      "required": ["review"],
+      "properties": {
+        "review": { "$ref": "#/$defs/QualityReview" }
+      }
+    },
+    "ReplyIncidentUpdatedPayload": {
+      "type": "object",
+      "required": ["incident"],
+      "properties": {
+        "incident": { "$ref": "#/$defs/ReplyIncident" }
+      }
+    },
+    "ActionProposal": {
+      "type": "object",
+      "required": ["id", "shopId", "conversationId", "type", "riskLevel", "targetEntityType", "targetEntityId", "contextVersion", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "shopId": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "workflowRunId": { "type": ["string", "null"] },
+        "type": { "enum": ["MARK_READ", "CREATE_INTERNAL_TASK", "TRANSFER_HUMAN", "ADD_ORDER_REMARK", "PROPOSE_COMPENSATION", "REFUND", "EXCHANGE"] },
+        "riskLevel": { "enum": ["READ", "LOW_WRITE", "MEDIUM_WRITE", "HIGH_RISK"] },
+        "targetEntityType": { "type": "string" },
+        "targetEntityId": { "type": "string" },
+        "payload": { "type": "object" },
+        "evidenceIds": { "type": "array", "items": { "type": "string" } },
+        "contextVersion": { "type": "integer", "minimum": 0 },
+        "status": { "enum": ["PROPOSED", "POLICY_CHECKED", "WAITING_APPROVAL", "APPROVED", "REVALIDATING", "EXECUTING", "SUCCEEDED", "REJECTED", "STALE", "FAILED", "UNCERTAIN", "CANCELLED"] },
+        "approvedBy": { "type": ["string", "null"] },
+        "approvedAt": { "type": ["string", "null"], "format": "date-time" },
+        "receipt": { "type": ["object", "null"] }
+      }
+    },
+    "QualityReview": {
+      "type": "object",
+      "required": ["id", "conversationId", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "status": { "enum": ["PENDING", "RUNNING", "AUTO_REVIEWED", "PASS", "FAIL", "NEEDS_HUMAN"] },
+        "deterministicResult": { "$ref": "#/$defs/QualityDeterministicResult" },
+        "judgeResult": { "$ref": "#/$defs/QualityJudgeResult" },
+        "humanResult": { "enum": ["PASS", "FAIL", "NEEDS_HUMAN", null] },
+        "sampleSize": { "type": "integer", "minimum": 0 },
+        "metrics": { "type": "object", "additionalProperties": { "type": "number" } }
+      }
+    },
+    "QualityDeterministicResult": {
+      "type": "object",
+      "required": ["passed", "checks"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "checks": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "QualityJudgeResult": {
+      "type": "object",
+      "required": ["relevance", "completeness", "groundedness", "tone", "risk", "result"],
+      "properties": {
+        "relevance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "completeness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "groundedness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "tone": { "type": "number", "minimum": 0, "maximum": 1 },
+        "risk": { "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "result": { "enum": ["PASS", "FAIL", "NEEDS_HUMAN"] },
+        "reasons": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "ReplyIncident": {
+      "type": "object",
+      "required": ["id", "replyId", "errorType", "severity", "originalAnswer", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "replyId": { "type": "string" },
+        "replyJobId": { "type": "string" },
+        "errorType": { "type": "string" },
+        "severity": { "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "sourceType": { "type": ["string", "null"] },
+        "originalAnswer": { "type": "string" },
+        "correctedAnswer": { "type": ["string", "null"] },
+        "rootCause": { "type": ["string", "null"] },
+        "status": { "enum": ["OPEN", "CORRECTION_DRAFTED", "CORRECTED", "ROOT_CAUSE_FIXED", "REGRESSION_ADDED", "RESOLVED"] },
+        "regressionCaseId": { "type": ["string", "null"] }
+      }
+    },
+    "ProductUpdatedPayload": {
+      "type": "object",
+      "required": ["shopId", "productId"],
+      "properties": {
+        "shopId": { "type": "string" },
+        "productId": { "type": "string" },
+        "product": { "type": "object" },
+        "learningStatus": {
+          "enum": ["PENDING", "PROCESSING", "SUCCEEDED", "FAILED", "OUTDATED"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "KnowledgeUpdatedPayload": {
+      "type": "object",
+      "required": ["shopId", "knowledgeId"],
+      "properties": {
+        "shopId": { "type": "string" },
+        "knowledgeId": { "type": "string" },
+        "knowledge": { "type": "object" },
+        "businessStatus": {
+          "enum": ["DRAFT", "ENABLED", "DISABLED", "OUTDATED", "CONFLICTED", "DELETED"]
+        },
+        "indexStatus": { "enum": ["PENDING", "INDEXING", "READY", "FAILED"] }
+      },
+      "additionalProperties": false
+    },
+    "UsageUpdatedPayload": {
+      "type": "object",
+      "required": ["workspaceId", "summary"],
+      "properties": {
+        "workspaceId": { "type": "string" },
+        "summary": {
+          "type": "object",
+          "required": ["invocationId", "purpose", "provider", "model", "success"],
+          "properties": {
+            "invocationId": { "type": "string" },
+            "purpose": { "type": "string" },
+            "provider": { "type": "string" },
+            "model": { "type": "string" },
+            "success": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "ScenarioUpdatedPayload": {
+      "type": "object",
+      "required": [
+        "scenarioKey",
+        "status"
+      ],
+      "properties": {
+        "scenarioKey": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["READY", "RUNNING", "SUCCEEDED", "FAILED", "RESETTING"]
+        },
+        "step": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "scenario": {
+          "$ref": "#/$defs/Scenario"
+        }
+      }
+    },
+    "Scenario": {
+      "type": "object",
+      "required": ["key", "name", "status", "synthetic"],
+      "properties": {
+        "key": { "enum": ["continuous_messages", "message_during_generation", "two_buyers", "two_shops", "duplicate_and_reorder", "ai_timeout_fallback", "service_restart_recovery", "realtime_state_change"] },
+        "name": { "type": "string" },
+        "status": { "enum": ["READY", "RUNNING", "SUCCEEDED", "FAILED", "RESETTING"] },
+        "synthetic": { "const": true },
+        "description": { "type": "string" },
+        "expectedResult": { "type": "string" },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/ScenarioStep" } },
+        "traceId": { "type": ["string", "null"] },
+        "lastRunAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "ScenarioStep": {
+      "type": "object",
+      "required": ["key", "label", "status"],
+      "properties": {
+        "key": { "type": "string" },
+        "label": { "type": "string" },
+        "status": { "enum": ["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "SKIPPED"] },
+        "expected": { "type": "string" },
+        "actual": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "@ai-customer-service/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prebuild": "pnpm --filter @ai-customer-service/contracts build && pnpm --filter @ai-customer-service/core build && pnpm --filter @ai-customer-service/mock-douyin build",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "node --watch -r ts-node/register src/main.ts",
+    "start": "node dist/main.js",
+    "pretypecheck": "pnpm --filter @ai-customer-service/contracts build && pnpm --filter @ai-customer-service/core build && pnpm --filter @ai-customer-service/mock-douyin build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "jest --config jest.unit.config.cjs --runInBand",
+    "test:integration": "jest --config jest.integration.config.cjs --runInBand",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@ai-customer-service/contracts": "workspace:*",
+    "@ai-customer-service/core": "workspace:*",
+    "@ai-customer-service/mock-douyin": "workspace:*",
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/platform-socket.io": "^11.1.6",
+    "@nestjs/websockets": "^11.1.6",
+    "@prisma/client": "^6.15.0",
+    "bullmq": "^5.58.5",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "exceljs": "^4.4.0",
+    "ioredis": "^5.7.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.1.6",
+    "@types/express": "^5.0.3",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.3.0",
+    "@types/supertest": "^6.0.3",
+    "jest": "^30.1.2",
+    "prisma": "^6.15.0",
+    "socket.io-client": "^4.8.1",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.4.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

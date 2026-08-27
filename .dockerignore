@@ -1,0 +1,23 @@
+# Keep local credentials, build output, and unrelated working files out of
+# application image build contexts. Production configuration is supplied only
+# at container runtime through Compose environment variables.
+.git
+.env
+.env.*
+**/node_modules
+**/dist
+**/.npm-cache
+.pnpm-store
+coverage
+playwright-report
+test-results
+e2e
+references
+docs
+codex
+infrastructure
+*.docx
+*.log
+~$*
+.obsidian
+.codex-resume-editable

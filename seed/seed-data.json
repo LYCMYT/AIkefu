@@ -1,0 +1,1737 @@
+{
+  "meta": {
+    "version": "1.0",
+    "generatedAt": "2026-08-26T11:08:38.505464+00:00"
+  },
+  "shops": [
+    {
+      "key": "shop_mia_fashion",
+      "name": "MIA Fashion",
+      "platform": "DOUYIN_DEMO",
+      "externalShopId": "dy_demo_mia",
+      "aiMode": "ASSIST_ONLY",
+      "connectionState": "CONNECTED",
+      "settings": {
+        "tone": "亲切、简洁、避免夸张承诺",
+        "logisticsPolicy": "默认使用顺丰或中通，具体承运方以订单物流为准。",
+        "shippingPolicy": "普通现货商品通常在24小时内发出；预售商品以商品说明为准；新疆、西藏等偏远地区时效以实际物流为准。",
+        "afterSalesPolicy": "支持7天无理由退货；商品破损需提供清晰图片；退款、换货及补偿均需人工确认。",
+        "welcomeMessage": "欢迎光临 MIA Fashion，请问想了解哪款商品？",
+        "closingMessages": {
+          "NO_ORDER": "感谢咨询，需要时可以继续问我。",
+          "WAITING_SHIPMENT": "订单正在准备中，发货后会更新物流信息。",
+          "SHIPPED": "订单已发出，请留意最新物流信息。",
+          "COMPLETED": "感谢您的购买，后续有问题可以随时咨询。"
+        },
+        "transferKeywords": [
+          "人工",
+          "投诉",
+          "平台介入",
+          "律师",
+          "举报"
+        ],
+        "forbiddenTerms": [
+          {
+            "term": "百分百",
+            "replacement": "通常"
+          },
+          {
+            "term": "绝对",
+            "replacement": "一般"
+          },
+          {
+            "term": "保证",
+            "replacement": "预计"
+          }
+        ]
+      }
+    },
+    {
+      "key": "shop_pixel_tech",
+      "name": "Pixel Tech",
+      "platform": "DOUYIN_DEMO",
+      "externalShopId": "dy_demo_pixel",
+      "aiMode": "ASSIST_ONLY",
+      "connectionState": "CONNECTED",
+      "settings": {
+        "tone": "专业、清晰、参数准确",
+        "logisticsPolicy": "默认使用顺丰、京东物流或中通，具体以订单为准。",
+        "shippingPolicy": "数码商品通常在48小时内发出；预售或定制商品以商品页说明为准。",
+        "afterSalesPolicy": "支持7天无理由退货；已拆封且影响二次销售的商品按售后规则处理；质量问题需提供图片或视频证据。",
+        "welcomeMessage": "欢迎来到 Pixel Tech，请告诉我您关注的产品和使用场景。",
+        "closingMessages": {
+          "NO_ORDER": "感谢咨询，如需对比产品参数可以继续提问。",
+          "WAITING_SHIPMENT": "订单正在处理中，发货后会同步物流。",
+          "SHIPPED": "订单已发出，可在订单页查看最新物流。",
+          "COMPLETED": "感谢您的购买，使用中遇到问题可以继续咨询。"
+        },
+        "transferKeywords": [
+          "人工",
+          "投诉",
+          "退款",
+          "平台介入"
+        ],
+        "forbiddenTerms": [
+          {
+            "term": "永久",
+            "replacement": "在正常使用条件下"
+          },
+          {
+            "term": "百分百兼容",
+            "replacement": "兼容性以设备与系统版本为准"
+          },
+          {
+            "term": "保证",
+            "replacement": "预计"
+          }
+        ]
+      }
+    }
+  ],
+  "buyers": [
+    {
+      "key": "buyer_001",
+      "externalBuyerId": "dy_buyer_001",
+      "displayName": "小林",
+      "tags": [
+        "新客"
+      ]
+    },
+    {
+      "key": "buyer_002",
+      "externalBuyerId": "dy_buyer_002",
+      "displayName": "Mia",
+      "tags": [
+        "尺码咨询"
+      ]
+    },
+    {
+      "key": "buyer_003",
+      "externalBuyerId": "dy_buyer_003",
+      "displayName": "张先生",
+      "tags": [
+        "多订单"
+      ]
+    },
+    {
+      "key": "buyer_004",
+      "externalBuyerId": "dy_buyer_004",
+      "displayName": "阿青",
+      "tags": [
+        "图片咨询"
+      ]
+    }
+  ],
+  "products": [
+    {
+      "key": "fashion_hoodie",
+      "shopKey": "shop_mia_fashion",
+      "externalProductId": "P-F-001",
+      "title": "轻薄连帽卫衣",
+      "status": "ON_SHELF",
+      "recommendable": true,
+      "description": "70%棉、30%聚酯纤维，宽松版型，适合春秋日常穿着。建议冷水手洗，不建议烘干。",
+      "skus": [
+        {
+          "externalSkuId": "P-F-001-BLACK-M",
+          "attributes": {
+            "color": "黑色",
+            "size": "M"
+          },
+          "price": 199,
+          "inventory": 12
+        },
+        {
+          "externalSkuId": "P-F-001-BLACK-L",
+          "attributes": {
+            "color": "黑色",
+            "size": "L"
+          },
+          "price": 199,
+          "inventory": 10
+        },
+        {
+          "externalSkuId": "P-F-001-BLACK-XL",
+          "attributes": {
+            "color": "黑色",
+            "size": "XL"
+          },
+          "price": 199,
+          "inventory": 8
+        },
+        {
+          "externalSkuId": "P-F-001-WHITE-L",
+          "attributes": {
+            "color": "白色",
+            "size": "L"
+          },
+          "price": 199,
+          "inventory": 6
+        }
+      ]
+    },
+    {
+      "key": "fashion_sun_jacket",
+      "shopKey": "shop_mia_fashion",
+      "externalProductId": "P-F-002",
+      "title": "轻量防晒外套",
+      "status": "ON_SHELF",
+      "recommendable": true,
+      "description": "轻薄透气面料，UPF50+，适合通勤与户外。可机洗，建议装洗衣袋，不可高温熨烫。",
+      "skus": [
+        {
+          "externalSkuId": "P-F-002-GRAY-M",
+          "attributes": {
+            "color": "浅灰",
+            "size": "M"
+          },
+          "price": 239,
+          "inventory": 15
+        },
+        {
+          "externalSkuId": "P-F-002-GRAY-L",
+          "attributes": {
+            "color": "浅灰",
+            "size": "L"
+          },
+          "price": 239,
+          "inventory": 7
+        },
+        {
+          "externalSkuId": "P-F-002-BLUE-L",
+          "attributes": {
+            "color": "雾蓝",
+            "size": "L"
+          },
+          "price": 239,
+          "inventory": 9
+        }
+      ]
+    },
+    {
+      "key": "fashion_jeans",
+      "shopKey": "shop_mia_fashion",
+      "externalProductId": "P-F-003",
+      "title": "高腰直筒牛仔裤",
+      "status": "ON_SHELF",
+      "recommendable": true,
+      "description": "高腰直筒版型，面料含少量弹力纤维。建议翻面冷水洗涤，深浅色分开清洗。",
+      "skus": [
+        {
+          "externalSkuId": "P-F-003-BLUE-S",
+          "attributes": {
+            "color": "牛仔蓝",
+            "size": "S"
+          },
+          "price": 269,
+          "inventory": 5
+        },
+        {
+          "externalSkuId": "P-F-003-BLUE-M",
+          "attributes": {
+            "color": "牛仔蓝",
+            "size": "M"
+          },
+          "price": 269,
+          "inventory": 11
+        },
+        {
+          "externalSkuId": "P-F-003-BLUE-L",
+          "attributes": {
+            "color": "牛仔蓝",
+            "size": "L"
+          },
+          "price": 269,
+          "inventory": 4
+        }
+      ]
+    },
+    {
+      "key": "fashion_down_coat",
+      "shopKey": "shop_mia_fashion",
+      "externalProductId": "P-F-004",
+      "title": "短款轻羽绒服",
+      "status": "ON_SHELF",
+      "recommendable": true,
+      "description": "90%白鸭绒，蓬松度650，当前为预售商品，预计7天内发出。建议专业洗护。",
+      "skus": [
+        {
+          "externalSkuId": "P-F-004-BLACK-M",
+          "attributes": {
+            "color": "黑色",
+            "size": "M"
+          },
+          "price": 699,
+          "inventory": 20
+        },
+        {
+          "externalSkuId": "P-F-004-BLACK-L",
+          "attributes": {
+            "color": "黑色",
+            "size": "L"
+          },
+          "price": 699,
+          "inventory": 20
+        },
+        {
+          "externalSkuId": "P-F-004-WHITE-M",
+          "attributes": {
+            "color": "米白",
+            "size": "M"
+          },
+          "price": 699,
+          "inventory": 12
+        }
+      ]
+    },
+    {
+      "key": "fashion_cardigan",
+      "shopKey": "shop_mia_fashion",
+      "externalProductId": "P-F-005",
+      "title": "柔软针织开衫",
+      "status": "OFF_SHELF",
+      "recommendable": false,
+      "description": "粘纤混纺，柔软亲肤，常规版型。建议平铺晾干，不建议悬挂暴晒。",
+      "skus": [
+        {
+          "externalSkuId": "P-F-005-CREAM-M",
+          "attributes": {
+            "color": "奶油色",
+            "size": "M"
+          },
+          "price": 299,
+          "inventory": 0
+        },
+        {
+          "externalSkuId": "P-F-005-CREAM-L",
+          "attributes": {
+            "color": "奶油色",
+            "size": "L"
+          },
+          "price": 299,
+          "inventory": 0
+        }
+      ]
+    },
+    {
+      "key": "tech_silent_keyboard",
+      "shopKey": "shop_pixel_tech",
+      "externalProductId": "P-T-001",
+      "title": "SilentKey 84 静音键盘",
+      "status": "ON_SHELF",
+      "recommendable": true,
+      "description": "84键布局，静音线性轴，支持Windows与macOS，蓝牙/2.4G/有线三模连接，内置4000mAh电池。",
+      "skus": [
+        {
+          "externalSkuId": "P-T-001-WHITE",
+          "attributes": {
+            "color": "白色",
+            "switch": "静音轴"
+          },
+          "price": 299,
+          "inventory": 18
+        },
+        {
+          "externalSkuId": "P-T-001-BLACK",
+          "attributes": {
+            "color": "黑色",
+            "switch": "静音轴"
+          },
+          "price": 299,
+          "inventory": 9
+        }
+      ]
+    },
+    {
+      "key": "tech_monitor",
+      "shopKey": "shop_pixel_tech",
+      "externalProductId": "P-T-002",
+      "title": "ViewGo 15.6英寸便携屏",
+      "status": "ON_SHELF",
+      "recommendable": true,
+      "description": "15.6英寸1080P IPS屏，支持USB-C一线连接与Mini HDMI，兼容多数笔记本、手机与游戏主机。",
+      "skus": [
+        {
+          "externalSkuId": "P-T-002-STD",
+          "attributes": {
+            "version": "标准版"
+          },
+          "price": 899,
+          "inventory": 7
+        },
+        {
+          "externalSkuId": "P-T-002-TOUCH",
+          "attributes": {
+            "version": "触控版"
+          },
+          "price": 1199,
+          "inventory": 3
+        }
+      ]
+    },
+    {
+      "key": "tech_charger",
+      "shopKey": "shop_pixel_tech",
+      "externalProductId": "P-T-003",
+      "title": "GaN 100W 三口充电器",
+      "status": "ON_SHELF",
+      "recommendable": true,
+      "description": "双USB-C加USB-A，单口最高100W，支持PD与PPS协议，适合笔记本、平板和手机。",
+      "skus": [
+        {
+          "externalSkuId": "P-T-003-CN",
+          "attributes": {
+            "plug": "国标"
+          },
+          "price": 259,
+          "inventory": 25
+        }
+      ]
+    },
+    {
+      "key": "tech_mouse",
+      "shopKey": "shop_pixel_tech",
+      "externalProductId": "P-T-004",
+      "title": "AirMouse 轻量无线鼠标",
+      "status": "ON_SHELF",
+      "recommendable": true,
+      "description": "58g轻量设计，2.4G与蓝牙双模，支持Windows与macOS，适合办公和轻度游戏。",
+      "skus": [
+        {
+          "externalSkuId": "P-T-004-WHITE",
+          "attributes": {
+            "color": "白色"
+          },
+          "price": 169,
+          "inventory": 14
+        },
+        {
+          "externalSkuId": "P-T-004-BLACK",
+          "attributes": {
+            "color": "黑色"
+          },
+          "price": 169,
+          "inventory": 13
+        }
+      ]
+    },
+    {
+      "key": "tech_mech_keyboard",
+      "shopKey": "shop_pixel_tech",
+      "externalProductId": "P-T-005",
+      "title": "CodeBoard 75 机械键盘",
+      "status": "ON_SHELF",
+      "recommendable": true,
+      "description": "75%配列，热插拔，RGB背光，支持QMK/VIA改键，适合开发者和桌搭用户。",
+      "skus": [
+        {
+          "externalSkuId": "P-T-005-RED",
+          "attributes": {
+            "switch": "红轴"
+          },
+          "price": 499,
+          "inventory": 10
+        },
+        {
+          "externalSkuId": "P-T-005-BROWN",
+          "attributes": {
+            "switch": "茶轴"
+          },
+          "price": 499,
+          "inventory": 5
+        }
+      ]
+    }
+  ],
+  "orders": [
+    {
+      "key": "order_001",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_001",
+      "productKey": "fashion_hoodie",
+      "sku": "P-F-001-BLACK-XL",
+      "externalOrderId": "MF-20260826-001",
+      "status": "WAITING_SHIPMENT",
+      "amount": 199,
+      "orderedAt": "2026-08-26T07:00:00+00:00",
+      "logistics": null
+    },
+    {
+      "key": "order_002",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_001",
+      "productKey": "fashion_jeans",
+      "sku": "P-F-003-BLUE-M",
+      "externalOrderId": "MF-20260825-002",
+      "status": "SHIPPED",
+      "amount": 269,
+      "orderedAt": "2026-08-25T10:00:00+00:00",
+      "logistics": {
+        "carrier": "顺丰",
+        "status": "IN_TRANSIT",
+        "lastNode": "深圳转运中心",
+        "updatedAt": "2026-08-26T09:00:00+00:00"
+      }
+    },
+    {
+      "key": "order_003",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_002",
+      "productKey": "fashion_sun_jacket",
+      "sku": "P-F-002-GRAY-M",
+      "externalOrderId": "MF-20260820-003",
+      "status": "COMPLETED",
+      "amount": 239,
+      "orderedAt": "2026-08-20T10:00:00+00:00",
+      "logistics": {
+        "carrier": "中通",
+        "status": "DELIVERED",
+        "lastNode": "已签收",
+        "updatedAt": "2026-08-23T10:00:00+00:00"
+      }
+    },
+    {
+      "key": "order_004",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_004",
+      "productKey": "fashion_hoodie",
+      "sku": "P-F-001-WHITE-L",
+      "externalOrderId": "MF-20260823-004",
+      "status": "COMPLETED",
+      "amount": 199,
+      "orderedAt": "2026-08-23T10:00:00+00:00",
+      "logistics": {
+        "carrier": "顺丰",
+        "status": "DELIVERED",
+        "lastNode": "已签收",
+        "updatedAt": "2026-08-25T10:00:00+00:00"
+      }
+    },
+    {
+      "key": "order_005",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_002",
+      "productKey": "fashion_down_coat",
+      "sku": "P-F-004-BLACK-M",
+      "externalOrderId": "MF-20260826-005",
+      "status": "WAITING_SHIPMENT",
+      "amount": 699,
+      "orderedAt": "2026-08-26T09:00:00+00:00",
+      "logistics": null
+    },
+    {
+      "key": "order_006",
+      "shopKey": "shop_pixel_tech",
+      "buyerKey": "buyer_003",
+      "productKey": "tech_silent_keyboard",
+      "sku": "P-T-001-BLACK",
+      "externalOrderId": "PT-20260824-006",
+      "status": "SHIPPED",
+      "amount": 299,
+      "orderedAt": "2026-08-24T10:00:00+00:00",
+      "logistics": {
+        "carrier": "京东物流",
+        "status": "IN_TRANSIT",
+        "lastNode": "广州分拨中心",
+        "updatedAt": "2026-08-26T08:00:00+00:00"
+      }
+    },
+    {
+      "key": "order_007",
+      "shopKey": "shop_pixel_tech",
+      "buyerKey": "buyer_003",
+      "productKey": "tech_monitor",
+      "sku": "P-T-002-STD",
+      "externalOrderId": "PT-20260824-007",
+      "status": "SHIPPED",
+      "amount": 899,
+      "orderedAt": "2026-08-24T06:00:00+00:00",
+      "logistics": {
+        "carrier": "顺丰",
+        "status": "IN_TRANSIT",
+        "lastNode": "东莞转运中心",
+        "updatedAt": "2026-08-26T07:00:00+00:00"
+      }
+    },
+    {
+      "key": "order_008",
+      "shopKey": "shop_pixel_tech",
+      "buyerKey": "buyer_004",
+      "productKey": "tech_charger",
+      "sku": "P-T-003-CN",
+      "externalOrderId": "PT-20260818-008",
+      "status": "COMPLETED",
+      "amount": 259,
+      "orderedAt": "2026-08-18T10:00:00+00:00",
+      "logistics": {
+        "carrier": "顺丰",
+        "status": "DELIVERED",
+        "lastNode": "已签收",
+        "updatedAt": "2026-08-21T10:00:00+00:00"
+      }
+    },
+    {
+      "key": "order_009",
+      "shopKey": "shop_pixel_tech",
+      "buyerKey": "buyer_001",
+      "productKey": "tech_mouse",
+      "sku": "P-T-004-WHITE",
+      "externalOrderId": "PT-20260826-009",
+      "status": "WAITING_SHIPMENT",
+      "amount": 169,
+      "orderedAt": "2026-08-26T08:00:00+00:00",
+      "logistics": null
+    },
+    {
+      "key": "order_010",
+      "shopKey": "shop_pixel_tech",
+      "buyerKey": "buyer_002",
+      "productKey": "tech_mech_keyboard",
+      "sku": "P-T-005-RED",
+      "externalOrderId": "PT-20260825-010",
+      "status": "SHIPPED",
+      "amount": 499,
+      "orderedAt": "2026-08-25T08:00:00+00:00",
+      "logistics": {
+        "carrier": "中通",
+        "status": "IN_TRANSIT",
+        "lastNode": "深圳网点已揽收",
+        "updatedAt": "2026-08-26T05:00:00+00:00"
+      }
+    }
+  ],
+  "knowledge": [
+    {
+      "key": "k001",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "多久发货？",
+      "answer": "普通现货商品通常在24小时内发出；预售商品以商品说明为准。"
+    },
+    {
+      "key": "k002",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "偏远地区多久发货？",
+      "answer": "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。"
+    },
+    {
+      "key": "k003",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "发什么快递？",
+      "answer": "默认使用顺丰或中通，具体承运方以订单物流信息为准。"
+    },
+    {
+      "key": "k004",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持指定快递吗？",
+      "answer": "是否支持指定快递需要人工确认，AI不做确定承诺。"
+    },
+    {
+      "key": "k005",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "是否包邮？",
+      "answer": "普通地区是否包邮以商品页与下单页面显示为准，偏远地区可能产生附加运费。"
+    },
+    {
+      "key": "k006",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "有运费险吗？",
+      "answer": "运费险以订单页面实际展示为准。"
+    },
+    {
+      "key": "k007",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持七天无理由吗？",
+      "answer": "支持7天无理由退货，但商品需保持完好，不影响二次销售。"
+    },
+    {
+      "key": "k008",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "商品破损怎么办？",
+      "answer": "请上传破损位置的清晰图片，客服会根据订单和售后政策协助处理。"
+    },
+    {
+      "key": "k009",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以换货吗？",
+      "answer": "换货需要人工确认商品状态和可换条件，AI只提供流程说明。"
+    },
+    {
+      "key": "k010",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "怎么转人工？",
+      "answer": "您可以直接回复“人工”，当前会话会切换为人工处理。"
+    },
+    {
+      "key": "k011",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "尺码怎么选？",
+      "answer": "请提供身高、体重、偏好版型，并结合当前商品尺码表选择。"
+    },
+    {
+      "key": "k012",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "如何洗护？",
+      "answer": "不同商品洗护要求不同，请发送商品卡或商品名称后查询。"
+    },
+    {
+      "key": "k013",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "订单怎么查？",
+      "answer": "请发送订单卡或进入订单详情，以避免关联错误记录。"
+    },
+    {
+      "key": "k014",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以改地址吗？",
+      "answer": "改地址属于高风险操作，需要人工核验后处理。"
+    },
+    {
+      "key": "k015",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以退款吗？",
+      "answer": "退款需要结合订单、商品状态和售后政策，由人工确认。"
+    },
+    {
+      "key": "k016",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "多久发货？",
+      "answer": "数码商品通常在48小时内发出；预售或定制商品以商品页说明为准。"
+    },
+    {
+      "key": "k017",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "发什么快递？",
+      "answer": "默认使用顺丰、京东物流或中通，具体以订单为准。"
+    },
+    {
+      "key": "k018",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持Mac吗？",
+      "answer": "是否支持macOS取决于具体商品，请发送商品卡或商品名称。"
+    },
+    {
+      "key": "k019",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持Windows吗？",
+      "answer": "大部分产品支持Windows，具体以商品说明为准。"
+    },
+    {
+      "key": "k020",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以开票吗？",
+      "answer": "开票规则需人工确认订单信息和店铺政策。"
+    },
+    {
+      "key": "k021",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持七天无理由吗？",
+      "answer": "支持7天无理由，已拆封且影响二次销售的商品按售后政策处理。"
+    },
+    {
+      "key": "k022",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "质量问题怎么办？",
+      "answer": "请上传清晰图片，必要时补充视频，客服会结合订单处理。"
+    },
+    {
+      "key": "k023",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以换货吗？",
+      "answer": "换货需确认商品状态与可换条件，由人工审批。"
+    },
+    {
+      "key": "k024",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "怎么转人工？",
+      "answer": "回复“人工”即可切换人工客服。"
+    },
+    {
+      "key": "k025",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持企业采购吗？",
+      "answer": "支持企业批量采购，具体数量与报价需人工确认。"
+    },
+    {
+      "key": "k026",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "保修多久？",
+      "answer": "保修期限以商品说明和订单凭证为准。"
+    },
+    {
+      "key": "k027",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "能开发票吗？",
+      "answer": "可否开票及票种需人工根据订单确认。"
+    },
+    {
+      "key": "k028",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "兼容手机吗？",
+      "answer": "需结合商品接口和手机型号判断，请提供具体设备。"
+    },
+    {
+      "key": "k029",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "订单怎么查？",
+      "answer": "请发送订单卡或选择具体订单，系统不会从多个订单中猜测。"
+    },
+    {
+      "key": "k030",
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以退款吗？",
+      "answer": "退款属于高风险操作，需要人工确认。"
+    },
+    {
+      "key": "k031",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "是什么材质？",
+      "answer": "70%棉、30%聚酯纤维。"
+    },
+    {
+      "key": "k032",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "版型怎么样？",
+      "answer": "该商品为宽松版型。"
+    },
+    {
+      "key": "k033",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以烘干吗？",
+      "answer": "不建议使用烘干机。"
+    },
+    {
+      "key": "k034",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "适合什么季节？",
+      "answer": "适合春秋日常穿着。"
+    },
+    {
+      "key": "k035",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "怎么洗？",
+      "answer": "建议冷水手洗。"
+    },
+    {
+      "key": "k036",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_sun_jacket",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "防晒指数是多少？",
+      "answer": "商品说明为UPF50+。"
+    },
+    {
+      "key": "k037",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_sun_jacket",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "面料厚吗？",
+      "answer": "面料轻薄透气。"
+    },
+    {
+      "key": "k038",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_sun_jacket",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以机洗吗？",
+      "answer": "可以机洗，建议装洗衣袋。"
+    },
+    {
+      "key": "k039",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_sun_jacket",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以高温熨烫吗？",
+      "answer": "不可高温熨烫。"
+    },
+    {
+      "key": "k040",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_sun_jacket",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "适合什么场景？",
+      "answer": "适合通勤和户外防晒。"
+    },
+    {
+      "key": "k041",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_jeans",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "版型是什么？",
+      "answer": "高腰直筒版型。"
+    },
+    {
+      "key": "k042",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_jeans",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "有弹力吗？",
+      "answer": "面料含少量弹力纤维。"
+    },
+    {
+      "key": "k043",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_jeans",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "怎么洗？",
+      "answer": "建议翻面冷水洗涤。"
+    },
+    {
+      "key": "k044",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_jeans",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "会掉色吗？",
+      "answer": "深色牛仔建议与浅色衣物分开清洗。"
+    },
+    {
+      "key": "k045",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_jeans",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "适合什么风格？",
+      "answer": "适合日常通勤和休闲搭配。"
+    },
+    {
+      "key": "k046",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_down_coat",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "填充物是什么？",
+      "answer": "填充物为90%白鸭绒。"
+    },
+    {
+      "key": "k047",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_down_coat",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "蓬松度多少？",
+      "answer": "商品说明为650蓬松度。"
+    },
+    {
+      "key": "k048",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_down_coat",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "预售商品的履约信息在哪里查看？",
+      "answer": "请以订单详情中展示的最新履约信息为准。"
+    },
+    {
+      "key": "k049",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_down_coat",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "怎么洗？",
+      "answer": "建议专业洗护。"
+    },
+    {
+      "key": "k050",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_down_coat",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "保暖吗？",
+      "answer": "短款轻羽绒设计，适合日常冬季通勤。"
+    },
+    {
+      "key": "k051",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_cardigan",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "是什么材质？",
+      "answer": "粘纤混纺。"
+    },
+    {
+      "key": "k052",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_cardigan",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "怎么晾晒？",
+      "answer": "建议平铺晾干。"
+    },
+    {
+      "key": "k053",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_cardigan",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以暴晒吗？",
+      "answer": "不建议悬挂暴晒。"
+    },
+    {
+      "key": "k054",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_cardigan",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "版型怎么样？",
+      "answer": "常规版型。"
+    },
+    {
+      "key": "k055",
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_cardigan",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "还能买吗？",
+      "answer": "当前商品已下架，不参与推荐。"
+    },
+    {
+      "key": "k056",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "是什么配列？",
+      "answer": "84键布局。"
+    },
+    {
+      "key": "k057",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "连接方式有哪些？",
+      "answer": "支持蓝牙、2.4G和有线三模。"
+    },
+    {
+      "key": "k058",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持Mac吗？",
+      "answer": "支持Windows和macOS。"
+    },
+    {
+      "key": "k059",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "电池多大？",
+      "answer": "内置4000mAh电池。"
+    },
+    {
+      "key": "k060",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "声音大吗？",
+      "answer": "采用静音线性轴，适合安静办公。"
+    },
+    {
+      "key": "k061",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "分辨率是多少？",
+      "answer": "1920×1080。"
+    },
+    {
+      "key": "k062",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "是什么面板？",
+      "answer": "15.6英寸IPS面板。"
+    },
+    {
+      "key": "k063",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持一线连接吗？",
+      "answer": "支持USB-C一线连接，设备需支持视频输出。"
+    },
+    {
+      "key": "k064",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "有HDMI吗？",
+      "answer": "支持Mini HDMI。"
+    },
+    {
+      "key": "k065",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持游戏主机吗？",
+      "answer": "兼容性取决于接口与供电条件。"
+    },
+    {
+      "key": "k066",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_charger",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "最大功率多少？",
+      "answer": "单口最高100W。"
+    },
+    {
+      "key": "k067",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_charger",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "有几个接口？",
+      "answer": "双USB-C加一个USB-A。"
+    },
+    {
+      "key": "k068",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_charger",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持什么协议？",
+      "answer": "支持PD与PPS协议。"
+    },
+    {
+      "key": "k069",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_charger",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "能充笔记本吗？",
+      "answer": "可为支持PD输入的笔记本充电，实际功率取决于设备。"
+    },
+    {
+      "key": "k070",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_charger",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "适合哪些设备？",
+      "answer": "适合笔记本、平板和手机。"
+    },
+    {
+      "key": "k071",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mouse",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "重量多少？",
+      "answer": "约58g。"
+    },
+    {
+      "key": "k072",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mouse",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "连接方式？",
+      "answer": "支持2.4G和蓝牙双模。"
+    },
+    {
+      "key": "k073",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mouse",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持Mac吗？",
+      "answer": "支持Windows和macOS。"
+    },
+    {
+      "key": "k074",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mouse",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "适合游戏吗？",
+      "answer": "适合办公和轻度游戏。"
+    },
+    {
+      "key": "k075",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mouse",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "有几个颜色？",
+      "answer": "当前有白色和黑色。"
+    },
+    {
+      "key": "k076",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mech_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "是什么配列？",
+      "answer": "75%配列。"
+    },
+    {
+      "key": "k077",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mech_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持热插拔吗？",
+      "answer": "支持热插拔。"
+    },
+    {
+      "key": "k078",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mech_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "HUMAN_REVIEWED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "支持改键吗？",
+      "answer": "支持QMK/VIA改键。"
+    },
+    {
+      "key": "k079",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mech_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "AUTO_LEARNED",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "有背光吗？",
+      "answer": "支持RGB背光。"
+    },
+    {
+      "key": "k080",
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_mech_keyboard",
+      "scope": "PRODUCT",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "适合谁？",
+      "answer": "适合开发者和桌搭用户。"
+    }
+  ],
+  "customerMemories": [
+    {
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_002",
+      "type": "PREFERENCE",
+      "key": "preferred_fit",
+      "value": {
+        "fit": "宽松"
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "shopKey": "shop_pixel_tech",
+      "buyerKey": "buyer_003",
+      "type": "PRODUCT_PREFERENCE",
+      "key": "keyboard_switch",
+      "value": {
+        "switch": "静音轴"
+      },
+      "status": "ACTIVE"
+    }
+  ],
+  "knowledgeConflicts": [
+    {
+      "key": "conflict_001",
+      "shopKey": "shop_mia_fashion",
+      "left": {
+        "question": "普通商品多久发货？",
+        "answer": "普通现货商品通常24小时内发出。",
+        "sourceType": "MANUAL"
+      },
+      "right": {
+        "question": "普通商品多久发货？",
+        "answer": "普通商品通常48小时内发出。",
+        "sourceType": "HUMAN_REVIEWED"
+      },
+      "status": "OPEN"
+    }
+  ],
+  "workflows": [
+    {
+      "key": "wf_product_recommendation",
+      "name": "商品推荐",
+      "type": "PRODUCT",
+      "status": "PUBLISHED",
+      "priority": 60,
+      "version": 1,
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger",
+            "type": "TRIGGER",
+            "position": {
+              "x": 100,
+              "y": 150
+            },
+            "config": {
+              "intent": "PRODUCT_RECOMMENDATION"
+            }
+          },
+          {
+            "id": "query",
+            "type": "QUERY_PRODUCT",
+            "position": {
+              "x": 360,
+              "y": 150
+            },
+            "config": {
+              "topN": 3
+            }
+          },
+          {
+            "id": "generate",
+            "type": "AI_GENERATE",
+            "position": {
+              "x": 620,
+              "y": 150
+            },
+            "config": {
+              "purpose": "REPLY_GENERATION"
+            }
+          },
+          {
+            "id": "end",
+            "type": "END",
+            "position": {
+              "x": 880,
+              "y": 150
+            },
+            "config": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "trigger",
+            "target": "query"
+          },
+          {
+            "id": "e2",
+            "source": "query",
+            "target": "generate"
+          },
+          {
+            "id": "e3",
+            "source": "generate",
+            "target": "end"
+          }
+        ]
+      }
+    },
+    {
+      "key": "wf_after_sales_template",
+      "name": "售后协商模板",
+      "type": "SHOP",
+      "status": "DRAFT",
+      "priority": 100,
+      "version": 0,
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger",
+            "type": "TRIGGER",
+            "position": {
+              "x": 100,
+              "y": 180
+            },
+            "config": {
+              "intent": "AFTER_SALES_QUERY"
+            }
+          },
+          {
+            "id": "order",
+            "type": "QUERY_ORDER",
+            "position": {
+              "x": 320,
+              "y": 180
+            },
+            "config": {}
+          },
+          {
+            "id": "condition",
+            "type": "CONDITION",
+            "position": {
+              "x": 540,
+              "y": 180
+            },
+            "config": {
+              "expression": "order.status != null"
+            }
+          },
+          {
+            "id": "generate",
+            "type": "AI_GENERATE",
+            "position": {
+              "x": 760,
+              "y": 180
+            },
+            "config": {}
+          },
+          {
+            "id": "approval",
+            "type": "HUMAN_APPROVAL",
+            "position": {
+              "x": 980,
+              "y": 180
+            },
+            "config": {
+              "action": "PROPOSE_COMPENSATION"
+            }
+          },
+          {
+            "id": "end",
+            "type": "END",
+            "position": {
+              "x": 1200,
+              "y": 180
+            },
+            "config": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "trigger",
+            "target": "order"
+          },
+          {
+            "id": "e2",
+            "source": "order",
+            "target": "condition"
+          },
+          {
+            "id": "e3",
+            "source": "condition",
+            "target": "generate",
+            "condition": "true"
+          },
+          {
+            "id": "e4",
+            "source": "generate",
+            "target": "approval"
+          },
+          {
+            "id": "e5",
+            "source": "approval",
+            "target": "end"
+          },
+          {
+            "id": "e6",
+            "source": "condition",
+            "target": "end",
+            "condition": "false"
+          }
+        ]
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "key": "continuous_messages",
+      "name": "连续消息聚合"
+    },
+    {
+      "key": "message_during_generation",
+      "name": "生成中补消息"
+    },
+    {
+      "key": "two_buyers",
+      "name": "两个用户同时咨询"
+    },
+    {
+      "key": "two_shops",
+      "name": "两个店铺同时收到消息"
+    },
+    {
+      "key": "duplicate_and_reorder",
+      "name": "消息重复与乱序"
+    },
+    {
+      "key": "ai_timeout_fallback",
+      "name": "AI超时与Fallback"
+    },
+    {
+      "key": "service_restart_recovery",
+      "name": "服务重启恢复"
+    },
+    {
+      "key": "realtime_state_change",
+      "name": "库存/订单状态变化"
+    }
+  ]
+}

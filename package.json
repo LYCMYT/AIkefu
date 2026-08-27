@@ -1,0 +1,26 @@
+{
+  "name": "ai-customer-service-demo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "infra:bootstrap": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap-infra.ps1",
+    "dev": "dotenv -e .env -- pnpm --parallel --filter @ai-customer-service/api --filter @ai-customer-service/web dev",
+    "start:api": "dotenv -e .env -- pnpm --filter @ai-customer-service/api start",
+    "infra:up": "scripts\\\\docker-cmd.cmd compose up -d",
+    "infra:down": "scripts\\\\docker-cmd.cmd compose down",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm test:unit && pnpm test:integration && pnpm test:e2e",
+    "test:unit": "pnpm -r --if-present test:unit",
+    "test:integration": "pnpm --filter @ai-customer-service/api test:integration",
+    "test:e2e": "playwright test",
+    "db:generate": "pnpm --filter @ai-customer-service/api prisma:generate",
+    "db:migrate": "dotenv -e .env -- pnpm --filter @ai-customer-service/api prisma:migrate",
+    "db:deploy": "dotenv -e .env -- pnpm --filter @ai-customer-service/api prisma:deploy"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "dotenv-cli": "^8.0.0"
+  }
+}

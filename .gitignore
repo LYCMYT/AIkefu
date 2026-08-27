@@ -1,0 +1,31 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+**/.npm-cache/
+.pnpm-store/
+.turbo/
+*.tsbuildinfo
+.env
+.env.local
+.env.*
+!.env.example
+!.env.production.example
+*.log
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+
+# Local editor / Codex artifacts that are not part of this product.
+.obsidian/
+.codex-resume-editable/
+~$*
+刘宇晨简历_可编辑Word版.docx
+刘宇晨简历_可编辑Word版_1比1复刻.docx
+
+# Internal clean-room inputs. These references are not public product assets.
+references/
+
+# Original handoff inventories become stale once development starts.
+checksums.sha256
+package-manifest.json

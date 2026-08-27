@@ -1,0 +1,1268 @@
+// Draft Prisma schema for the frozen V1.
+// Adjust embedding dimension to match the selected embedding model.
+// The pgvector column is represented with Unsupported("vector(1536)").
+// Run specs/pgvector.sql after migration where required.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  EXPIRED
+  DELETED
+}
+
+enum ShopAIMode {
+  AUTO_ALLOWED
+  ASSIST_ONLY
+  MANUAL_ONLY
+}
+
+enum ShopConnectionState {
+  CONNECTED
+  RECONNECTING
+  RECONCILING
+  DEGRADED
+  DISCONNECTED
+}
+
+enum ConversationState {
+  ACTIVE
+  CLOSING
+  CLOSED
+}
+
+enum ConversationMode {
+  AUTO
+  ASSIST
+  MANUAL
+  HOLD
+}
+
+enum SyncState {
+  HEALTHY
+  DEGRADED
+}
+
+enum MessageRole {
+  BUYER
+  AI
+  HUMAN
+  SYSTEM
+}
+
+enum MessageKind {
+  TEXT
+  IMAGE
+  GOODS_CARD
+  ORDER_CARD
+  SYSTEM
+}
+
+enum MessageStatus {
+  ACTIVE
+  RECALLED
+  DELETED
+  EDITED
+}
+
+enum SummaryState {
+  ACTIVE
+  DIRTY
+  FROZEN
+}
+
+enum TurnBufferStatus {
+  BUFFERING
+  FLUSHING
+  FLUSHED
+  CANCELLED
+  RECOVERY_PENDING
+}
+
+enum UserTurnStatus {
+  OPEN
+  PLANNED
+  RESOLVED
+  SUPERSEDED
+  CANCELLED
+  FAILED
+}
+
+enum TaskStatus {
+  OPEN
+  RUNNING
+  RESOLVED
+  AMBIGUOUS
+  FAILED
+  SUPERSEDED
+  CANCELLED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReplyJobStatus {
+  PENDING
+  FAST_PATH_READY
+  GENERATING
+  WAITING_HUMAN
+  SENT
+  CANCELLING
+  STALE
+  EXPIRED
+  CANCELLED
+  FAILED
+  RECOVERY_PENDING
+}
+
+enum ReplyDraftStatus {
+  GENERATING
+  WAITING_HUMAN
+  SENT
+  STALE
+  EXPIRED
+  CANCELLED
+  FAILED
+}
+
+enum ReplyEditType {
+  NONE
+  STYLE_EDIT
+  FACTUAL_CORRECTION
+  KNOWLEDGE_ENRICHMENT
+}
+
+enum ProcessingOutboxStatus {
+  PENDING
+  DISPATCHING
+  DISPATCHED
+  FAILED
+}
+
+enum SendOutboxStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  UNCERTAIN
+  CANCELLED
+}
+
+enum KnowledgeScope {
+  STORE
+  PRODUCT
+}
+
+enum KnowledgeSourceType {
+  MANUAL
+  HUMAN_REVIEWED
+  AUTO_LEARNED
+}
+
+enum KnowledgeBusinessStatus {
+  DRAFT
+  ENABLED
+  DISABLED
+  OUTDATED
+  DELETED
+}
+
+enum KnowledgeIndexStatus {
+  PENDING
+  INDEXING
+  READY
+  FAILED
+}
+
+enum KnowledgeCandidateStatus {
+  PENDING
+  APPROVED
+  PUBLISHED
+  REJECTED
+  DUPLICATE
+  CONFLICTED
+}
+
+enum KnowledgeConflictStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+enum CustomerMemoryType {
+  PREFERENCE
+  PRODUCT_PREFERENCE
+  ONGOING_CASE
+}
+
+enum CustomerMemoryStatus {
+  ACTIVE
+  DISABLED
+  DELETED
+}
+
+enum ProductStatus {
+  ON_SHELF
+  OFF_SHELF
+  DISABLED
+}
+
+enum ProductLearningJobStatus {
+  PENDING
+  RUNNING
+  PARTIAL_SUCCESS
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ProductLearningItemStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  OUTDATED
+}
+
+enum AttachmentStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  DELETED
+}
+
+enum WorkflowStatus {
+  DRAFT
+  PUBLISHED
+  DISABLED
+}
+
+enum WorkflowRunStatus {
+  RUNNING
+  WAITING_APPROVAL
+  SUCCEEDED
+  FAILED
+  STALE
+  CANCELLED
+  RECOVERING
+}
+
+enum WorkflowNodeRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  STALE
+  CANCELLED
+}
+
+enum ActionRiskLevel {
+  READ
+  LOW_WRITE
+  MEDIUM_WRITE
+  HIGH_RISK
+}
+
+enum ActionProposalStatus {
+  PROPOSED
+  POLICY_CHECKED
+  WAITING_APPROVAL
+  APPROVED
+  REVALIDATING
+  EXECUTING
+  SUCCEEDED
+  REJECTED
+  STALE
+  FAILED
+  UNCERTAIN
+  CANCELLED
+}
+
+enum ScheduledMessageType {
+  WELCOME
+  CLOSING
+}
+
+enum ScheduledMessageStatus {
+  SCHEDULED
+  REVALIDATING
+  SENDING
+  SENT
+  CANCELLED_STALE
+  FAILED
+  UNCERTAIN
+}
+
+enum QualityReviewStatus {
+  PENDING
+  RUNNING
+  AUTO_REVIEWED
+  PASS
+  FAIL
+  NEEDS_HUMAN
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum IncidentStatus {
+  OPEN
+  CORRECTION_DRAFTED
+  CORRECTED
+  ROOT_CAUSE_FIXED
+  REGRESSION_ADDED
+  RESOLVED
+}
+
+enum AiPurpose {
+  INTENT_PLANNER
+  RISK_CLASSIFIER
+  SUMMARY
+  KNOWLEDGE_EXTRACT
+  REPLY_GENERATION
+  IMAGE_ANALYSIS
+  QUALITY_JUDGE
+  EMBEDDING
+}
+
+model Workspace {
+  id             String          @id @default(cuid())
+  tokenHash      String          @unique
+  status         WorkspaceStatus @default(ACTIVE)
+  lastAccessedAt DateTime        @default(now())
+  expiresAt      DateTime
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  tenant         Tenant?
+  attachments    Attachment[]
+  aiUsage        AiUsage[]
+  traceEvents    TraceEvent[]
+  auditLogs      AuditLog[]
+
+  @@index([status, expiresAt])
+}
+
+model Tenant {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  shops         Shop[]
+  buyers        Buyer[]
+  conversations Conversation[]
+  knowledge     KnowledgeItem[]
+  workflows     Workflow[]
+  qualityReviews QualityReview[]
+  replyIncidents ReplyIncident[]
+
+  @@index([workspaceId])
+}
+
+model Shop {
+  id              String              @id @default(cuid())
+  workspaceId     String
+  tenantId        String
+  platform        String
+  externalShopId  String
+  name            String
+  aiMode          ShopAIMode          @default(ASSIST_ONLY)
+  connectionState ShopConnectionState @default(CONNECTED)
+  syncComplete    Boolean             @default(true)
+  enabled         Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  settings            ShopSettings?
+  products            Product[]
+  orders              Order[]
+  conversations       Conversation[]
+  knowledge           KnowledgeItem[]
+  candidates          KnowledgeCandidate[]
+  memories            CustomerMemory[]
+  productLearningJobs ProductLearningJob[]
+  syncCheckpoint      ShopSyncCheckpoint?
+  scheduledMessages   ScheduledMessageJob[]
+  aiUsage             AiUsage[]
+  workflows           Workflow[]
+
+  @@unique([workspaceId, platform, externalShopId])
+  @@index([workspaceId, tenantId, enabled])
+}
+
+model ShopSettings {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  tenantId         String
+  shopId           String   @unique
+  tone             String   @default("亲切、简洁")
+  logisticsPolicy  String?
+  shippingPolicy   String?
+  afterSalesPolicy String?
+  welcomeMessage   String?
+  closingMessages  Json?
+  transferKeywords Json?
+  forbiddenTerms   Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, tenantId])
+}
+
+model Buyer {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  tenantId        String
+  externalBuyerId String
+  displayName     String
+  avatarUrl       String?
+  tags            Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  orders        Order[]
+  memories      CustomerMemory[]
+
+  @@unique([workspaceId, externalBuyerId])
+  @@index([workspaceId, tenantId, displayName])
+}
+
+model CustomerMemory {
+  id          String               @id @default(cuid())
+  workspaceId String
+  tenantId    String
+  shopId      String
+  buyerId     String
+  type        CustomerMemoryType
+  key         String
+  valueJson   Json
+  status      CustomerMemoryStatus @default(ACTIVE)
+  expiresAt   DateTime?
+  createdBy   String
+  updatedBy   String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  shop  Shop  @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  buyer Buyer @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, shopId, buyerId, status])
+}
+
+model Product {
+  id                       String        @id @default(cuid())
+  workspaceId              String
+  tenantId                 String
+  shopId                   String
+  externalProductId        String
+  title                    String
+  description              String
+  contentHash              String?
+  sourceVersion            String?
+  status                   ProductStatus @default(ON_SHELF)
+  recommendable            Boolean       @default(true)
+  activeKnowledgeVersionId String?
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+
+  shop                 Shop                    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  skus                 ProductSku[]
+  orders               Order[]
+  knowledge            KnowledgeItem[]
+  conversations        Conversation[]          @relation("CurrentProduct")
+  learningItems        ProductLearningItem[]
+  currentKnowledgeVersion KnowledgeVersion?    @relation("ProductCurrentKnowledge", fields: [activeKnowledgeVersionId], references: [id])
+
+  @@unique([workspaceId, shopId, externalProductId])
+  @@index([workspaceId, shopId, status])
+}
+
+model ProductSku {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  tenantId      String
+  shopId        String
+  productId     String
+  externalSkuId String
+  attributesJson Json
+  price         Decimal  @db.Decimal(12, 2)
+  inventory     Int
+  status        String
+  version       Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orders  Order[]
+
+  @@unique([workspaceId, shopId, externalSkuId])
+  @@index([productId, status])
+}
+
+model Order {
+  id                    String   @id @default(cuid())
+  workspaceId           String
+  tenantId              String
+  shopId                String
+  buyerId               String
+  productId             String
+  skuId                 String?
+  externalOrderId       String
+  status                String
+  amount                Decimal  @db.Decimal(12, 2)
+  orderedAt             DateTime
+  shippedAt             DateTime?
+  logisticsSnapshotJson Json?
+  version               Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  shop        Shop       @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  buyer       Buyer      @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  product     Product    @relation(fields: [productId], references: [id])
+  sku         ProductSku? @relation(fields: [skuId], references: [id])
+  conversations Conversation[] @relation("CurrentOrder")
+
+  @@unique([workspaceId, shopId, externalOrderId])
+  @@index([workspaceId, shopId, buyerId, status])
+}
+
+model Conversation {
+  id                     String            @id @default(cuid())
+  workspaceId            String
+  tenantId               String
+  shopId                 String
+  buyerId                String
+  externalConversationId String?
+  state                  ConversationState @default(ACTIVE)
+  baseMode               ConversationMode  @default(ASSIST)
+  overrideMode           ConversationMode?
+  activeTopic            String?
+  currentProductId       String?
+  currentOrderId         String?
+  lastCommittedSequence  Int               @default(0)
+  contextVersion         Int               @default(1)
+  humanActive            Boolean           @default(false)
+  needsReplan            Boolean           @default(false)
+  syncState              SyncState         @default(HEALTHY)
+  idleExpiresAt          DateTime?
+  closedAt               DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shop            Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  buyer           Buyer                @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  currentProduct  Product?             @relation("CurrentProduct", fields: [currentProductId], references: [id])
+  currentOrder    Order?               @relation("CurrentOrder", fields: [currentOrderId], references: [id])
+  messages        Message[]
+  summary         ConversationSummary?
+  turnBuffer      ConversationTurnBuffer?
+  userTurns       UserTurn[]
+  replyJobs       ReplyJob[]
+  workflowRuns    WorkflowRun[]
+  actionProposals ActionProposal[]
+  scheduledMessages ScheduledMessageJob[]
+  qualityReviews  QualityReview[]
+  replyIncidents  ReplyIncident[]
+  traceEvents     TraceEvent[]
+
+  @@index([workspaceId, shopId, state, updatedAt])
+  @@index([workspaceId, shopId, buyerId, state])
+}
+
+model Message {
+  id                String        @id @default(cuid())
+  workspaceId       String
+  tenantId          String
+  platform          String
+  shopId            String
+  conversationId    String
+  buyerId           String?
+  externalMessageId String
+  sequence          Int
+  role              MessageRole
+  kind              MessageKind
+  status            MessageStatus @default(ACTIVE)
+  contentJson       Json
+  sentAt            DateTime
+  receivedAt        DateTime      @default(now())
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  conversation Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  versions     MessageVersion[]
+  attachments  Attachment[]
+  sourceTurns  UserTurnMessage[]
+
+  @@unique([platform, shopId, externalMessageId])
+  @@unique([conversationId, sequence, externalMessageId])
+  @@index([conversationId, sequence])
+  @@index([workspaceId, shopId, receivedAt])
+}
+
+model MessageVersion {
+  id        String   @id @default(cuid())
+  messageId String
+  version   Int
+  contentJson Json
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, version])
+}
+
+model ConversationSummary {
+  id                     String       @id @default(cuid())
+  workspaceId            String
+  tenantId               String
+  conversationId         String       @unique
+  narrativeSummary       String
+  structuredFactsJson    Json
+  openQuestionsJson      Json
+  activeTopic            String?
+  summaryVersion         Int          @default(1)
+  basedOnThroughSequence Int          @default(0)
+  state                  SummaryState @default(ACTIVE)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, tenantId, state])
+}
+
+model ConversationTurnBuffer {
+  id              String           @id @default(cuid())
+  workspaceId     String
+  tenantId        String
+  conversationId  String           @unique
+  firstSequence   Int
+  latestSequence  Int
+  openedAt        DateTime
+  lastMessageAt   DateTime
+  idleDeadline    DateTime
+  hardDeadline    DateTime
+  generation      Int              @default(1)
+  status          TurnBufferStatus @default(BUFFERING)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([status, idleDeadline])
+  @@index([status, hardDeadline])
+}
+
+model UserTurn {
+  id                  String         @id @default(cuid())
+  workspaceId         String
+  tenantId            String
+  shopId              String
+  conversationId      String
+  turnKey             String         @unique
+  firstSequence       Int
+  lastSequence        Int
+  normalizedText      String?
+  multimodalSummaryJson Json?
+  status              UserTurnStatus @default(OPEN)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messages     UserTurnMessage[]
+  tasks        Task[]
+  replyJobs    ReplyJob[]
+
+  @@index([conversationId, createdAt])
+}
+
+model UserTurnMessage {
+  userTurnId String
+  messageId  String
+  orderIndex Int
+
+  userTurn UserTurn @relation(fields: [userTurnId], references: [id], onDelete: Cascade)
+  message  Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@id([userTurnId, messageId])
+  @@unique([userTurnId, orderIndex])
+}
+
+model Task {
+  id                    String     @id @default(cuid())
+  workspaceId           String
+  tenantId              String
+  shopId                String
+  conversationId        String
+  userTurnId            String
+  intent                String
+  riskLevel             RiskLevel
+  requiredContextJson   Json
+  requiredKnowledgeJson Json
+  requiredToolsJson     Json
+  ownerWorkflowRunId    String?
+  status                TaskStatus @default(OPEN)
+  resultJson            Json?
+  blocking              Boolean    @default(false)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  userTurn         UserTurn      @relation(fields: [userTurnId], references: [id], onDelete: Cascade)
+  ownerWorkflowRun WorkflowRun?  @relation("TaskWorkflowOwner", fields: [ownerWorkflowRunId], references: [id])
+
+  @@index([conversationId, status])
+  @@index([userTurnId, status])
+}
+
+model ReplyJob {
+  id                       String         @id @default(cuid())
+  workspaceId              String
+  tenantId                 String
+  shopId                   String
+  conversationId           String
+  userTurnId               String
+  status                   ReplyJobStatus @default(PENDING)
+  mode                     ConversationMode
+  sourceLastMessageId      String?
+  sourceSequence           Int
+  sourceContextVersion     Int
+  idempotencyKey           String         @unique
+  cancelReason             String?
+  provider                 String?
+  model                    String?
+  purpose                  AiPurpose?
+  promptVersion            String?
+  ragStrategy              String?
+  fallbackUsed             Boolean        @default(false)
+  inputTokens              Int?
+  outputTokens             Int?
+  estimatedCost            Decimal?       @db.Decimal(14, 6)
+  createdAt                DateTime       @default(now())
+  startedAt                DateTime?
+  completedAt              DateTime?
+  updatedAt                DateTime       @updatedAt
+
+  conversation Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userTurn      UserTurn       @relation(fields: [userTurnId], references: [id], onDelete: Cascade)
+  draft         ReplyDraft?
+  sendOutbox    SendOutbox?
+  evidences     ReplyEvidence[]
+  incidents     ReplyIncident[]
+  traceEvents   TraceEvent[]
+
+  @@index([conversationId, status])
+  @@index([status, updatedAt])
+}
+
+model ReplyDraft {
+  id           String           @id @default(cuid())
+  workspaceId  String
+  tenantId     String
+  replyJobId   String           @unique
+  aiDraft      String
+  humanFinal   String?
+  editType     ReplyEditType    @default(NONE)
+  status       ReplyDraftStatus @default(GENERATING)
+  expiresAt    DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  replyJob ReplyJob @relation(fields: [replyJobId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+}
+
+model ReplyEvidence {
+  id                       String   @id @default(cuid())
+  workspaceId              String
+  tenantId                 String
+  replyJobId               String
+  knowledgeItemId          String
+  knowledgeVersionId       String
+  knowledgeVersionNumber   Int
+  sourceType               KnowledgeSourceType
+  scope                    KnowledgeScope
+  retrievedContentSnapshot String
+  retrievalScore           Float?
+  createdAt                DateTime @default(now())
+
+  replyJob ReplyJob @relation(fields: [replyJobId], references: [id], onDelete: Cascade)
+
+  @@index([replyJobId])
+  @@index([knowledgeItemId, knowledgeVersionId])
+}
+
+model ProcessingOutbox {
+  id            String                    @id @default(cuid())
+  workspaceId   String
+  tenantId      String
+  eventId       String                    @unique
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payloadJson   Json
+  status        ProcessingOutboxStatus    @default(PENDING)
+  attempts      Int                       @default(0)
+  availableAt   DateTime                  @default(now())
+  dispatchedAt  DateTime?
+  lastError     String?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  @@index([status, availableAt])
+}
+
+model SendOutbox {
+  id                     String           @id @default(cuid())
+  workspaceId            String
+  tenantId               String
+  shopId                 String
+  conversationId         String
+  replyJobId             String?          @unique
+  actionProposalId       String?          @unique
+  idempotencyKey         String           @unique
+  payloadJson            Json
+  expectedLastMessageId  String?
+  expectedSequence       Int
+  expectedContextVersion Int
+  status                 SendOutboxStatus @default(PENDING)
+  receiptJson            Json?
+  lastError              String?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  replyJob       ReplyJob?       @relation(fields: [replyJobId], references: [id], onDelete: SetNull)
+  actionProposal ActionProposal? @relation(fields: [actionProposalId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+model KnowledgeItem {
+  id               String                  @id @default(cuid())
+  workspaceId      String
+  tenantId         String
+  shopId           String
+  productId        String?
+  scope            KnowledgeScope
+  sourceType       KnowledgeSourceType
+  businessStatus   KnowledgeBusinessStatus @default(DRAFT)
+  activeVersionId  String?                 @unique
+  createdBy        String
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shop          Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  product       Product?            @relation(fields: [productId], references: [id])
+  activeVersion KnowledgeVersion?   @relation("KnowledgeActiveVersion", fields: [activeVersionId], references: [id])
+  versions      KnowledgeVersion[]  @relation("KnowledgeItemVersions")
+  conflictsLeft  KnowledgeConflict[] @relation("ConflictLeftItem")
+  conflictsRight KnowledgeConflict[] @relation("ConflictRightItem")
+
+  @@index([workspaceId, shopId, productId, businessStatus])
+}
+
+model KnowledgeVersion {
+  id                String               @id @default(cuid())
+  workspaceId       String
+  tenantId          String
+  knowledgeItemId   String
+  version           Int
+  question          String
+  answer            String
+  sourceText        String?
+  sourceVersion     String?
+  confidence        Float?
+  indexStatus       KnowledgeIndexStatus @default(PENDING)
+  searchTokensJson  Json?
+  embedding         Unsupported("vector(1536)")?
+  effectiveFrom     DateTime?
+  effectiveTo       DateTime?
+  supersedesId      String?
+  createdAt         DateTime             @default(now())
+  indexedAt         DateTime?
+
+  item            KnowledgeItem       @relation("KnowledgeItemVersions", fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+  activeForItem   KnowledgeItem?      @relation("KnowledgeActiveVersion")
+  supersedes      KnowledgeVersion?   @relation("VersionSupersedes", fields: [supersedesId], references: [id])
+  supersededBy    KnowledgeVersion[]  @relation("VersionSupersedes")
+  currentForProduct Product[]         @relation("ProductCurrentKnowledge")
+
+  @@unique([knowledgeItemId, version])
+  @@index([indexStatus, effectiveFrom, effectiveTo])
+}
+
+model KnowledgeCandidate {
+  id                   String                   @id @default(cuid())
+  workspaceId          String
+  tenantId             String
+  shopId               String
+  productId            String?
+  source               String
+  proposedQuestion     String
+  proposedAnswer       String
+  status               KnowledgeCandidateStatus @default(PENDING)
+  duplicateOfId        String?
+  conflictWithId       String?
+  sourceConversationId String?
+  sourceReplyJobId     String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, shopId, status])
+}
+
+model KnowledgeConflict {
+  id             String                  @id @default(cuid())
+  workspaceId    String
+  tenantId       String
+  shopId         String
+  leftItemId     String
+  rightItemId    String
+  leftVersionId  String
+  rightVersionId String
+  status         KnowledgeConflictStatus @default(OPEN)
+  resolutionJson Json?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  createdAt      DateTime                @default(now())
+
+  leftItem  KnowledgeItem @relation("ConflictLeftItem", fields: [leftItemId], references: [id], onDelete: Cascade)
+  rightItem KnowledgeItem @relation("ConflictRightItem", fields: [rightItemId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, shopId, status])
+}
+
+model ProductLearningJob {
+  id          String                   @id @default(cuid())
+  workspaceId String
+  tenantId    String
+  shopId      String
+  status      ProductLearningJobStatus @default(PENDING)
+  total       Int                      @default(0)
+  succeeded   Int                      @default(0)
+  failed      Int                      @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  shop  Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items ProductLearningItem[]
+
+  @@index([shopId, status])
+}
+
+model ProductLearningItem {
+  id          String                    @id @default(cuid())
+  jobId       String
+  productId   String
+  status      ProductLearningItemStatus @default(PENDING)
+  lastError   String?
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  job     ProductLearningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  product Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, productId])
+}
+
+model Attachment {
+  id             String           @id @default(cuid())
+  workspaceId    String
+  tenantId       String
+  shopId         String
+  conversationId String?
+  messageId      String?
+  storageKey     String
+  mimeType       String
+  size           Int
+  status         AttachmentStatus @default(ACTIVE)
+  containsPII    Boolean          @default(false)
+  analysisJson   Json?
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  deletedAt      DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  message   Message?  @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, expiresAt])
+}
+
+model Workflow {
+  id              String         @id @default(cuid())
+  workspaceId     String
+  tenantId        String
+  shopId          String?
+  name            String
+  type            String
+  priority        Int            @default(50)
+  status          WorkflowStatus @default(DRAFT)
+  activeVersionId String?        @unique
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shop          Shop?             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  activeVersion WorkflowVersion?  @relation("WorkflowActiveVersion", fields: [activeVersionId], references: [id])
+  versions      WorkflowVersion[] @relation("WorkflowVersions")
+
+  @@index([workspaceId, status, priority])
+}
+
+model WorkflowVersion {
+  id          String   @id @default(cuid())
+  workspaceId String
+  tenantId    String
+  workflowId  String
+  version     Int
+  graphJson   Json
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  workflow      Workflow      @relation("WorkflowVersions", fields: [workflowId], references: [id], onDelete: Cascade)
+  activeFor     Workflow?     @relation("WorkflowActiveVersion")
+  runs          WorkflowRun[]
+
+  @@unique([workflowId, version])
+}
+
+model WorkflowRun {
+  id                   String            @id @default(cuid())
+  workspaceId          String
+  tenantId             String
+  shopId               String
+  conversationId       String
+  workflowVersionId    String
+  status               WorkflowRunStatus @default(RUNNING)
+  contextVersion       Int
+  currentNodeId        String?
+  completedNodeIdsJson Json?
+  startedAt            DateTime          @default(now())
+  finishedAt           DateTime?
+  updatedAt            DateTime          @updatedAt
+
+  conversation  Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  version       WorkflowVersion   @relation(fields: [workflowVersionId], references: [id])
+  nodeRuns      WorkflowNodeRun[]
+  ownedTasks    Task[]            @relation("TaskWorkflowOwner")
+  proposals     ActionProposal[]
+
+  @@index([status, updatedAt])
+  @@index([conversationId, status])
+}
+
+model WorkflowNodeRun {
+  id            String                @id @default(cuid())
+  workflowRunId String
+  nodeId        String
+  status        WorkflowNodeRunStatus @default(PENDING)
+  inputJson     Json?
+  outputJson    Json?
+  errorCode     String?
+  retryCount    Int                   @default(0)
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  durationMs    Int?
+
+  workflowRun WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  @@index([workflowRunId, nodeId])
+}
+
+model ActionProposal {
+  id               String               @id @default(cuid())
+  workspaceId      String
+  tenantId         String
+  shopId           String
+  conversationId   String
+  workflowRunId    String?
+  type             String
+  riskLevel        ActionRiskLevel
+  targetEntityType String
+  targetEntityId   String
+  payloadJson      Json
+  evidenceJson     Json?
+  contextVersion   Int
+  status           ActionProposalStatus @default(PROPOSED)
+  approvedBy       String?
+  approvedAt       DateTime?
+  receiptJson      Json?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  conversation Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  workflowRun  WorkflowRun?  @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+  sendOutbox    SendOutbox?
+
+  @@index([conversationId, status])
+  @@index([status, updatedAt])
+}
+
+model ScheduledMessageJob {
+  id                    String                 @id @default(cuid())
+  workspaceId           String
+  tenantId              String
+  shopId                String
+  conversationId        String
+  type                  ScheduledMessageType
+  executeAt             DateTime
+  createdContextVersion Int
+  status                ScheduledMessageStatus @default(SCHEDULED)
+  templateKey           String
+  idempotencyKey        String                 @unique
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  shop         Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([status, executeAt])
+}
+
+model ShopSyncCheckpoint {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  tenantId      String
+  shopId        String   @unique
+  lastCursor    String?
+  lastSequence  Int      @default(0)
+  lastEventAt   DateTime?
+  syncStatus    String   @default("HEALTHY")
+  updatedAt     DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model QualityReview {
+  id                      String              @id @default(cuid())
+  workspaceId             String
+  tenantId                String
+  conversationId          String
+  status                  QualityReviewStatus @default(PENDING)
+  deterministicResultJson Json?
+  judgeResultJson         Json?
+  humanResult             String?
+  createdBy               String
+  createdAt               DateTime            @default(now())
+  completedAt             DateTime?
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, createdAt])
+}
+
+model ReplyIncident {
+  id               String           @id @default(cuid())
+  workspaceId      String
+  tenantId         String
+  conversationId   String
+  replyJobId       String
+  errorType        String
+  severity         IncidentSeverity
+  sourceType       String?
+  originalAnswer   String
+  correctedAnswer  String?
+  status           IncidentStatus   @default(OPEN)
+  regressionCaseId String?
+  createdAt        DateTime         @default(now())
+  resolvedAt       DateTime?
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  replyJob     ReplyJob     @relation(fields: [replyJobId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, severity])
+}
+
+model AiUsage {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  tenantId       String
+  shopId         String?
+  purpose        AiPurpose
+  provider       String
+  model          String
+  requestId      String    @unique
+  inputTokens    Int       @default(0)
+  outputTokens   Int       @default(0)
+  estimatedCost  Decimal   @default(0) @db.Decimal(14, 6)
+  success        Boolean
+  fallbackUsed   Boolean   @default(false)
+  durationMs     Int?
+  errorCode      String?
+  createdAt      DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  shop      Shop?     @relation(fields: [shopId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([purpose, provider, model])
+}
+
+model TraceEvent {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  tenantId       String
+  shopId         String?
+  conversationId String?
+  replyJobId     String?
+  traceId        String
+  stage          String
+  payloadJson    Json
+  createdAt      DateTime @default(now())
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  replyJob     ReplyJob?     @relation(fields: [replyJobId], references: [id], onDelete: Cascade)
+
+  @@index([traceId, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  tenantId     String
+  actorType    String
+  actorId      String?
+  action       String
+  entityType   String
+  entityIdHash String
+  requestId    String?
+  resultCode   String
+  durationMs   Int?
+  createdAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+}
