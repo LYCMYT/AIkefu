@@ -54,6 +54,7 @@ test('archive filename is deterministic for a commit', () => {
 test('CI has a non-skipped real infrastructure and browser gate', () => {
   const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
   assert.match(workflow, /real-infra:/);
+  assert.match(workflow, /RUN_REAL_INFRA_INTEGRATION:\s*'0'[\s\S]*S3_ACCESS_KEY:\s*ci-demo-access[\s\S]*S3_SECRET_KEY:\s*ci-demo-secret/);
   assert.match(workflow, /RUN_REAL_INFRA_INTEGRATION:\s*'1'/);
   assert.match(workflow, /RUN_REAL_INFRA_E2E:\s*'1'/);
   assert.match(workflow, /playwright install --with-deps chromium/);

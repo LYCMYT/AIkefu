@@ -19,6 +19,11 @@ jobs:
     env:
       # Real PostgreSQL/Redis/MinIO suites are opt-in in this repository.
       RUN_REAL_INFRA_INTEGRATION: '0'
+      # AppModule intentionally fails closed when object-storage credentials are
+      # absent. These non-production placeholders let the mocked HTTP contract
+      # suites compile the full Nest module without contacting MinIO.
+      S3_ACCESS_KEY: ci-demo-access
+      S3_SECRET_KEY: ci-demo-secret
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
