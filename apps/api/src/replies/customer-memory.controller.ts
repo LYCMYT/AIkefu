@@ -11,8 +11,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import type { CustomerMemoryInput } from '@ai-customer-service/contracts';
 import { CurrentWorkspace } from '../auth/current-workspace.decorator';
+import { CustomerMemoryDto, ShopScopeDto } from '../common/request-dtos';
 import type { AuthenticatedWorkspace } from '../workspaces/workspace.repository';
 import { CustomerMemoryService } from './customer-memory.service';
 
@@ -34,7 +34,7 @@ export class CustomerMemoryController {
   create(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
     @Param('buyerId') buyerId: string,
-    @Body() input: CustomerMemoryInput,
+    @Body() input: CustomerMemoryDto,
   ) {
     return this.memories.create(scope, buyerId, input);
   }
@@ -45,12 +45,12 @@ export class MemoryMutationController {
   constructor(private readonly memories: CustomerMemoryService) {}
 
   @Patch(':memoryId')
-  update(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('memoryId') memoryId: string, @Body() input: CustomerMemoryInput) {
+  update(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('memoryId') memoryId: string, @Body() input: CustomerMemoryDto) {
     return this.memories.update(scope, memoryId, input);
   }
 
   @Post(':memoryId/disable')
-  disable(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('memoryId') memoryId: string, @Body() input: { shopId?: string }) {
+  disable(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('memoryId') memoryId: string, @Body() input: ShopScopeDto) {
     return this.memories.disable(scope, memoryId, requiredShopId(input?.shopId));
   }
 

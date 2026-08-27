@@ -1,15 +1,18 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { validateEnvironment } from './common/environment';
+import { configureHttpApplication } from './common/http-bootstrap';
 import { PrismaService } from './database/prisma.service';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api');
-  app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173' });
+  const environment = validateEnvironment(process.env);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+  configureHttpApplication(app, environment);
   app.enableShutdownHooks();
   await app.get(PrismaService).$connect();
-  await app.listen(Number(process.env.API_PORT ?? 3000));
+  await app.listen(environment.apiPort);
 }
 
 void bootstrap();

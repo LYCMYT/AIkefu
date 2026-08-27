@@ -12,15 +12,10 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentWorkspace } from '../auth/current-workspace.decorator';
+import { AttachmentBodyDto } from '../common/request-dtos';
 import type { AuthenticatedWorkspace } from '../workspaces/workspace.repository';
 import { MAX_ATTACHMENT_BYTES, AttachmentService } from './attachments.service';
 import type { AttachmentFile } from './attachments.types';
-
-type AttachmentBody = {
-  shopId?: string;
-  buyerId?: string;
-  conversationId?: string;
-};
 
 @Controller('attachments')
 export class AttachmentsController {
@@ -34,7 +29,7 @@ export class AttachmentsController {
   )
   upload(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
-    @Body() body: AttachmentBody,
+    @Body() body: AttachmentBodyDto,
     @UploadedFile() file?: AttachmentFile,
   ) {
     if (!body?.shopId || !body.buyerId) {

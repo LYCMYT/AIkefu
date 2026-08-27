@@ -1,5 +1,13 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
+import {
+  CreateBucketCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export const OBJECT_STORAGE = Symbol('OBJECT_STORAGE');
 
@@ -101,30 +109,37 @@ export type MinioStorageConfig = {
   accessKeyId?: string;
   secretAccessKey?: string;
   forcePathStyle?: boolean;
+  requestTimeoutMs?: number;
+  client?: S3Client;
 };
 
+type StorageCommand = PutObjectCommand | DeleteObjectCommand | CreateBucketCommand;
+
 /**
- * Small S3 Signature V4 client for MinIO.  Credentials are read only from
- * server configuration and are never accepted from a request or included in
- * application logs.  The implementation intentionally covers only the three
- * operations this bounded attachment feature needs.
+ * Official AWS SDK v3 adapter for MinIO/S3. Credentials are server-only and
+ * every network operation has a hard deadline even when a custom transport
+ * ignores AbortSignal.
  */
 @Injectable()
 export class MinioObjectStorage implements ObjectStorage {
-  private readonly endpoint: URL;
   private readonly bucket: string;
-  private readonly region: string;
-  private readonly accessKeyId?: string;
-  private readonly secretAccessKey?: string;
-  private readonly forcePathStyle: boolean;
+  private readonly requestTimeoutMs: number;
+  private readonly client: S3Client;
 
   constructor(config: MinioStorageConfig = MinioObjectStorage.configFromEnv()) {
-    this.endpoint = new URL(config.endpoint);
     this.bucket = config.bucket;
-    this.region = config.region ?? 'us-east-1';
-    this.accessKeyId = config.accessKeyId;
-    this.secretAccessKey = config.secretAccessKey;
-    this.forcePathStyle = config.forcePathStyle ?? true;
+    this.requestTimeoutMs = boundedRequestTimeout(config.requestTimeoutMs ?? 8_000);
+    if (!this.bucket || !config.accessKeyId || !config.secretAccessKey) throw new Error('ATTACHMENT_STORAGE_NOT_CONFIGURED');
+    this.client = config.client ?? new S3Client({
+      endpoint: config.endpoint,
+      region: config.region ?? 'us-east-1',
+      forcePathStyle: config.forcePathStyle ?? true,
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      },
+      maxAttempts: 1,
+    });
   }
 
   static fromEnv(): MinioObjectStorage {
@@ -132,146 +147,63 @@ export class MinioObjectStorage implements ObjectStorage {
   }
 
   async putObject(input: PutObjectInput): Promise<void> {
-    this.requireCredentials();
-    const bodyHash = sha256(input.body);
-    const request = this.signedRequest('PUT', input.key, bodyHash, {
-      'content-type': input.contentType,
-      'content-length': String(input.body.byteLength),
-      'x-amz-content-sha256': bodyHash,
+    const command = () => new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: input.key,
+      Body: input.body,
+      ContentType: input.contentType,
+      ContentLength: input.body.byteLength,
     });
-    const response = await requestFetch(request.url, {
-      method: 'PUT',
-      headers: request.headers,
-      body: input.body,
-    });
-    if (response.status === 404) {
-      // The local compose file intentionally starts a blank MinIO volume.
-      // Create the configured bucket on first use; a concurrent creator's
-      // 409 is treated as success by createBucket.
+    try {
+      await this.sendWithDeadline(command());
+    } catch (error) {
+      if (!httpStatus(error, 404)) throw storageFailure('PUT', error);
       await this.createBucket();
-      const retry = this.signedRequest('PUT', input.key, bodyHash, {
-        'content-type': input.contentType,
-        'content-length': String(input.body.byteLength),
-        'x-amz-content-sha256': bodyHash,
-      });
-      const retryResponse = await requestFetch(retry.url, {
-        method: 'PUT',
-        headers: retry.headers,
-        body: input.body,
-      });
-      await ensureSuccess(retryResponse, 'put');
-      return;
+      try {
+        await this.sendWithDeadline(command());
+      } catch (retryError) {
+        throw storageFailure('PUT', retryError);
+      }
     }
-    await ensureSuccess(response, 'put');
   }
 
   async deleteObject(key: string): Promise<void> {
-    this.requireCredentials();
-    const bodyHash = sha256(Buffer.alloc(0));
-    const request = this.signedRequest('DELETE', key, bodyHash, {
-      'x-amz-content-sha256': bodyHash,
-    });
-    const response = await requestFetch(request.url, { method: 'DELETE', headers: request.headers });
-    await ensureSuccess(response, 'delete');
+    try {
+      await this.sendWithDeadline(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    } catch (error) {
+      throw storageFailure('DELETE', error);
+    }
   }
 
   async createSignedReadUrl(key: string, expiresInSeconds: number): Promise<string> {
-    this.requireCredentials();
     const ttl = boundedTtl(expiresInSeconds);
-    const now = new Date();
-    const amzDate = amzTimestamp(now);
-    const shortDate = amzDate.slice(0, 8);
-    const credentialScope = `${shortDate}/${this.region}/s3/aws4_request`;
-    const host = this.objectHost();
-    const query: Record<string, string> = {
-      'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-      'X-Amz-Credential': `${this.accessKeyId!}/${credentialScope}`,
-      'X-Amz-Date': amzDate,
-      'X-Amz-Expires': String(ttl),
-      'X-Amz-SignedHeaders': 'host',
-    };
-    const canonicalRequest = [
-      'GET',
-      this.objectPath(key),
-      canonicalQuery(query),
-      // SigV4 requires the canonical-headers block to end in a newline;
-      // join() then contributes the second newline before SignedHeaders.
-      `host:${host}\n`,
-      'host',
-      'UNSIGNED-PAYLOAD',
-    ].join('\n');
-    const signature = signatureFor(this.secretAccessKey!, shortDate, this.region, canonicalRequest, amzDate);
-    query['X-Amz-Signature'] = signature;
-    return `${this.objectOrigin()}${this.objectPath(key)}?${canonicalQuery(query)}`;
-  }
-
-  private signedRequest(
-    method: 'PUT' | 'DELETE',
-    key: string,
-    bodyHash: string,
-    extraHeaders: Record<string, string>,
-    path = this.objectPath(key),
-  ): { url: string; headers: Record<string, string> } {
-    const now = new Date();
-    const amzDate = amzTimestamp(now);
-    const shortDate = amzDate.slice(0, 8);
-    const host = this.objectHost();
-    const headers: Record<string, string> = {
-      host,
-      'x-amz-date': amzDate,
-      ...extraHeaders,
-    };
-    const signedHeaders = Object.keys(headers).map((name) => name.toLowerCase()).sort();
-    const canonicalHeaders = `${signedHeaders.map((name) => `${name}:${normalizeHeader(headers[name]!)}`).join('\n')}\n`;
-    const canonicalRequest = [
-      method,
-      path,
-      '',
-      canonicalHeaders,
-      signedHeaders.join(';'),
-      bodyHash,
-    ].join('\n');
-    const signature = signatureFor(this.secretAccessKey!, shortDate, this.region, canonicalRequest, amzDate);
-    headers.authorization =
-      `AWS4-HMAC-SHA256 Credential=${this.accessKeyId!}/${shortDate}/${this.region}/s3/aws4_request, ` +
-      `SignedHeaders=${signedHeaders.join(';')}, Signature=${signature}`;
-    return { url: `${this.objectOrigin()}${path}`, headers };
+    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), { expiresIn: ttl });
   }
 
   private async createBucket(): Promise<void> {
-    const bodyHash = sha256(Buffer.alloc(0));
-    const request = this.signedRequest('PUT', '', bodyHash, { 'x-amz-content-sha256': bodyHash }, this.bucketPath());
-    const response = await requestFetch(request.url, { method: 'PUT', headers: request.headers });
-    if (response.ok || response.status === 409) return;
-    await ensureSuccess(response, 'bucket_create');
+    try {
+      await this.sendWithDeadline(new CreateBucketCommand({ Bucket: this.bucket }));
+    } catch (error) {
+      if (!httpStatus(error, 409)) throw storageFailure('BUCKET_CREATE', error);
+    }
   }
 
-  private objectHost(): string {
-    if (!this.forcePathStyle) return `${this.bucket}.${this.endpoint.host}`;
-    return this.endpoint.host;
-  }
-
-  private objectOrigin(): string {
-    if (this.forcePathStyle) return this.endpoint.origin;
-    return `${this.endpoint.protocol}//${this.bucket}.${this.endpoint.host}`;
-  }
-
-  private objectPath(key: string): string {
-    const prefix = this.endpoint.pathname.replace(/\/+$/, '');
-    if (!key) return this.bucketPath();
-    const encodedKey = key.split('/').map(encodeRfc3986).join('/');
-    if (this.forcePathStyle) return `${prefix}/${encodeRfc3986(this.bucket)}/${encodedKey}`;
-    return `${prefix}/${encodedKey}`;
-  }
-
-  private bucketPath(): string {
-    const prefix = this.endpoint.pathname.replace(/\/+$/, '');
-    return `${prefix}/${encodeRfc3986(this.bucket)}`;
-  }
-
-  private requireCredentials(): void {
-    if (!this.accessKeyId || !this.secretAccessKey || !this.bucket) {
-      throw new Error('ATTACHMENT_STORAGE_NOT_CONFIGURED');
+  private async sendWithDeadline(command: StorageCommand): Promise<unknown> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+    const send = this.client.send.bind(this.client) as unknown as (
+      storageCommand: StorageCommand,
+      options: { abortSignal: AbortSignal },
+    ) => Promise<unknown>;
+    try {
+      return await Promise.race([
+        send(command, { abortSignal: controller.signal }),
+        new Promise<never>((_resolve, reject) => {
+          controller.signal.addEventListener('abort', () => reject(new Error('ATTACHMENT_STORAGE_TIMEOUT')), { once: true });
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -283,6 +215,7 @@ export class MinioObjectStorage implements ObjectStorage {
       accessKeyId: process.env.S3_ACCESS_KEY,
       secretAccessKey: process.env.S3_SECRET_KEY,
       forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
+      requestTimeoutMs: Number(process.env.ATTACHMENT_STORAGE_TIMEOUT_MS || 8_000),
     };
   }
 }
@@ -296,57 +229,25 @@ function boundedTtl(seconds: number): number {
   return Math.max(1, Math.min(Math.floor(seconds), 300));
 }
 
-function encodeRfc3986(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+function boundedRequestTimeout(milliseconds: number): number {
+  if (!Number.isSafeInteger(milliseconds) || milliseconds < 1 || milliseconds > 60_000) {
+    throw new Error('ATTACHMENT_STORAGE_TIMEOUT_INVALID');
+  }
+  return milliseconds;
 }
 
-function normalizeHeader(value: string): string {
-  return value.trim().replace(/\s+/g, ' ');
+function httpStatus(error: unknown, expected: number): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && '$metadata' in error
+    && typeof (error as { $metadata?: { httpStatusCode?: unknown } }).$metadata?.httpStatusCode === 'number'
+    && (error as { $metadata: { httpStatusCode: number } }).$metadata.httpStatusCode === expected;
 }
 
-function canonicalQuery(query: Record<string, string>): string {
-  return Object.keys(query)
-    .sort()
-    .map((key) => `${encodeRfc3986(key)}=${encodeRfc3986(query[key]!)}`)
-    .join('&');
-}
-
-function sha256(value: Buffer | string): string {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-function hmac(key: Buffer | string, value: string): Buffer {
-  return createHmac('sha256', key).update(value).digest();
-}
-
-function amzTimestamp(date: Date): string {
-  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-}
-
-function signatureFor(secret: string, shortDate: string, region: string, canonicalRequest: string, amzDate: string): string {
-  const scope = `${shortDate}/${region}/s3/aws4_request`;
-  const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${scope}\n${sha256(canonicalRequest)}`;
-  const dateKey = hmac(`AWS4${secret}`, shortDate);
-  const regionKey = hmac(dateKey, region);
-  const serviceKey = hmac(regionKey, 's3');
-  const signingKey = hmac(serviceKey, 'aws4_request');
-  return createHmac('sha256', signingKey).update(stringToSign).digest('hex');
-}
-
-type FetchResponse = { ok: boolean; status: number; text(): Promise<string> };
-
-async function requestFetch(
-  url: string,
-  init: { method: string; headers: Record<string, string>; body?: Buffer },
-): Promise<FetchResponse> {
-  const fetchFn = globalThis.fetch as unknown as (requestUrl: string, options: unknown) => Promise<FetchResponse>;
-  if (typeof fetchFn !== 'function') throw new Error('ATTACHMENT_FETCH_UNAVAILABLE');
-  return fetchFn(url, init);
-}
-
-async function ensureSuccess(response: FetchResponse, operation: string): Promise<void> {
-  if (response.ok) return;
-  // Do not include MinIO response bodies: they may contain bucket/key details.
-  void response.text().catch(() => undefined);
-  throw new Error(`ATTACHMENT_STORAGE_${operation.toUpperCase()}_FAILED_${response.status}`);
+function storageFailure(operation: string, error: unknown): Error {
+  if (error instanceof Error && error.message === 'ATTACHMENT_STORAGE_TIMEOUT') return error;
+  const status = typeof error === 'object' && error !== null && '$metadata' in error
+    ? (error as { $metadata?: { httpStatusCode?: unknown } }).$metadata?.httpStatusCode
+    : undefined;
+  return new Error(`ATTACHMENT_STORAGE_${operation}_FAILED${typeof status === 'number' ? `_${status}` : ''}`);
 }

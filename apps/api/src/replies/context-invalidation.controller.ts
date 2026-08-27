@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, HttpCode, HttpStatus, NotFoundException, Param, Patch } from '@nestjs/common';
 import { CurrentWorkspace } from '../auth/current-workspace.decorator';
+import { InventoryUpdateDto, OrderStatusDto } from '../common/request-dtos';
 import type { AuthenticatedWorkspace } from '../workspaces/workspace.repository';
 import { ContextInvalidationService } from './context-invalidation.service';
 
@@ -15,7 +16,7 @@ export class ContextInvalidationController {
     @Param('shopId') shopId: string,
     @Param('productId') productId: string,
     @Param('skuId') skuId: string,
-    @Body() input: { inventory?: number },
+    @Body() input: InventoryUpdateDto,
   ) {
     if (!Number.isSafeInteger(input?.inventory) || Number(input.inventory) < 0) throw inputError('SKU_INVENTORY_INVALID');
     const result = await this.invalidation.updateSkuInventory({ ...scope, shopId }, productId, skuId, Number(input.inventory));
@@ -29,7 +30,7 @@ export class ContextInvalidationController {
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
     @Param('shopId') shopId: string,
     @Param('orderId') orderId: string,
-    @Body() input: { status?: string },
+    @Body() input: OrderStatusDto,
   ) {
     const status = input?.status?.trim();
     if (!status || !ORDER_STATUSES.has(status)) throw inputError('ORDER_STATUS_INVALID');

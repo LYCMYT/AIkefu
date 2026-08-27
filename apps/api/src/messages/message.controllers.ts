@@ -11,12 +11,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import type {
-  BuyerMessageCommand,
-  BuyerOrderCardCommand,
-  BuyerProductCardCommand,
-} from '@ai-customer-service/contracts';
 import { CurrentWorkspace } from '../auth/current-workspace.decorator';
+import { BuyerMessageDto, BuyerOrderCardDto, BuyerProductCardDto, MessageEditDto } from '../common/request-dtos';
 import type { AuthenticatedWorkspace } from '../workspaces/workspace.repository';
 import { MESSAGE_APPLICATION, type MessageApplication } from './message.application';
 
@@ -71,7 +67,7 @@ export class BuyerSimulatorController {
 
   @Post('messages')
   @HttpCode(HttpStatus.ACCEPTED)
-  send(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerMessageCommand) {
+  send(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerMessageDto) {
     if (!input?.shopId || !input.buyerId || !input.kind) {
       throw inputError('MESSAGE_INPUT_INVALID', 'shopId, buyerId and kind are required');
     }
@@ -83,7 +79,7 @@ export class BuyerSimulatorController {
 
   @Post('product-cards')
   @HttpCode(HttpStatus.ACCEPTED)
-  productCard(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerProductCardCommand) {
+  productCard(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerProductCardDto) {
     if (!input?.shopId || !input.buyerId || !input.productId) {
       throw inputError('PRODUCT_CARD_INPUT_INVALID', 'shopId, buyerId and productId are required');
     }
@@ -92,13 +88,13 @@ export class BuyerSimulatorController {
 
   @Post('cards/product')
   @HttpCode(HttpStatus.ACCEPTED)
-  productCardContract(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerProductCardCommand) {
+  productCardContract(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerProductCardDto) {
     return this.productCard(scope, input);
   }
 
   @Post('order-cards')
   @HttpCode(HttpStatus.ACCEPTED)
-  orderCard(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerOrderCardCommand) {
+  orderCard(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerOrderCardDto) {
     if (!input?.shopId || !input.buyerId || !input.orderId) {
       throw inputError('ORDER_CARD_INPUT_INVALID', 'shopId, buyerId and orderId are required');
     }
@@ -107,7 +103,7 @@ export class BuyerSimulatorController {
 
   @Post('cards/order')
   @HttpCode(HttpStatus.ACCEPTED)
-  orderCardContract(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerOrderCardCommand) {
+  orderCardContract(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Body() input: BuyerOrderCardDto) {
     return this.orderCard(scope, input);
   }
 
@@ -116,7 +112,7 @@ export class BuyerSimulatorController {
   edit(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
     @Param('messageId') messageId: string,
-    @Body() input: { text?: string },
+    @Body() input: MessageEditDto,
   ) {
     if (!input?.text?.trim()) throw inputError('MESSAGE_TEXT_REQUIRED', 'text is required');
     return this.messages.editMessage(scope, messageId, input.text);

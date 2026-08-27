@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
-import type { ConversationMessageCommand, ConversationModeCommand, ReplyDraftEditType } from '@ai-customer-service/contracts';
 import { CurrentWorkspace } from '../auth/current-workspace.decorator';
+import { ConversationMessageDto, ConversationModeDto, ShopScopeDto } from '../common/request-dtos';
 import type { AuthenticatedWorkspace } from '../workspaces/workspace.repository';
 import { ConversationReplyControlService } from './conversation-reply-control.service';
 
@@ -13,7 +13,7 @@ export class ConversationReplyController {
   async setMode(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
     @Param('conversationId') conversationId: string,
-    @Body() input: ConversationModeCommand & { shopId?: string },
+    @Body() input: ConversationModeDto,
   ) {
     const result = await this.controls.setMode(scoped(scope, input?.shopId), conversationId, requiredMode(input?.mode));
     return { id: result.id, overrideMode: result.overrideMode, humanActive: result.humanActive };
@@ -21,20 +21,20 @@ export class ConversationReplyController {
 
   @Post(':conversationId/takeover')
   @HttpCode(HttpStatus.ACCEPTED)
-  async takeover(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('conversationId') conversationId: string, @Body() input: { shopId?: string }) {
+  async takeover(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('conversationId') conversationId: string, @Body() input: ShopScopeDto) {
     return this.controls.takeover(scoped(scope, input?.shopId), conversationId);
   }
 
   @Post(':conversationId/resume-ai')
   @HttpCode(HttpStatus.ACCEPTED)
-  async resumeAi(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('conversationId') conversationId: string, @Body() input: { shopId?: string }) {
+  async resumeAi(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('conversationId') conversationId: string, @Body() input: ShopScopeDto) {
     const result = await this.controls.resumeAi(scoped(scope, input?.shopId), conversationId);
     return { id: result.id, overrideMode: result.overrideMode, humanActive: result.humanActive, resumed: result.resumed };
   }
 
   @Post(':conversationId/reply/regenerate')
   @HttpCode(HttpStatus.ACCEPTED)
-  async regenerate(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('conversationId') conversationId: string, @Body() input: { shopId?: string }) {
+  async regenerate(@CurrentWorkspace() scope: AuthenticatedWorkspace, @Param('conversationId') conversationId: string, @Body() input: ShopScopeDto) {
     const job = await this.controls.regenerate(scoped(scope, input?.shopId), conversationId);
     return accepted(job.id);
   }
@@ -44,7 +44,7 @@ export class ConversationReplyController {
   async humanMessage(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
     @Param('conversationId') conversationId: string,
-    @Body() input: ConversationMessageCommand & { shopId?: string; editType?: ReplyDraftEditType },
+    @Body() input: ConversationMessageDto,
   ) {
     if (!input?.text?.trim()) throw inputError('HUMAN_MESSAGE_REQUIRED', 'text is required');
     if (input.editType && !['STYLE_EDIT', 'FACTUAL_CORRECTION', 'KNOWLEDGE_ENRICHMENT'].includes(input.editType)) {

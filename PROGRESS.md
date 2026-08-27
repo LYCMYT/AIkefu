@@ -146,6 +146,9 @@
 - 未接入真实电商平台私有 API、Cookie、Token、真实账号或原产品代码；所有平台事件与数据均为合成 Mock。
 - 已新增单机生产风格 `docker-compose.prod.yml`、API/Web Dockerfile、Nginx 同源 `/api`/`/ws` 反代、Secret 模板与 GitHub Actions/GHCR 流程；不把公网主机尚未选定误报为已在线部署。
 - Release Hygiene 已新增跨平台 tracked-file Secret 扫描与 `git archive` 白名单源码包脚本；CI 在 frozen install 前后执行可重复门禁，归档拒绝 `.env`、依赖、构建产物、测试报告与内部参考材料。
+- 公开边界硬化已完成：Nest 全局 `ValidationPipe` 对全部 Body DTO 启用 transform/whitelist/forbidNonWhitelisted；文本、JSON、Knowledge topK、Workflow 图与普通请求体均有上限；环境变量启动时 fail-closed；API Helmet/安全响应头生效。
+- 附件对象存储已由手写 SigV4 改为官方 AWS SDK v3，并为 PUT/DELETE/CreateBucket 增加强制 Abort/deadline；真实 MinIO opt-in integration 随全套 47/47 通过。
+- `docs/16` 冻结的“公开 Demo 不做 Workspace Quota / Rate Limit / 超额 Fallback”保持不变并继续作为已知费用风险；未用外部审查建议擅自覆盖冻结决策。
 
 ## Release
 - [x] Docker Compose 一键启动

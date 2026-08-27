@@ -15,6 +15,15 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentWorkspace } from '../auth/current-workspace.decorator';
+import {
+  KnowledgeConflictResolveDto,
+  KnowledgeCreateDto,
+  KnowledgeImportDto,
+  KnowledgeReviseDto,
+  KnowledgeSearchDto,
+  ProductLearningDto,
+  ShopScopeDto,
+} from '../common/request-dtos';
 import type { AuthenticatedWorkspace } from '../workspaces/workspace.repository';
 import { KnowledgeService } from './knowledge.service';
 
@@ -38,7 +47,7 @@ export class KnowledgeController {
   @Post()
   create(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
-    @Body() body: { shopId?: string; scope?: string; productId?: string; question?: string; answer?: string },
+    @Body() body: KnowledgeCreateDto,
   ) {
     return this.knowledge.create(scope, {
       shopId: body?.shopId ?? '',
@@ -66,7 +75,7 @@ export class KnowledgeController {
   )
   async upload(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
-    @Body() body: { shopId?: string; csv?: string; sourceName?: string },
+    @Body() body: KnowledgeImportDto,
     @UploadedFile() file?: CsvUpload,
   ) {
     const upload = importSource(file, body?.csv);
@@ -82,7 +91,7 @@ export class KnowledgeController {
   @Post('imports/preview')
   async preview(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
-    @Body() body: { shopId?: string; csv?: string; sourceName?: string },
+    @Body() body: KnowledgeImportDto,
   ) {
     return this.knowledge.previewImport(scope, { shopId: body?.shopId ?? '', csv: body?.csv ?? '', sourceName: body?.sourceName });
   }
@@ -100,7 +109,7 @@ export class KnowledgeController {
   commit(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
     @Param('id') id: string,
-    @Body() body: { shopId?: string },
+    @Body() body: ShopScopeDto,
   ) {
     return this.knowledge.commitImport(scope, id, body?.shopId);
   }
@@ -158,12 +167,7 @@ export class KnowledgeController {
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
     @Param('conflictId') conflictId: string,
     @Body()
-    body: {
-      shopId?: string;
-      resolution?: 'KEEP_LEFT' | 'KEEP_RIGHT' | 'MERGE' | 'CUSTOM';
-      customQuestion?: string;
-      customAnswer?: string;
-    },
+    body: KnowledgeConflictResolveDto,
   ) {
     if (!isConflictResolution(body?.resolution)) {
       throw inputError('KNOWLEDGE_CONFLICT_RESOLUTION_REQUIRED', 'resolution must be KEEP_LEFT, KEEP_RIGHT, MERGE, or CUSTOM');
@@ -191,7 +195,7 @@ export class KnowledgeController {
   revise(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
     @Param('id') id: string,
-    @Body() body: { shopId?: string; question?: string; answer?: string },
+    @Body() body: KnowledgeReviseDto,
   ) {
     return this.knowledge.revise(scope, id, {
       shopId: body?.shopId,
@@ -213,7 +217,7 @@ export class KnowledgeController {
   @Post('search')
   search(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
-    @Body() body: { shopId?: string; query?: string; scope?: string; productId?: string; topK?: number },
+    @Body() body: KnowledgeSearchDto,
   ) {
     return this.knowledge.search(scope, {
       shopId: body?.shopId ?? '',
@@ -240,7 +244,7 @@ export class KnowledgeShopController {
   startLearning(
     @CurrentWorkspace() scope: AuthenticatedWorkspace,
     @Param('shopId') shopId: string,
-    @Body() body: { productId?: string; productIds?: string[]; retryFailed?: boolean },
+    @Body() body: ProductLearningDto,
   ) {
     const productIds = body?.productIds ?? (body?.productId ? [body.productId] : undefined);
     return this.knowledge.startProductLearning(scope, shopId, productIds, Boolean(body?.retryFailed));

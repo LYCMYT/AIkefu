@@ -90,6 +90,7 @@ pnpm release:archive
 | `DATABASE_URL` | PostgreSQL/pgvector 连接 | 本地 Compose 数据库 |
 | `REDIS_URL` | BullMQ/Redis 连接 | 本地 Compose Redis |
 | `S3_ENDPOINT`、`S3_BUCKET`、`S3_REGION`、`S3_ACCESS_KEY`、`S3_SECRET_KEY`、`S3_FORCE_PATH_STYLE` | MinIO/S3 兼容对象存储 | 示例值仅用于本地 MinIO |
+| `ATTACHMENT_STORAGE_TIMEOUT_MS`、`JSON_BODY_LIMIT` | 对象存储硬超时与普通 JSON 请求体上限 | `8000`、`1mb` |
 | `WEB_ORIGIN`、`API_PORT`、`WS_PATH` | API CORS、端口与 WebSocket 路径 | `5173`、`3000`、`/ws` |
 | `VITE_API_BASE_URL`、`VITE_WS_BASE_URL`、`VITE_WS_PATH` | 浏览器 API/WS 地址 | `VITE_WS_BASE_URL` 留空则使用当前 origin；仅可放公开地址，不能放 Secret |
 | `DEMO_WORKSPACE_IDLE_EXPIRY_HOURS` | Demo Workspace 空闲清理 | `24` |
@@ -163,6 +164,8 @@ pnpm --filter @ai-customer-service/web build
 ## 安全与已知限制
 
 安全边界详见 [`docs/14_SECURITY_PRIVACY.md`](docs/14_SECURITY_PRIVACY.md)，冻结取舍详见 [`docs/16_DECISION_LOG.md`](docs/16_DECISION_LOG.md)，已知限制详见 [`docs/19_KNOWN_LIMITATIONS.md`](docs/19_KNOWN_LIMITATIONS.md)。本交付明确无真实平台 Secret，不声称在线部署，不虚构商业 KPI，也不声称满足生产 SLA、安全认证或大规模并发。
+
+API 在监听端口前会校验生产环境、注册严格的运行时 Body DTO 校验、普通 JSON 总体积上限与 Helmet 安全响应头；附件使用官方 AWS SDK v3，并对对象存储网络操作设置硬超时。冻结决策仍明确不在 V1 增加 Workspace 防刷 Quota/Rate Limit，因此任何公网 Preview 必须把该费用风险纳入访问控制或保持离线确定性 Provider。
 
 ## 目录
 

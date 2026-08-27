@@ -64,6 +64,8 @@ docker compose --env-file .env.production -f docker-compose.prod.yml down
 
 保持 `AI_BASE_URL` 与 `AI_API_KEY` 为空即可使用离线确定性 provider。若显式配置兼容的 AI gateway，只在服务端设置这些变量，审查其数据处理条款，并保持 `AI_EXTERNAL_IMAGE_ANALYSIS_OPT_IN=false`，除非已明确批准把原始图片发送到该外部运行时。
 
+API 启动会校验环境变量并启用严格 Body DTO、`JSON_BODY_LIMIT`（默认 `1mb`）与 Helmet。对象存储使用 AWS SDK v3，`ATTACHMENT_STORAGE_TIMEOUT_MS`（默认 `8000`）是 PUT/DELETE/CreateBucket 的硬截止时间。配置错误会阻止 API 监听，而不是带着隐式默认值继续运行。
+
 不要把真实电商 API key、Cookie、Token、平台账号或客户生产数据放入任何环境文件、Compose 文件或镜像中。
 
 ## 扩展限制
