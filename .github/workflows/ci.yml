@@ -92,6 +92,12 @@ jobs:
       - name: Install frozen dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build workspace libraries for runtime tests
+        run: |
+          pnpm --filter @ai-customer-service/contracts build
+          pnpm --filter @ai-customer-service/core build
+          pnpm --filter @ai-customer-service/mock-douyin build
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 

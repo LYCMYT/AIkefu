@@ -57,5 +57,6 @@ test('CI has a non-skipped real infrastructure and browser gate', () => {
   assert.match(workflow, /RUN_REAL_INFRA_INTEGRATION:\s*'0'[\s\S]*S3_ACCESS_KEY:\s*ci-demo-access[\s\S]*S3_SECRET_KEY:\s*ci-demo-secret/);
   assert.match(workflow, /RUN_REAL_INFRA_INTEGRATION:\s*'1'/);
   assert.match(workflow, /RUN_REAL_INFRA_E2E:\s*'1'/);
+  assert.match(workflow, /Build workspace libraries for runtime tests[\s\S]*@ai-customer-service\/contracts build[\s\S]*@ai-customer-service\/core build[\s\S]*@ai-customer-service\/mock-douyin build/);
   assert.match(workflow, /playwright install --with-deps chromium/);
 });
