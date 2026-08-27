@@ -148,6 +148,8 @@
 - Release Hygiene 已新增跨平台 tracked-file Secret 扫描与 `git archive` 白名单源码包脚本；CI 在 frozen install 前后执行可重复门禁，归档拒绝 `.env`、依赖、构建产物、测试报告与内部参考材料。
 - 公开边界硬化已完成：Nest 全局 `ValidationPipe` 对全部 Body DTO 启用 transform/whitelist/forbidNonWhitelisted；文本、JSON、Knowledge topK、Workflow 图与普通请求体均有上限；环境变量启动时 fail-closed；API Helmet/安全响应头生效。
 - 附件对象存储已由手写 SigV4 改为官方 AWS SDK v3，并为 PUT/DELETE/CreateBucket 增加强制 Abort/deadline；真实 MinIO opt-in integration 随全套 47/47 通过。
+- AI Gateway 已按错误类型做有界重试：网络、超时、408、429 与选定 5xx 最多重试一次；400、401、403 与无效响应不重试。`AiRuntime` 内存 Usage 视图默认仅保留最近 1,000 条，持久化 Invocation / Usage 账本仍是事实源。
+- 外部模型 Intent / Reply / Embedding / Image / Judge 与 36 个 Eval Case 仍标记为外部复验项：当前环境没有配置模型 endpoint、模型名或服务端凭据，禁止伪造准确率与成本数据。
 - `docs/16` 冻结的“公开 Demo 不做 Workspace Quota / Rate Limit / 超额 Fallback”保持不变并继续作为已知费用风险；未用外部审查建议擅自覆盖冻结决策。
 
 ## Release

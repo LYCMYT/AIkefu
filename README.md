@@ -165,7 +165,7 @@ pnpm --filter @ai-customer-service/web build
 
 安全边界详见 [`docs/14_SECURITY_PRIVACY.md`](docs/14_SECURITY_PRIVACY.md)，冻结取舍详见 [`docs/16_DECISION_LOG.md`](docs/16_DECISION_LOG.md)，已知限制详见 [`docs/19_KNOWN_LIMITATIONS.md`](docs/19_KNOWN_LIMITATIONS.md)。本交付明确无真实平台 Secret，不声称在线部署，不虚构商业 KPI，也不声称满足生产 SLA、安全认证或大规模并发。
 
-API 在监听端口前会校验生产环境、注册严格的运行时 Body DTO 校验、普通 JSON 总体积上限与 Helmet 安全响应头；附件使用官方 AWS SDK v3，并对对象存储网络操作设置硬超时。冻结决策仍明确不在 V1 增加 Workspace 防刷 Quota/Rate Limit，因此任何公网 Preview 必须把该费用风险纳入访问控制或保持离线确定性 Provider。
+API 在监听端口前会校验生产环境、注册严格的运行时 Body DTO 校验、普通 JSON 总体积上限与 Helmet 安全响应头；附件使用官方 AWS SDK v3，并对对象存储网络操作设置硬超时。配置的 JSON 模型 Gateway 只对网络、超时、408/429 与选定 5xx 重试一次，认证/请求/无效响应失败关闭且不重试；内存 Usage 仅保留最近 1,000 条，Prisma 账本才是审计事实源。冻结决策仍明确不在 V1 增加 Workspace 防刷 Quota/Rate Limit，因此任何公网 Preview 必须把该费用风险纳入访问控制或保持离线确定性 Provider。
 
 ## 目录
 

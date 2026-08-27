@@ -51,6 +51,33 @@ describe('server AI providers', () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it.each([
+    [400, 1],
+    [401, 1],
+    [403, 1],
+    [429, 2],
+    [500, 2],
+  ] as const)('classifies HTTP %s for bounded retry (%s call(s))', async (status, expectedCalls) => {
+    const fetcher = jest.fn().mockResolvedValue({
+      ok: false,
+      status,
+      json: async () => ({}),
+    });
+    const runtime = createServerAiRuntime({
+      AI_BASE_URL: 'https://models.example.test/structured',
+      AI_API_KEY: 'server-only-secret',
+      AI_FAST_MODEL: 'fast-model',
+      fetcher: fetcher as never,
+    });
+
+    await expect(runtime.runStructured({
+      purpose: 'RISK_CLASSIFIER',
+      input: { text: '需要判断风险' },
+      validate: (_value: unknown): _value is object => true,
+    })).rejects.toMatchObject({ code: 'PROVIDER_FAILED' });
+    expect(fetcher).toHaveBeenCalledTimes(expectedCalls);
+  });
+
   it('uses the offline provider when no external model gateway is configured', async () => {
     const runtime = createServerAiRuntime({});
     const result = await runtime.runStructured({

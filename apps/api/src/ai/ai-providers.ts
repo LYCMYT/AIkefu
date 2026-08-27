@@ -1,4 +1,11 @@
-import { AiRuntime, type AiProvider, type AiProviderRequest, type AiProviderResponse, type AiPurpose } from '@ai-customer-service/core';
+import {
+  AiProviderFailure,
+  AiRuntime,
+  type AiProvider,
+  type AiProviderRequest,
+  type AiProviderResponse,
+  type AiPurpose,
+} from '@ai-customer-service/core';
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<{ ok: boolean; status?: number; json(): Promise<unknown> }>;
 
@@ -44,26 +51,40 @@ export class JsonModelGatewayProvider implements AiProvider {
   }
 
   async invoke(request: AiProviderRequest): Promise<AiProviderResponse> {
-    if (request.signal.aborted) throw new Error('AI_REQUEST_ABORTED');
-    const response = await this.fetcher(this.options.endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.options.secret}`,
-        'Content-Type': 'application/json',
-      },
-      // Secret/credentials remain exclusively in the Authorization header.
-      body: JSON.stringify({
-        model: this.options.model,
-        purpose: request.purpose,
-        input: request.input,
-        attempt: request.attempt,
-        repair: request.repair,
-        ...(request.previousOutput === undefined ? {} : { previousOutput: request.previousOutput }),
-      }),
-      signal: request.signal,
-    });
-    if (!response.ok) throw new Error(`AI_GATEWAY_HTTP_${response.status ?? 0}`);
-    const payload = await response.json();
+    if (request.signal.aborted) throw abortedProviderFailure(request.signal);
+    let response: Awaited<ReturnType<FetchLike>>;
+    try {
+      response = await this.fetcher(this.options.endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.options.secret}`,
+          'Content-Type': 'application/json',
+        },
+        // Secret/credentials remain exclusively in the Authorization header.
+        body: JSON.stringify({
+          model: this.options.model,
+          purpose: request.purpose,
+          input: request.input,
+          attempt: request.attempt,
+          repair: request.repair,
+          ...(request.previousOutput === undefined ? {} : { previousOutput: request.previousOutput }),
+        }),
+        signal: request.signal,
+      });
+    } catch (error) {
+      if (request.signal.aborted) throw abortedProviderFailure(request.signal, error);
+      throw new AiProviderFailure('NETWORK', true, 'AI_GATEWAY_NETWORK_ERROR', { cause: error });
+    }
+    if (!response.ok) {
+      const status = response.status ?? 0;
+      throw new AiProviderFailure('HTTP', isRetryableHttpStatus(status), `AI_GATEWAY_HTTP_${status}`, { status });
+    }
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      throw new AiProviderFailure('RESPONSE', false, 'AI_GATEWAY_RESPONSE_INVALID', { cause: error });
+    }
     if (!payload || typeof payload !== 'object' || !('output' in payload)) throw new Error('AI_GATEWAY_RESPONSE_INVALID');
     const record = payload as { output: unknown; model?: unknown; usage?: unknown };
     return {
@@ -72,6 +93,16 @@ export class JsonModelGatewayProvider implements AiProvider {
       ...(validUsage(record.usage) ? { usage: record.usage } : {}),
     };
   }
+}
+
+function isRetryableHttpStatus(status: number): boolean {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function abortedProviderFailure(signal: AbortSignal, cause?: unknown): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new AiProviderFailure('ABORTED', false, 'AI_REQUEST_ABORTED', { cause });
 }
 
 /** Offline-only fixture provider used unless a caller explicitly injects a gateway. */

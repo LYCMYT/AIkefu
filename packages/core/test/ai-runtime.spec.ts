@@ -1,4 +1,5 @@
 import {
+  AiProviderFailure,
   AiRuntime,
   AiRuntimeFailure,
   type AiProvider,
@@ -35,6 +36,59 @@ const ok = (output: unknown): AiProviderResponse => ({
 });
 
 describe('AI Runtime', () => {
+  it('retries only provider failures explicitly classified as transient', async () => {
+    const transient = new ScriptedProvider('transient', [
+      new AiProviderFailure('NETWORK', true, 'temporary network failure'),
+      ok({ tasks: ['RETRIED'] }),
+    ]);
+    const permanent = new ScriptedProvider('permanent', [
+      new AiProviderFailure('HTTP', false, 'AI_GATEWAY_HTTP_401', { status: 401 }),
+      ok({ tasks: ['MUST_NOT_RUN'] }),
+    ]);
+    const transientRuntime = new AiRuntime({
+      providers: { transient },
+      routes: { INTENT_PLANNER: ['transient'] },
+    });
+    const permanentRuntime = new AiRuntime({
+      providers: { permanent },
+      routes: { INTENT_PLANNER: ['permanent'] },
+    });
+
+    await expect(transientRuntime.runStructured({
+      purpose: 'INTENT_PLANNER',
+      input: {},
+      validate: (value): value is { tasks: string[] } =>
+        typeof value === 'object' && value !== null && Array.isArray((value as { tasks?: unknown }).tasks),
+    })).resolves.toMatchObject({ output: { tasks: ['RETRIED'] } });
+    await expect(permanentRuntime.runStructured({
+      purpose: 'INTENT_PLANNER',
+      input: {},
+      validate: (_value): _value is object => true,
+    })).rejects.toMatchObject({ code: 'PROVIDER_FAILED' });
+
+    expect(transient.calls).toHaveLength(2);
+    expect(permanent.calls).toHaveLength(1);
+  });
+
+  it('keeps only the configured number of safe in-memory usage records', async () => {
+    const provider = new ScriptedProvider('primary', [ok({ id: 1 }), ok({ id: 2 }), ok({ id: 3 })]);
+    const runtime = new AiRuntime({
+      providers: { primary: provider },
+      routes: { SUMMARY: ['primary'] },
+      usageLogLimit: 2,
+    });
+
+    for (let index = 0; index < 3; index += 1) {
+      await runtime.runStructured({
+        purpose: 'SUMMARY',
+        input: { index },
+        validate: (_value): _value is object => true,
+      });
+    }
+
+    expect(runtime.usageLog()).toHaveLength(2);
+  });
+
   it('retries one transient failure then falls back once after timeout', async () => {
     const primary = new ScriptedProvider('primary', ['TIMEOUT', 'TIMEOUT']);
     const fallback = new ScriptedProvider('fallback', [ok({ tasks: ['PRODUCT_QUERY'] })]);

@@ -27,6 +27,21 @@ export interface AiProvider {
   invoke(request: AiProviderRequest): Promise<AiProviderResponse>;
 }
 
+export class AiProviderFailure extends Error {
+  readonly status: number | undefined;
+
+  constructor(
+    readonly kind: 'NETWORK' | 'HTTP' | 'RESPONSE' | 'ABORTED',
+    readonly retryable: boolean,
+    message: string,
+    options?: ErrorOptions & { status?: number },
+  ) {
+    super(message, options);
+    this.name = 'AiProviderFailure';
+    this.status = options?.status;
+  }
+}
+
 export type AiRuntimeUsage = Readonly<{
   purpose: AiPurpose;
   provider: string | null;
@@ -78,6 +93,7 @@ type CircuitState = { consecutiveFailures: number; openedAt?: number };
 export class AiRuntime {
   private readonly logs: AiRuntimeUsage[] = [];
   private readonly circuits = new Map<string, CircuitState>();
+  private readonly usageLogLimit: number;
 
   constructor(
     private readonly options: {
@@ -86,8 +102,13 @@ export class AiRuntime {
       defaultTimeoutMs?: number;
       circuitFailureThreshold?: number;
       circuitResetMs?: number;
+      usageLogLimit?: number;
     },
-  ) {}
+  ) {
+    this.usageLogLimit = Number.isSafeInteger(options.usageLogLimit) && (options.usageLogLimit ?? -1) >= 0
+      ? options.usageLogLimit!
+      : 1_000;
+  }
 
   usageLog(): readonly AiRuntimeUsage[] {
     return this.logs.map((entry) => ({ ...entry, tokenUsage: entry.tokenUsage ? { ...entry.tokenUsage } : null }));
@@ -183,7 +204,7 @@ export class AiRuntime {
         status: finalStatus,
         tokenUsage: tokenUsage ? { ...tokenUsage } : null,
       });
-      this.logs.push(audit);
+      this.recordUsage(audit);
       terminalFailure?.withAudit(audit);
     }
   }
@@ -199,7 +220,7 @@ export class AiRuntime {
         return await this.invokeOnce(provider, { ...request, attempt, repair: false }, timeoutMs);
       } catch (error) {
         failure = error;
-        if (request.signal?.aborted) throw error;
+        if (!this.shouldRetry(error, request.signal)) throw error;
       }
     }
     throw failure;
@@ -257,6 +278,19 @@ export class AiRuntime {
     if (callerSignal?.aborted) return new AiRuntimeFailure('ABORTED', 'AI call aborted because its context became stale', { cause: error });
     if (error instanceof AiRuntimeFailure) return error;
     return new AiRuntimeFailure('PROVIDER_FAILED', error instanceof Error ? error.message : String(error), { cause: error });
+  }
+
+  private shouldRetry(error: unknown, callerSignal?: AbortSignal): boolean {
+    if (callerSignal?.aborted) return false;
+    if (error instanceof AiProviderFailure) return error.retryable;
+    return error instanceof AiRuntimeFailure && error.code === 'TIMEOUT';
+  }
+
+  private recordUsage(audit: AiRuntimeUsage): void {
+    if (this.usageLogLimit === 0) return;
+    this.logs.push(audit);
+    const overflow = this.logs.length - this.usageLogLimit;
+    if (overflow > 0) this.logs.splice(0, overflow);
   }
 
   private assertCircuit(providerName: string): void {
