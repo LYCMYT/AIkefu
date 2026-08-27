@@ -1,5 +1,10 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import type { AiProviderRequest } from '@ai-customer-service/core';
 import {
+  DeepSeekJsonProvider,
   JsonModelGatewayProvider,
   OfflineStructuredProvider,
   createServerAiRuntime,
@@ -49,6 +54,75 @@ describe('server AI providers', () => {
     expect(init.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer server-only-secret' }));
     expect(String(init.body)).not.toContain('server-only-secret');
     expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('adapts the DeepSeek Chat Completions JSON mode without placing its key in the body', async () => {
+    const fetcher = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"riskLevel":"LOW","reasons":[],"recommendedMode":"AUTO"}' } }],
+        model: 'deepseek-v4-flash',
+        usage: { prompt_tokens: 11, completion_tokens: 7 },
+      }),
+    });
+    const provider = new DeepSeekJsonProvider({
+      endpoint: 'https://api.deepseek.com',
+      secret: 'server-only-deepseek-secret',
+      model: 'deepseek-v4-flash',
+      fetcher: fetcher as never,
+    });
+
+    const result = await provider.invoke(request('RISK_CLASSIFIER', { text: 'hello' }));
+
+    expect(result).toEqual({
+      output: { riskLevel: 'LOW', reasons: [], recommendedMode: 'AUTO' },
+      model: 'deepseek-v4-flash',
+      usage: { inputTokens: 11, outputTokens: 7 },
+    });
+    expect(fetcher).toHaveBeenCalledWith('https://api.deepseek.com/chat/completions', expect.any(Object));
+    const init = fetcher.mock.calls[0]![1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(init.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer server-only-deepseek-secret' }));
+    expect(String(init.body)).not.toContain('server-only-deepseek-secret');
+    expect(body).toEqual(expect.objectContaining({
+      model: 'deepseek-v4-flash',
+      response_format: { type: 'json_object' },
+      thinking: { type: 'disabled' },
+    }));
+    expect(JSON.stringify(body.messages)).toContain('JSON');
+  });
+
+  it('can resolve a DeepSeek key from a server-only file without embedding it in environment values', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'aikefu-model-key-'));
+    const keyPath = join(directory, 'deepseek.key');
+    writeFileSync(keyPath, 'test-deepseek-secret\n', { encoding: 'utf8', mode: 0o600 });
+    const fetcher = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"riskLevel":"LOW","reasons":[],"recommendedMode":"AUTO"}' } }],
+        model: 'deepseek-v4-flash',
+      }),
+    });
+    try {
+      const runtime = createServerAiRuntime({
+        AI_PROVIDER: 'deepseek',
+        AI_API_KEY_FILE: keyPath,
+        AI_FAST_MODEL: 'deepseek-v4-flash',
+        fetcher: fetcher as never,
+      });
+      const result = await runtime.runStructured({
+        purpose: 'RISK_CLASSIFIER',
+        input: { text: 'hello' },
+        validate: (value: unknown): value is { riskLevel: string } => Boolean(value && typeof value === 'object' && 'riskLevel' in value),
+      });
+
+      expect(result.provider).toBe('deepseek-openai-chat');
+      expect((fetcher.mock.calls[0]![1] as RequestInit).headers).toEqual(expect.objectContaining({
+        Authorization: 'Bearer test-deepseek-secret',
+      }));
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it.each([

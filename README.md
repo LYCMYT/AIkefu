@@ -40,7 +40,7 @@ Trace 默认隐藏。可直接打开 `/workbench?trace=1`，或在 Workbench 点
 
 - V1 只实现 `MockDouyinAdapter`；不接真实抖音或其他平台 API，不复制私有接口、Cookie、Token 或认证材料。
 - Seed、聊天、商品、订单、物流、图片和 Scenario 均为合成数据。其他平台只能显示规划入口。
-- 默认 AI provider 是离线确定性 provider。若确需接入兼容 JSON gateway，只能在服务端设置 `AI_BASE_URL`、`AI_API_KEY` 与模型变量；密钥不得使用 `VITE_*`，也不会进入前端 Bundle、URL、WebSocket 或普通日志。
+- 默认 AI provider 是离线确定性 provider。服务端现支持原有 JSON gateway，以及显式 `AI_PROVIDER=deepseek` 的 DeepSeek OpenAI-compatible Chat Completions JSON 模式；密钥可通过 `AI_API_KEY` 或本机 `AI_API_KEY_FILE` 读取，不得使用 `VITE_*`，也不会进入前端 Bundle、URL、WebSocket 或普通日志。
 - 图片默认使用本地确定性分析；只有服务端 `.env` 中 `AI_EXTERNAL_IMAGE_ANALYSIS_OPT_IN=true`（精确值）才允许外部多模态运行时接收原图。图片仍属于 Untrusted 数据。
 - 公开 Demo 不提供 Workspace Quota、Rate Limit 或超额 Fallback；这是已知费用风险，不是商业指标承诺。
 
@@ -112,7 +112,7 @@ pnpm release:archive
 | `WEB_ORIGIN`、`API_PORT`、`WS_PATH` | API CORS、端口与 WebSocket 路径 | `5173`、`3000`、`/ws` |
 | `VITE_API_BASE_URL`、`VITE_WS_BASE_URL`、`VITE_WS_PATH` | 浏览器 API/WS 地址 | `VITE_WS_BASE_URL` 留空则使用当前 origin；仅可放公开地址，不能放 Secret |
 | `DEMO_WORKSPACE_IDLE_EXPIRY_HOURS` | Demo Workspace 空闲清理 | `24` |
-| `AI_BASE_URL`、`AI_API_KEY`、`AI_*_MODEL`、`AI_TIMEOUT_MS` | 服务端可选 AI gateway | 留空使用离线 provider；Key 只在服务端 |
+| `AI_PROVIDER`、`AI_BASE_URL`、`AI_API_KEY` / `AI_API_KEY_FILE`、`AI_*_MODEL`、`AI_TIMEOUT_MS` | 服务端可选 AI gateway / DeepSeek | 留空使用离线 provider；Key 只在服务端。可用 `pnpm ai:probe` 做无客户数据的结构化探针 |
 | `AI_EXTERNAL_IMAGE_ANALYSIS_OPT_IN` | 外部图片分析开关 | 精确 `true` 才开启，默认 `false` |
 | `RUN_REAL_INFRA_INTEGRATION` | 真实 PostgreSQL/pgvector/MinIO 验收开关 | `0`；不会自动启动 Docker |
 

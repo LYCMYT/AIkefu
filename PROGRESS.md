@@ -78,7 +78,7 @@
 ### Phase 03 已知问题 / 环境复验项
 
 - Phase 03 Migration、pgvector/HNSW、PostgreSQL-backed 检索、MinIO 上传/签名下载/删除与 Redis 队列已在本机真实基础设施中复验通过；浏览器也已连接同一真实 Workspace API。
-- AI Runtime 与 Embedding 均提供显式服务器端 Provider Gateway 配置边界，并以确定性离线 Provider 做无凭据回退；已验证非协作 Provider 强制超时、重试一次、fallback 一次、结构化修复一次、失败关闭、熔断、PII/Secret 清洗、Invocation/Usage/Evidence 持久化。当前未提供外部模型凭据，因此真实模型、真实 embedding 与真实图片多模态仍是外部复验项，不冒充已通过。
+- AI Runtime 与 Embedding 均提供显式服务器端 Provider Gateway 配置边界，并以确定性离线 Provider 做无凭据回退；已验证非协作 Provider 强制超时、重试一次、fallback 一次、结构化修复一次、失败关闭、熔断、PII/Secret 清洗、Invocation/Usage/Evidence 持久化。新增 DeepSeek OpenAI-compatible Chat JSON 适配器与 `AI_API_KEY_FILE`，`deepseek-v4-flash` 的合成 `RISK_CLASSIFIER` 探针已真实通过；embedding、图片多模态和完整 36 Eval 仍不冒充已通过。
 - 未接入任何真实电商平台私有接口、Cookie、Token、真实账号或原产品代码；商品、知识、图片与 Eval 数据全部为合成数据。
 - 独立审查登记 3 项非阻断 P2：pgvector SQL 前推 ENABLED / activeVersion 过滤、XLSX 解压炸弹资源限制、Memory DIRTY 扫描 lease / backoff / 稳定排序；不阻断 Phase 04，将在后续可靠性/发布硬化中处理。
 
@@ -141,7 +141,7 @@
 ### Phase 05 已知环境复验项
 
 - Docker / WSL2 环境已打通，PostgreSQL / pgvector、Redis、MinIO、BullMQ、全部 migration、45 个 integration 与真实连接态浏览器 E2E 均已实际运行通过。
-- 未配置外部模型或 embedding 凭据；AI、Embedding 与图片默认使用离线/本地 Provider。外部模型是可选扩展，不属于默认本地 V1 Demo 的完成前提。
+- 默认仍可使用离线/本地 Provider；本机已配置仓库外 Key 文件驱动的 DeepSeek Chat，Embedding 与图片仍使用本地 Provider。外部模型是可选扩展，不属于默认本地 V1 Demo 的完成前提。
 - V1 transport mutex 仍是单 API 进程互斥；多副本部署需 DB / Redis fencing token 或平台幂等协议。
 - 未接入真实电商平台私有 API、Cookie、Token、真实账号或原产品代码；所有平台事件与数据均为合成 Mock。
 - 已新增单机生产风格 `docker-compose.prod.yml`、API/Web Dockerfile、Nginx 同源 `/api`/`/ws` 反代、Secret 模板与 GitHub Actions/GHCR 流程；不把公网主机尚未选定误报为已在线部署。
@@ -149,7 +149,7 @@
 - 公开边界硬化已完成：Nest 全局 `ValidationPipe` 对全部 Body DTO 启用 transform/whitelist/forbidNonWhitelisted；文本、JSON、Knowledge topK、Workflow 图与普通请求体均有上限；环境变量启动时 fail-closed；API Helmet/安全响应头生效。
 - 附件对象存储已由手写 SigV4 改为官方 AWS SDK v3，并为 PUT/DELETE/CreateBucket 增加强制 Abort/deadline；真实 MinIO opt-in integration 随全套 47/47 通过。
 - AI Gateway 已按错误类型做有界重试：网络、超时、408、429 与选定 5xx 最多重试一次；400、401、403 与无效响应不重试。`AiRuntime` 内存 Usage 视图默认仅保留最近 1,000 条，持久化 Invocation / Usage 账本仍是事实源。
-- 外部模型 Intent / Reply / Embedding / Image / Judge 与 36 个 Eval Case 仍标记为外部复验项：当前环境没有配置模型 endpoint、模型名或服务端凭据，禁止伪造准确率与成本数据。
+- DeepSeek Chat endpoint / 模型 / 服务端 Key 文件已经配置；结构化风险分类探针，以及合成 Buyer→Intent/Risk/Reply→Workbench Draft→Human Final 的连接态浏览器链均通过。Judge、Embedding / Image 与 36 个 Eval Case 仍标记为外部复验项，禁止据此伪造准确率与成本数据。
 - `docs/16` 冻结的“公开 Demo 不做 Workspace Quota / Rate Limit / 超额 Fallback”保持不变并继续作为已知费用风险；未用外部审查建议擅自覆盖冻结决策。
 
 ## Release
@@ -163,7 +163,7 @@
 
 - Docker Desktop 29.7.2 / WSL2 已运行，Compose 中 PostgreSQL、Redis、MinIO 均为 `healthy`。
 - 18 个 Prisma migrations 已真实部署；`prisma generate`、`prisma validate`、全仓 build 与 typecheck 通过。
-- 最新回归：454 unit、48 real-infra integration、4 条连接态 Playwright E2E 通过；4 条离线降级用例按互斥环境条件跳过，不计为 PASS。
+- 最新回归：456 unit、48 real-infra integration、4 条连接态 Playwright E2E 通过；DeepSeek 配置下另复跑 Buyer→Human Final 主链 1/1 通过。4 条离线降级用例按互斥环境条件跳过，不计为 PASS。
 - 应用已常驻启动：Web `http://localhost:5173`、API `http://localhost:3000`；应用内浏览器确认 `API READY · 实时已连接`。
 - Scenario Lab 八个固定合成场景已从真实浏览器界面逐一运行并全部 `SUCCEEDED`。
 - 独立生产验证项目的 Web/API/PostgreSQL/pgvector/Redis/MinIO 5 容器全部 `healthy`；18 migrations、`/healthz`、SPA fallback、同源 REST Workspace 创建、Socket.IO heartbeat、Redis 密码与 Nginx 安全响应头实测通过。验证容器/网络/卷已定向清理，本地开发栈保留。
@@ -176,7 +176,8 @@
 - [x] R2：全局 Runtime DTO 校验、Helmet/CSP、Body limit、环境 fail-closed、AWS SDK v3 + Abort。Quota / Rate Limit 按 `docs/16` 冻结决策不实施。
 - [x] R3：连接态 Reset→Buyer 三连发→Workbench Draft→人工接管→Human Final→Buyer 可见 E2E。同时修复 Reset 500 与 WebSocket 刷新期静默丢发。
 - [x] R4 代码 Gate：模型错误分类、有界重试、RUNNING 账本、最近 1,000 条内存 Usage。
-- [ ] R4 外部 Gate：当前无 AI endpoint / key / model，Intent/Reply/Embedding/Image/Judge 与外部 36 Eval 保持 BLOCKED，不虚构成本或准确率。
+- [x] R4 外部 Chat Gate：DeepSeek `deepseek-v4-flash` 风险探针与 Intent/Risk/Reply 合成浏览器主链通过，Key 仅从仓库外文件读取。
+- [ ] R4 完整 Eval Gate：Judge、Embedding、Image 与 36 Eval 尚未执行，不虚构成本或准确率。
 - [x] R5 安全拆分基线：React Router、TanStack Query、`app/`、`features/`、`components/ui/`，Usage / Privacy 移出 `App.tsx`；三尺寸快照已视觉复核。
 - [ ] R5 渐进技术债：Workbench / Buyer / Workflow 与 `api.ts` / `styles.css` 仍需后续按 feature 拆分；本轮不做无回归的全量重写。
 - [x] R6 本地/CI/容器交付：CI 现实跑非 skip 基础设施 integration 与连接态 Playwright；生产风格五容器验收通过。

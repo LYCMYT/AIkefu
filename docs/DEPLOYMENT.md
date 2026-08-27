@@ -62,7 +62,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml down
 
 `.env.production` 仅供该主机的 Compose 使用，且被 `.gitignore` 忽略。数据库密码、Redis 密码、MinIO 密钥与可选 `AI_API_KEY` 只通过容器环境变量传给 API；它们不会传入 Web Docker build、前端 bundle、URL、WebSocket payload 或普通日志。
 
-保持 `AI_BASE_URL` 与 `AI_API_KEY` 为空即可使用离线确定性 provider。若显式配置兼容的 AI gateway，只在服务端设置这些变量，审查其数据处理条款，并保持 `AI_EXTERNAL_IMAGE_ANALYSIS_OPT_IN=false`，除非已明确批准把原始图片发送到该外部运行时。
+保持 AI 配置为空即可使用离线确定性 provider。DeepSeek 可在服务端设置 `AI_PROVIDER=deepseek`、`AI_BASE_URL=https://api.deepseek.com/chat/completions`、模型变量和 `AI_API_KEY`；本地开发也可用 `AI_API_KEY_FILE` 指向仓库外的单行 Key 文件。`pnpm ai:probe` 只发送一条合成风险分类输入并输出 provider/model/token 元数据。生产容器仍应通过 Secret 管理器注入 `AI_API_KEY`。保持 `AI_EXTERNAL_IMAGE_ANALYSIS_OPT_IN=false`，除非已明确批准把原始图片发送到外部运行时。
 
 API 启动会校验环境变量并启用严格 Body DTO、`JSON_BODY_LIMIT`（默认 `1mb`）与 Helmet。对象存储使用 AWS SDK v3，`ATTACHMENT_STORAGE_TIMEOUT_MS`（默认 `8000`）是 PUT/DELETE/CreateBucket 的硬截止时间。配置错误会阻止 API 监听，而不是带着隐式默认值继续运行。
 

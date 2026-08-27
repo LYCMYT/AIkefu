@@ -19,6 +19,7 @@
     "db:migrate": "dotenv -e .env -- pnpm --filter @ai-customer-service/api prisma:migrate",
     "db:deploy": "dotenv -e .env -- pnpm --filter @ai-customer-service/api prisma:deploy",
     "security:secrets": "node scripts/scan-secrets.mjs",
+    "ai:probe": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node scripts/probe-ai-runtime.cjs",
     "release:archive": "node scripts/create-source-archive.mjs"
   },
   "devDependencies": {

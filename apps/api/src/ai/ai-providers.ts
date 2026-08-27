@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import {
   AiProviderFailure,
   AiRuntime,
@@ -18,8 +20,10 @@ export type JsonModelGatewayOptions = {
 };
 
 type ServerAiRuntimeOptions = Partial<JsonModelGatewayOptions> & Partial<Record<
+  | 'AI_PROVIDER'
   | 'AI_BASE_URL'
   | 'AI_API_KEY'
+  | 'AI_API_KEY_FILE'
   | 'AI_FAST_MODEL'
   | 'AI_QUALITY_MODEL'
   | 'AI_MULTIMODAL_MODEL'
@@ -31,6 +35,12 @@ type ServerAiRuntimeOptions = Partial<JsonModelGatewayOptions> & Partial<Record<
   | 'AI_RUNTIME_TIMEOUT_MS',
   string
 >>;
+
+type DeepSeekChatCompletion = {
+  choices?: Array<{ message?: { content?: unknown } }>;
+  model?: unknown;
+  usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+};
 
 /**
  * Optional server-side gateway. It has no environment lookup and is never
@@ -95,6 +105,85 @@ export class JsonModelGatewayProvider implements AiProvider {
   }
 }
 
+/**
+ * DeepSeek's OpenAI-compatible Chat Completions boundary. The provider keeps
+ * credentials in the Authorization header and asks for JSON mode; AiRuntime
+ * remains the final authority that validates and, at most once, repairs the
+ * purpose-specific structured output.
+ */
+export class DeepSeekJsonProvider implements AiProvider {
+  readonly name = 'deepseek-openai-chat';
+  private readonly fetcher: FetchLike;
+  private readonly endpoint: string;
+
+  constructor(private readonly options: JsonModelGatewayOptions) {
+    this.endpoint = normalizeDeepSeekEndpoint(options.endpoint);
+    if (!options.secret?.trim() || !options.model?.trim()) throw new Error('AI_GATEWAY_CONFIGURATION_INVALID');
+    this.fetcher = options.fetcher ?? (globalThis.fetch as unknown as FetchLike);
+  }
+
+  async invoke(request: AiProviderRequest): Promise<AiProviderResponse> {
+    if (request.signal.aborted) throw abortedProviderFailure(request.signal);
+    let response: Awaited<ReturnType<FetchLike>>;
+    try {
+      response = await this.fetcher(this.endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.options.secret}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.options.model,
+          messages: [
+            { role: 'system', content: deepSeekSystemPrompt(request.purpose) },
+            {
+              role: 'user',
+              content: JSON.stringify({
+                input: request.input,
+                repair: request.repair,
+                ...(request.previousOutput === undefined ? {} : { previousOutput: request.previousOutput }),
+              }),
+            },
+          ],
+          response_format: { type: 'json_object' },
+          thinking: { type: 'disabled' },
+          temperature: 0,
+          max_tokens: 2_048,
+        }),
+        signal: request.signal,
+      });
+    } catch (error) {
+      if (request.signal.aborted) throw abortedProviderFailure(request.signal, error);
+      throw new AiProviderFailure('NETWORK', true, 'AI_GATEWAY_NETWORK_ERROR', { cause: error });
+    }
+    if (!response.ok) {
+      const status = response.status ?? 0;
+      throw new AiProviderFailure('HTTP', isRetryableHttpStatus(status), `AI_GATEWAY_HTTP_${status}`, { status });
+    }
+    let payload: DeepSeekChatCompletion;
+    try {
+      payload = await response.json() as DeepSeekChatCompletion;
+    } catch (error) {
+      throw new AiProviderFailure('RESPONSE', false, 'AI_GATEWAY_RESPONSE_INVALID', { cause: error });
+    }
+    const content = payload.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) {
+      throw new AiProviderFailure('RESPONSE', false, 'AI_GATEWAY_RESPONSE_INVALID');
+    }
+    let output: unknown;
+    try {
+      output = JSON.parse(content);
+    } catch (error) {
+      throw new AiProviderFailure('RESPONSE', false, 'AI_GATEWAY_RESPONSE_INVALID', { cause: error });
+    }
+    return {
+      output,
+      model: typeof payload.model === 'string' && payload.model ? payload.model : this.options.model,
+      ...(deepSeekUsage(payload.usage) ? { usage: deepSeekUsage(payload.usage) } : {}),
+    };
+  }
+}
+
 function isRetryableHttpStatus(status: number): boolean {
   return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
@@ -120,8 +209,15 @@ export class OfflineStructuredProvider implements AiProvider {
 }
 
 export function createServerAiRuntime(options: ServerAiRuntimeOptions = process.env): AiRuntime {
-  const endpoint = options.endpoint?.trim() || options.AI_BASE_URL?.trim() || options.AI_MODEL_GATEWAY_URL?.trim();
-  const secret = options.secret?.trim() || options.AI_API_KEY?.trim() || options.AI_MODEL_GATEWAY_SECRET?.trim();
+  const providerKind = options.AI_PROVIDER?.trim().toLowerCase();
+  const endpoint = options.endpoint?.trim()
+    || options.AI_BASE_URL?.trim()
+    || options.AI_MODEL_GATEWAY_URL?.trim()
+    || (providerKind === 'deepseek' ? 'https://api.deepseek.com' : undefined);
+  const secret = options.secret?.trim()
+    || options.AI_API_KEY?.trim()
+    || options.AI_MODEL_GATEWAY_SECRET?.trim()
+    || readSecretFile(options.AI_API_KEY_FILE);
   const explicitModel = options.model?.trim() || options.AI_MODEL_NAME?.trim();
   const fallback = new OfflineStructuredProvider();
   const purposes: AiPurpose[] = [
@@ -133,7 +229,12 @@ export function createServerAiRuntime(options: ServerAiRuntimeOptions = process.
     const model = explicitModel || modelForPurpose(options, purpose);
     if (endpoint && secret && model) {
       const key = `primary:${purpose}`;
-      providers[key] = new JsonModelGatewayProvider({
+      providers[key] = providerKind === 'deepseek' ? new DeepSeekJsonProvider({
+        endpoint,
+        secret,
+        model,
+        ...(options.fetcher ? { fetcher: options.fetcher } : {}),
+      }) : new JsonModelGatewayProvider({
         endpoint,
         secret,
         model,
@@ -155,6 +256,63 @@ export function createServerAiRuntime(options: ServerAiRuntimeOptions = process.
     routes,
     defaultTimeoutMs: positiveInteger(options.AI_TIMEOUT_MS ?? options.AI_RUNTIME_TIMEOUT_MS, 8_000),
   });
+}
+
+function normalizeDeepSeekEndpoint(rawEndpoint: string): string {
+  const endpoint = new URL(rawEndpoint);
+  if (endpoint.protocol !== 'https:' && endpoint.hostname !== 'localhost' && endpoint.hostname !== '127.0.0.1') {
+    throw new Error('AI_GATEWAY_HTTPS_REQUIRED');
+  }
+  if (endpoint.pathname === '/' || endpoint.pathname === '') endpoint.pathname = '/chat/completions';
+  return endpoint.toString();
+}
+
+function readSecretFile(path: string | undefined): string | undefined {
+  if (!path?.trim()) return undefined;
+  let secret: string;
+  try {
+    secret = readFileSync(path.trim(), 'utf8').trim();
+  } catch {
+    throw new Error('AI_API_KEY_FILE_INVALID');
+  }
+  if (!secret || /[\r\n]/.test(secret)) throw new Error('AI_API_KEY_FILE_INVALID');
+  return secret;
+}
+
+function deepSeekUsage(value: DeepSeekChatCompletion['usage']): AiProviderResponse['usage'] | undefined {
+  if (!value || !Number.isSafeInteger(value.prompt_tokens) || Number(value.prompt_tokens) < 0
+    || !Number.isSafeInteger(value.completion_tokens) || Number(value.completion_tokens) < 0) return undefined;
+  return { inputTokens: Number(value.prompt_tokens), outputTokens: Number(value.completion_tokens) };
+}
+
+function deepSeekSystemPrompt(purpose: AiPurpose): string {
+  return [
+    'You are a structured JSON component in a customer-service safety system.',
+    'Return exactly one JSON object and no markdown, prose, or chain-of-thought.',
+    'Do not invent inventory, price, order, logistics, identity, or payment facts.',
+    'When evidence is missing or risk is uncertain, choose the conservative human/manual outcome.',
+    `Purpose: ${purpose}.`,
+    `Example JSON shape: ${JSON.stringify(exampleForPurpose(purpose))}`,
+  ].join(' ');
+}
+
+function exampleForPurpose(purpose: AiPurpose): Record<string, unknown> {
+  switch (purpose) {
+    case 'INTENT_PLANNER':
+      return { tasks: [{ intent: 'UNKNOWN', riskLevel: 'MEDIUM', requiredContext: [], requiredKnowledge: [], requiredTools: ['TRANSFER_HUMAN'] }], summary: '' };
+    case 'RISK_CLASSIFIER':
+      return { riskLevel: 'MEDIUM', reasons: ['insufficient evidence'], recommendedMode: 'ASSIST', sensitiveIntent: false };
+    case 'SUMMARY':
+      return { narrativeSummary: '', activeTopic: '', activeProductId: null, activeOrderId: null, resolvedFacts: [], openQuestions: [], deprecatedFacts: [] };
+    case 'KNOWLEDGE_EXTRACT':
+      return { question: '', answer: '', scope: 'STORE', candidateType: 'NEW_KNOWLEDGE', shouldCreate: false, rejectionReason: 'insufficient evidence', containsTemporaryCommitment: false, containsPII: false };
+    case 'REPLY_GENERATION':
+      return { text: '', requiresHuman: true };
+    case 'IMAGE_ANALYSIS':
+      return { scene: 'UNKNOWN', observations: [], confidence: 0, containsPII: false, requiresHuman: true };
+    case 'QUALITY_JUDGE':
+      return { relevance: 0, completeness: 0, groundedness: 0, tone: 0, risk: 'MEDIUM', result: 'NEEDS_HUMAN', reasons: ['insufficient evidence'] };
+  }
 }
 
 function modelForPurpose(options: ServerAiRuntimeOptions, purpose: AiPurpose): string | undefined {

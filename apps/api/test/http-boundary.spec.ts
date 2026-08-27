@@ -62,6 +62,7 @@ describe('HTTP runtime boundaries', () => {
     expect(() => validateEnvironment({ NODE_ENV: 'production', WEB_ORIGIN: '*' })).toThrow('ENVIRONMENT_INVALID');
     expect(() => validateEnvironment({ API_PORT: '0' })).toThrow('ENVIRONMENT_INVALID');
     expect(() => validateEnvironment({ AI_EXTERNAL_IMAGE_ANALYSIS_OPT_IN: 'TRUE' })).toThrow('ENVIRONMENT_INVALID');
+    expect(() => validateEnvironment({ AI_PROVIDER: 'unknown-provider' })).toThrow('ENVIRONMENT_INVALID');
 
     expect(validateEnvironment({
       NODE_ENV: 'test',

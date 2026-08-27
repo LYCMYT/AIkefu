@@ -37,6 +37,9 @@ export function validateEnvironment(environment: Record<string, string | undefin
     const value = environment[key];
     if (value !== undefined && value !== 'true' && value !== 'false') errors.push(key);
   }
+  if (environment.AI_PROVIDER && !['deepseek', 'json-gateway'].includes(environment.AI_PROVIDER.trim().toLowerCase())) {
+    errors.push('AI_PROVIDER');
+  }
 
   const webOrigin = validHttpUrl(environment.WEB_ORIGIN ?? 'http://localhost:5173', 'WEB_ORIGIN', errors);
   for (const key of ['AI_BASE_URL', 'AI_EMBEDDING_BASE_URL', 'S3_ENDPOINT'] as const) {
