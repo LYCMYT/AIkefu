@@ -56,3 +56,86 @@ jobs:
 
       - name: Build packages and applications
         run: pnpm build
+
+  real-infra:
+    name: Real infrastructure and browser gate
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RUN_REAL_INFRA_INTEGRATION: '1'
+      RUN_REAL_INFRA_E2E: '1'
+      E2E_BASE_URL: http://127.0.0.1:5173
+      PLAYWRIGHT_BROWSER_CHANNEL: chromium
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Configure deterministic demo environment
+        run: cp .env.example .env
+
+      - name: Start PostgreSQL, Redis and MinIO
+        run: docker compose -f docker-compose.yml up -d --wait --wait-timeout 180
+
+      - name: Deploy and validate Prisma schema
+        run: |
+          pnpm db:deploy
+          pnpm exec dotenv -e .env -- pnpm --filter @ai-customer-service/api exec prisma validate
+          pnpm db:generate
+
+      - name: Run real infrastructure integration tests
+        run: pnpm exec dotenv -e .env -- pnpm test:integration
+
+      - name: Start API and Web
+        run: |
+          nohup pnpm dev > /tmp/aikefu-dev.log 2>&1 &
+          echo $! > /tmp/aikefu-dev.pid
+          for attempt in $(seq 1 90); do
+            api_status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/bootstrap || true)
+            if [ "$api_status" = "401" ] && curl --fail --silent http://127.0.0.1:5173/workbench > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/aikefu-dev.log
+          exit 1
+
+      - name: Run connected browser acceptance
+        run: pnpm test:e2e
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-infra-diagnostics
+          path: |
+            /tmp/aikefu-dev.log
+            test-results
+          if-no-files-found: ignore
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml logs --no-color
+
+      - name: Stop isolated CI infrastructure
+        if: always()
+        run: docker compose -f docker-compose.yml down -v

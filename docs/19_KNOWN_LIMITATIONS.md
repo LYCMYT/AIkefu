@@ -18,5 +18,8 @@
 16. 公开 Demo 不做 Workspace 级防刷 Quota / Rate Limit；存在模型费用风险。
 17. BM25 在应用层实现，仅适合 Demo 小规模语料。
 18. 不声称满足生产 SLA、安全认证或大规模并发。
-19. 本交付不声称在线部署已完成；Compose 只提供本地 PostgreSQL/Redis/MinIO 依赖，真实基础设施验收需显式 opt-in。
+19. 本交付不声称在线部署已完成；本地基础设施和生产风格 Compose 已实跑，但没有公网主机、域名或 TLS 终止点。
 20. 不虚构商业 KPI、转化率、准确率或成本收益；Usage 页面只展示服务端返回的 Demo 运行快照。
+21. 本地匿名 Workspace token 仍存在浏览器 localStorage；已有严格 CSP，但公网部署前仍应升级为 HttpOnly + SameSite Cookie 或受控的一次性会话。
+22. 当前未配置外部 AI / embedding 凭据；Intent、Reply、Image、Judge 和 36 Eval 的外部模型结果不报告为 PASS。
+23. 前端已引入 React Router、TanStack Query 和 feature 目录，但 Workbench / Buyer / Workflow 以及 `api.ts` / `styles.css` 仍较大，需按功能渐进拆分，不适合一次性无测试重写。

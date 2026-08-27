@@ -57,14 +57,17 @@ describe('Phase 05 release handoff documentation', () => {
 
   it('keeps Phase 05 resource pages on real loading/error/empty branches and narrow layouts', () => {
     const app = readRepositoryFile('apps/web/src/App.tsx');
+    const usage = readRepositoryFile('apps/web/src/features/usage/UsageAdminPage.tsx');
+    const phase05Sources = `${app}\n${usage}`;
     const styles = readRepositoryFile('apps/web/src/styles.css');
 
-    for (const page of ['WorkflowAdminPage', 'QualityAdminPage', 'IncidentAdminPage', 'UsageAdminPage', 'ScenarioLabPage']) {
+    for (const page of ['WorkflowAdminPage', 'QualityAdminPage', 'IncidentAdminPage', 'ScenarioLabPage']) {
       expect(app).toContain(`function ${page}`);
     }
-    expect(app.match(/Phase05LoadingState/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
-    expect(app.match(/Phase05ErrorState message=\{resourceError\}/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
-    expect(app).toContain('暂无用量快照');
+    expect(usage).toContain('function UsageAdminPage');
+    expect(phase05Sources.match(/(?:Phase05LoadingState|LoadingState)/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
+    expect(phase05Sources.match(/(?:Phase05ErrorState|ErrorState) message=/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(usage).toContain('暂无用量快照');
     expect(app).toContain('暂无场景快照');
     expect(styles).toContain('@media (max-width: 700px)');
     expect(styles).toContain('.phase05-resource-grid');

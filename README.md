@@ -7,6 +7,24 @@
 
 本仓库是一个合成数据 Demo，不是已上线的电商客服产品。默认运行不需要真实平台账号或模型密钥；需要真实 PostgreSQL / Redis / MinIO 验收时，必须显式启动 Docker 并打开 opt-in 开关。当前文档不声称在线部署、生产 SLA 或商业 KPI。
 
+![Relay Workbench — 1440×900 真实本地 Workspace 快照](docs/screenshots/workbench-1440x900.png)
+
+```mermaid
+flowchart LR
+  B["Buyer Simulator"] --> M["MockDouyinAdapter"]
+  M --> P["Message / Turn / ProcessingOutbox"]
+  P --> R["ReplyJob / TaskBundle / Workflow"]
+  R --> K["Knowledge + live Product/Order Context"]
+  R --> S["SendGuard / SendOutbox / Receipt"]
+  S --> W["Workbench + WebSocket snapshots"]
+  D[("PostgreSQL + pgvector")] --- P
+  D --- R
+  X[("Redis / BullMQ")] --- P
+  O[("MinIO")] --- P
+```
+
+截图基线同时保留 [1440×900](docs/screenshots/workbench-1440x900.png)、[1366×768](docs/screenshots/workbench-1366x768.png) 与 [390×844](docs/screenshots/workbench-390x844.png)。在线 Demo 与演示视频尚无公网托管地址，不使用本地链接冒充公开 Preview。
+
 ## 展示范围
 
 四个一级入口固定为：
@@ -70,7 +88,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 
 默认访问 `http://localhost:8080`。线上服务器应在 Web 容器前终止 TLS，并将 `WEB_ORIGIN` 设为真实 HTTPS Origin。完整的密钥边界、健康检查、升级和停机命令见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 
-`.github/workflows/ci.yml` 会在 push/PR 时执行类型检查、单元测试、默认集成测试和构建；`container-images.yml` 在 `main`、`v*` Tag 或手动触发时将 API/Web 镜像发布到 GitHub Container Registry。GitHub 负责代码、CI/CD 与镜像，真正的常驻运行仍需 Linux 主机或兼容的容器平台。
+`.github/workflows/ci.yml` 会在 push/PR 时先执行 Secret scan、frozen install、Prisma generate、typecheck、unit、默认 integration 与 build；随后在隔离 job 中真实启动 PostgreSQL/pgvector、Redis、MinIO，部署 migration，执行非跳过的 real-infra integration，并启动 API/Web 跑连接态 Playwright。`container-images.yml` 在 `main`、`v*` Tag 或手动触发时将 API/Web 镜像发布到 GitHub Container Registry。GitHub 负责代码、CI/CD 与镜像，真正的常驻运行仍需 Linux 主机或兼容的容器平台。
 
 发布源码包不要压缩整个工作目录。先确保工作区已提交且干净，再运行：
 

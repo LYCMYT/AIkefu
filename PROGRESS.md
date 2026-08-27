@@ -163,8 +163,23 @@
 
 - Docker Desktop 29.7.2 / WSL2 已运行，Compose 中 PostgreSQL、Redis、MinIO 均为 `healthy`。
 - 18 个 Prisma migrations 已真实部署；`prisma generate`、`prisma validate`、全仓 build 与 typecheck 通过。
-- 432 unit、45 real-infra integration、3 real-infra Playwright E2E 通过。
+- 最新回归：454 unit、48 real-infra integration、4 条连接态 Playwright E2E 通过；4 条离线降级用例按互斥环境条件跳过，不计为 PASS。
 - 应用已常驻启动：Web `http://localhost:5173`、API `http://localhost:3000`；应用内浏览器确认 `API READY · 实时已连接`。
 - Scenario Lab 八个固定合成场景已从真实浏览器界面逐一运行并全部 `SUCCEEDED`。
 - 独立生产验证项目的 Web/API/PostgreSQL/pgvector/Redis/MinIO 5 容器全部 `healthy`；18 migrations、`/healthz`、SPA fallback、同源 REST Workspace 创建、Socket.IO heartbeat、Redis 密码与 Nginx 安全响应头实测通过。验证容器/网络/卷已定向清理，本地开发栈保留。
 - 当前总进度：44 / 46（95.7%）。剩余在线部署与完整 3 分钟人工走台；均不扩大 V1，也不接真实电商私有接口。
+
+## 外部深度审查整改（R0–R6）
+
+- [x] R0：Secret scan、tracked-file 白名单源码归档、交付忽略规则。
+- [x] R1：Docker PostgreSQL/pgvector、Redis/BullMQ、MinIO、18 migrations 与 48 条 real-infra integration 真实验收。
+- [x] R2：全局 Runtime DTO 校验、Helmet/CSP、Body limit、环境 fail-closed、AWS SDK v3 + Abort。Quota / Rate Limit 按 `docs/16` 冻结决策不实施。
+- [x] R3：连接态 Reset→Buyer 三连发→Workbench Draft→人工接管→Human Final→Buyer 可见 E2E。同时修复 Reset 500 与 WebSocket 刷新期静默丢发。
+- [x] R4 代码 Gate：模型错误分类、有界重试、RUNNING 账本、最近 1,000 条内存 Usage。
+- [ ] R4 外部 Gate：当前无 AI endpoint / key / model，Intent/Reply/Embedding/Image/Judge 与外部 36 Eval 保持 BLOCKED，不虚构成本或准确率。
+- [x] R5 安全拆分基线：React Router、TanStack Query、`app/`、`features/`、`components/ui/`，Usage / Privacy 移出 `App.tsx`；三尺寸快照已视觉复核。
+- [ ] R5 渐进技术债：Workbench / Buyer / Workflow 与 `api.ts` / `styles.css` 仍需后续按 feature 拆分；本轮不做无回归的全量重写。
+- [x] R6 本地/CI/容器交付：CI 现实跑非 skip 基础设施 integration 与连接态 Playwright；生产风格五容器验收通过。
+- [ ] R6 外部发布：没有公网主机/域名/TLS，因此不宣称 Preview 已上线。
+
+详细“已做 / 部分做 / 未做”证据见 `docs/20_REVIEW_REMEDIATION_R0_R6.md`。

@@ -69,13 +69,17 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
   }
 
   async reset(scope: WorkspaceScope, seed: SeedData): Promise<SeedCounts> {
+    // Auth middleware supplies an AuthenticatedWorkspace, which structurally
+    // contains WorkspaceScope plus nested workspace/tenant views. Never spread
+    // those extra properties into Prisma create inputs during reseeding.
+    const normalizedScope = this.scope(scope);
     return this.prisma.$transaction(async (transaction) => {
-      await transaction.auditLog.deleteMany({ where: this.scope(scope) });
-      await transaction.workflow.deleteMany({ where: this.scope(scope) });
-      await transaction.shop.deleteMany({ where: this.scope(scope) });
-      await transaction.buyer.deleteMany({ where: this.scope(scope) });
-      await this.seedScope(transaction, scope, seed);
-      return this.seedCounts(transaction, scope);
+      await transaction.auditLog.deleteMany({ where: normalizedScope });
+      await transaction.workflow.deleteMany({ where: normalizedScope });
+      await transaction.shop.deleteMany({ where: normalizedScope });
+      await transaction.buyer.deleteMany({ where: normalizedScope });
+      await this.seedScope(transaction, normalizedScope, seed);
+      return this.seedCounts(transaction, normalizedScope);
     });
   }
 

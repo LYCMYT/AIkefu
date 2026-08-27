@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -48,4 +49,12 @@ test('release archive rejects dependencies, build output, private env and intern
 
 test('archive filename is deterministic for a commit', () => {
   assert.equal(defaultArchiveName('995294025208cd9a53f8b650a26c5d6ddb2fc474'), 'aikefu-source-9952940.zip');
+});
+
+test('CI has a non-skipped real infrastructure and browser gate', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /real-infra:/);
+  assert.match(workflow, /RUN_REAL_INFRA_INTEGRATION:\s*'1'/);
+  assert.match(workflow, /RUN_REAL_INFRA_E2E:\s*'1'/);
+  assert.match(workflow, /playwright install --with-deps chromium/);
 });

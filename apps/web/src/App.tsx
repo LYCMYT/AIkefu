@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   approveActionProposal,
   ApiError,
@@ -46,7 +47,6 @@ import {
   getQualityReviews,
   addIncidentRegression,
   concludeQualityReview,
-  deleteCustomerData,
   getScenarios,
   getUsageSummary,
   getWorkflow,
@@ -87,7 +87,6 @@ import {
   type ReplyDraft,
   type CustomerMemory,
   type CustomerMemoryInputDto,
-  type CustomerDataDeletionResult,
   type QualityReview,
   type QualityResult,
   type DeveloperTrace,
@@ -101,6 +100,12 @@ import {
   type WorkflowRun,
 } from './api';
 import { connectWorkspaceSocket, refreshConversationForWorkspaceEvent, type WorkspaceSocketEvent, type WorkspaceSocketStatus } from './workspace-socket';
+import { buyerTextSubmissionEnabled, humanFinalSubmission } from './workbench-actions';
+import { navIcons, navigationItems, resolveAppPath, type AppPath } from './app/routes';
+import { EmptyState, ErrorState as Phase05ErrorState, LoadingState as Phase05LoadingState } from './components/ui/feedback';
+import { AdminPageHeader as Phase05AdminHeader, AdminTabs } from './features/admin/AdminChrome';
+import { DataPrivacyPage } from './features/privacy/DataPrivacyPage';
+import { UsageAdminPage } from './features/usage/UsageAdminPage';
 import type {
   Bootstrap as BootstrapPayload,
   WorkflowEdge,
@@ -108,13 +113,7 @@ import type {
   WorkflowNodeType,
 } from '@ai-customer-service/contracts';
 
-type AppPath = '/workbench' | '/admin' | '/admin/shops' | '/admin/products' | '/admin/knowledge' | '/admin/knowledge/candidates' | '/admin/knowledge/conflicts' | '/admin/workflows' | '/admin/quality' | '/admin/incidents' | '/admin/usage' | '/admin/privacy' | '/buyer-simulator' | '/scenario-lab';
-
-interface NavigationItem {
-  path: AppPath;
-  label: string;
-  note: string;
-}
+export { navigationItems } from './app/routes';
 
 interface FoundationState {
   status: 'loading' | 'ready' | 'error';
@@ -132,61 +131,7 @@ interface SharedViewProps {
   traceOpen?: boolean;
 }
 
-export const navigationItems: NavigationItem[] = [
-  { path: '/workbench', label: '工作台', note: 'Live desk' },
-  { path: '/buyer-simulator', label: '买家模拟器', note: 'Buyer view' },
-  { path: '/admin', label: '运营后台', note: 'Control room' },
-  { path: '/scenario-lab', label: '场景实验室', note: 'Scenarios' },
-];
-
-const navIcons: Record<AppPath, string> = {
-  '/workbench': '⌘',
-  '/buyer-simulator': '↗',
-  '/admin': '▦',
-  '/admin/shops': '▦',
-  '/admin/products': '▦',
-  '/admin/knowledge': '▦',
-  '/admin/knowledge/candidates': '▦',
-  '/admin/knowledge/conflicts': '▦',
-  '/admin/workflows': '▦',
-  '/admin/quality': '▦',
-  '/admin/incidents': '▦',
-  '/admin/usage': '▦',
-  '/admin/privacy': '⌁',
-  '/scenario-lab': '◌',
-};
-
 const defaultNavigationItem = navigationItems[0]!;
-
-function currentPath(): AppPath {
-  const path = window.location.pathname;
-  if (path === '/admin/overview') return '/admin';
-  if (path === '/products') return '/admin/products';
-  if (path === '/knowledge') return '/admin/knowledge';
-  if (path === '/admin/shops' || path === '/admin/products' || path === '/admin/knowledge' || path === '/admin/knowledge/candidates' || path === '/admin/knowledge/conflicts' || path === '/admin/workflows' || path === '/admin/quality' || path === '/admin/incidents' || path === '/admin/usage' || path === '/admin/privacy') return path;
-  return navigationItems.some((item) => item.path === path) ? (path as AppPath) : '/workbench';
-}
-
-function navigate(path: AppPath, replace = false): void {
-  window.history[replace ? 'replaceState' : 'pushState']({}, '', path);
-  window.dispatchEvent(new Event('relay:navigate'));
-}
-
-function useAppPath(): AppPath {
-  const [path, setPath] = useState<AppPath>(currentPath);
-
-  useEffect(() => {
-    const updatePath = () => setPath(currentPath());
-    window.addEventListener('popstate', updatePath);
-    window.addEventListener('relay:navigate', updatePath);
-    return () => {
-      window.removeEventListener('popstate', updatePath);
-      window.removeEventListener('relay:navigate', updatePath);
-    };
-  }, []);
-
-  return path;
-}
 
 function readableTime(value?: string): string {
   if (!value) return '—';
@@ -623,17 +568,6 @@ function eventHasWorkspaceShape(event: WorkspaceSocketEvent): boolean {
 function isPhase03SnapshotEvent(event: WorkspaceSocketEvent): boolean {
   const eventType = (event as Record<string, unknown>).eventType;
   return eventType === 'PRODUCT_UPDATED' || eventType === 'KNOWLEDGE_UPDATED' || eventType === 'USAGE_UPDATED';
-}
-
-function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
-  return (
-    <div className="empty-state">
-      <span className="empty-glyph" aria-hidden="true">○</span>
-      <strong>{title}</strong>
-      <p>{detail}</p>
-      {action}
-    </div>
-  );
 }
 
 function Avatar({ label, tone = 'mint' }: { label?: string; tone?: 'mint' | 'orange' | 'blue' | 'dark' }) {
@@ -1076,7 +1010,11 @@ function Workbench({ token, shops, activeShopId, onShopChange, refreshKey, realt
     const text = (overrideText ?? composer).trim();
     if (!text || !selectedConversationId) return;
     const durableDraftId = sourceDraftId ?? (draft?.id && draftCanEdit ? draft.id : undefined);
-    if (!durableDraftId) {
+    const submission = humanFinalSubmission({
+      humanActive: Boolean(activeConversation?.humanActive),
+      sourceDraftId: durableDraftId,
+    });
+    if (!submission.allowed) {
       setSendError('当前没有可用的 ASSIST Draft；请等待 Draft 生成或先请求重新生成。');
       return;
     }
@@ -1085,8 +1023,7 @@ function Workbench({ token, shops, activeShopId, onShopChange, refreshKey, realt
     try {
       const receipt = await sendConversationMessage(token, selectedConversationId, shopId, {
         text,
-        sourceDraftId: durableDraftId,
-        editType: draftEditType,
+        ...(submission.sourceDraftId ? { sourceDraftId: submission.sourceDraftId, editType: draftEditType } : {}),
       });
       setSendError(`Human Final 已接受（${receipt.sendOutboxId}），等待发送回执。`);
       setComposer('');
@@ -1411,7 +1348,7 @@ function BuyerSimulator({ token, shops, activeShopId, onShopChange, refreshKey }
               <div className="seller-welcome"><span className="welcome-spark">✦</span><strong>{activeShop?.name ?? '店铺'}的智能客服</strong><small>欢迎咨询商品、订单和售后问题</small></div>
               {loading ? <div className="phone-empty">正在读取对话…</div> : messages.length === 0 ? <div className="phone-empty"><span>○</span><strong>开始一次新的咨询</strong><small>你发送的内容会同步到客服工作台</small></div> : messages.map((message) => <div className="buyer-message-wrap" key={message.id}><MessageBubble message={message} dense />{message.role === 'BUYER' && message.status !== 'RECALLED' && message.status !== 'DELETED' && !message.id.startsWith('local-') && <div className="buyer-message-actions"><button type="button" onClick={() => { setEditingId(message.id); setEditingText(messageText(message)); }}>编辑</button><button type="button" onClick={() => void recall(message.id)}>撤回</button></div>}{editingId === message.id && <div className="inline-edit"><textarea value={editingText} onChange={(event) => setEditingText(event.currentTarget.value)} rows={2} /><div><button type="button" onClick={() => setEditingId('')}>取消</button><button className="save-mini" type="button" onClick={() => void saveEdit(message.id)}>保存</button></div></div>}</div>)}
             </div>
-            <div className="phone-composer"><div className="phone-input-row"><button type="button" disabled title="图片消息暂不可用">＋</button><textarea value={composer} onChange={(event) => setComposer(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(); } }} placeholder="输入咨询内容…" rows={1} /><button type="button" className="phone-send" onClick={() => void sendText()} disabled={!composer.trim() || sending} aria-label="发送">↑</button></div><small>图片消息暂不可用</small></div>
+            <div className="phone-composer"><div className="phone-input-row"><button type="button" disabled title="图片消息暂不可用">＋</button><textarea value={composer} onChange={(event) => setComposer(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(); } }} placeholder="输入咨询内容…" rows={1} /><button type="button" className="phone-send" onClick={() => void sendText()} disabled={!buyerTextSubmissionEnabled({ text: composer, shopId, buyerId, loading, sending })} aria-label="发送">↑</button></div><small>图片消息暂不可用</small></div>
           </div>
         </section>
         <aside className="simulator-tools">
@@ -1427,21 +1364,6 @@ function BuyerSimulator({ token, shops, activeShopId, onShopChange, refreshKey }
   );
 }
 
-function AdminTabs({ active }: { active: 'overview' | 'shops' | 'products' | 'knowledge' | 'workflows' | 'quality' | 'incidents' | 'usage' | 'privacy' }) {
-  const tabs: Array<{ key: typeof active; path: AppPath; label: string; note: string }> = [
-    { key: 'overview', path: '/admin', label: '总览', note: 'Overview' },
-    { key: 'shops', path: '/admin/shops', label: '店铺', note: 'Shops' },
-    { key: 'products', path: '/admin/products', label: '商品学习', note: 'Products' },
-    { key: 'knowledge', path: '/admin/knowledge', label: '知识运营', note: 'Knowledge' },
-    { key: 'workflows', path: '/admin/workflows', label: '工作流', note: 'Workflow' },
-    { key: 'quality', path: '/admin/quality', label: '质检', note: 'Quality' },
-    { key: 'incidents', path: '/admin/incidents', label: '错误治理', note: 'Incidents' },
-    { key: 'usage', path: '/admin/usage', label: '用量', note: 'Usage' },
-    { key: 'privacy', path: '/admin/privacy', label: '数据与隐私', note: 'Privacy' },
-  ];
-  return <div className="admin-tabs" role="tablist" aria-label="运营模块">{tabs.map((tab) => <a className={active === tab.key ? 'is-active' : ''} href={tab.path} key={tab.path} onClick={(event) => { event.preventDefault(); navigate(tab.path); }}>{tab.label} <small>{tab.note}</small></a>)}</div>;
-}
-
 function AdminMetricCard({ label, snapshot, detail, tone = '' }: { label: string; snapshot: AdminMetricSnapshot; detail: string; tone?: string }) {
   return <article className="admin-overview-metric"><span>{label}</span><strong className={tone}>{snapshot.value === null ? '—' : snapshot.value.toLocaleString('zh-CN')}{snapshot.value !== null && label === '已质检通过率' ? '%' : ''}</strong><small>{detail}</small></article>;
 }
@@ -1451,40 +1373,39 @@ function metricSampleDetail(snapshot: AdminMetricSnapshot, available: string, un
 }
 
 function AdminOverviewPage({ token, shops, refreshKey }: Pick<SharedViewProps, 'token' | 'shops' | 'refreshKey'>) {
-  const [conversationsByShop, setConversationsByShop] = useState<Record<string, Conversation[]>>({});
-  const [usage, setUsage] = useState<UsageSummary>();
-  const [qualityReviews, setQualityReviews] = useState<QualityReview[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [resourceError, setResourceError] = useState('');
+  const navigate = useNavigate();
+  const overview = useQuery({
+    queryKey: ['admin-overview', token, shops.map((shop) => shop.id).join(','), refreshKey],
+    queryFn: async () => {
+      const [conversationResults, usageResult, qualityResult] = await Promise.all([
+        Promise.allSettled(shops.map((shop) => getConversations(token, shop.id))),
+        Promise.allSettled([getUsageSummary(token)]).then(([result]) => result!),
+        Promise.allSettled([getQualityReviews(token)]).then(([result]) => result!),
+      ]);
+      const conversationsByShop: Record<string, Conversation[]> = {};
+      let failedSources = 0;
+      shops.forEach((shop, index) => {
+        const result = conversationResults[index];
+        if (result?.status === 'fulfilled') conversationsByShop[shop.id] = result.value;
+        else failedSources += 1;
+      });
+      const usage = usageResult.status === 'fulfilled' ? usageResult.value : undefined;
+      if (!usage) failedSources += 1;
+      const qualityReviews = qualityResult.status === 'fulfilled' ? qualityResult.value : [];
+      if (qualityResult.status === 'rejected') failedSources += 1;
+      return { conversationsByShop, usage, qualityReviews, failedSources };
+    },
+  });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setResourceError('');
-    const settle = <T,>(promise: Promise<T>) => promise.then((value) => ({ status: 'fulfilled' as const, value }), (reason: unknown) => ({ status: 'rejected' as const, reason }));
-    const [conversationResults, usageResult, qualityResult] = await Promise.all([
-      Promise.allSettled(shops.map((shop) => getConversations(token, shop.id))),
-      settle(getUsageSummary(token)),
-      settle(getQualityReviews(token)),
-    ]);
-    const nextConversations: Record<string, Conversation[]> = {};
-    let failedSources = 0;
-    shops.forEach((shop, index) => {
-      const result = conversationResults[index];
-      if (result?.status === 'fulfilled') nextConversations[shop.id] = result.value;
-      else failedSources += 1;
-    });
-    setConversationsByShop(nextConversations);
-    if (usageResult.status === 'fulfilled') setUsage(usageResult.value);
-    else { setUsage(undefined); failedSources += 1; }
-    if (qualityResult.status === 'fulfilled') setQualityReviews(qualityResult.value);
-    else { setQualityReviews([]); failedSources += 1; }
-    setResourceError(failedSources ? '部分 Workspace 数据暂不可用；以下仅展示已返回的真实样本，不推断缺失指标。' : '');
-    setLoading(false);
-  }, [shops, token]);
-
-  useEffect(() => {
-    void load();
-  }, [load, refreshKey]);
+  const conversationsByShop = overview.data?.conversationsByShop ?? {};
+  const usage = overview.data?.usage;
+  const qualityReviews = overview.data?.qualityReviews ?? [];
+  const loading = overview.isLoading;
+  const resourceError = overview.isError
+    ? errorMessage(overview.error)
+    : overview.data?.failedSources
+      ? '部分 Workspace 数据暂不可用；以下仅展示已返回的真实样本，不推断缺失指标。'
+      : '';
 
   const snapshot = buildAdminOverviewSnapshot(shops, conversationsByShop, usage, qualityReviews);
   const allConversations = Object.values(conversationsByShop).flat();
@@ -1515,6 +1436,7 @@ function AdminOverviewPage({ token, shops, refreshKey }: Pick<SharedViewProps, '
 }
 
 function ShopsAdminPage({ shops, activeShopId, onShopChange }: Pick<SharedViewProps, 'shops' | 'activeShopId' | 'onShopChange'>) {
+  const navigate = useNavigate();
   const selectedShopId = activeShopId || shops[0]?.id || '';
   const openForShop = (shopId: string, path: AppPath) => {
     onShopChange(shopId);
@@ -1770,6 +1692,7 @@ function KnowledgeViewTabs({ active, onChange }: { active: KnowledgeAdminView; o
 }
 
 function KnowledgePage({ initialView = 'formal', ...props }: SharedViewProps & { initialView?: KnowledgeAdminView }) {
+  const navigate = useNavigate();
   const [view, setView] = useState<KnowledgeAdminView>(initialView);
   useEffect(() => setView(initialView), [initialView]);
   const changeView = (nextView: KnowledgeAdminView) => {
@@ -1916,23 +1839,11 @@ function KnowledgeConflictsPage({ token, shops, activeShopId, onShopChange, refr
   return <div className="admin-page conflict-page"><AdminTabs active="knowledge" /><section className="admin-page-header panel-surface"><div><span className="overline">KNOWLEDGE CONFLICTS</span><h2>冲突治理</h2><p>冲突是 RAG 硬停止条件，必须明确保留一侧或提交人工编写的合并内容。</p></div><div className="admin-header-controls"><label className="compact-field"><span>当前店铺</span><select value={shopId} onChange={(event) => setShopId(event.currentTarget.value)}>{shops.map((shop) => <option value={shop.id} key={shop.id}>{shop.name}</option>)}</select></label><span className="quiet-label">{conflicts.length} 个 OPEN</span></div></section>{resourceError && <div className="inline-notice">{resourceError}</div>}<div className="conflict-list">{loading ? <div className="table-empty panel-surface">正在读取冲突快照…</div> : conflicts.length === 0 ? <div className="table-empty panel-surface">{resourceError || '当前店铺没有待治理冲突。'}</div> : conflicts.map((conflict) => <ConflictResolutionCard conflict={conflict} items={items} busy={actionId === `conflict-${conflict.id}`} onResolve={resolve} key={conflict.id} />)}</div>{notice && <div className={`action-toast ${notice.includes('失败') || notice.includes('不可用') ? '' : 'is-success'}`} role="status">{notice}</div>}</div>;
 }
 
-function Phase05AdminHeader({ overline, title, description }: { overline: string; title: string; description: string }) {
-  return <section className="admin-page-header panel-surface"><div><span className="overline">{overline}</span><h2>{title}</h2><p>{description}</p></div><span className="observe-only">REST SNAPSHOT</span></section>;
-}
-
 function phase05StatusClass(status?: string): string {
   if (['SUCCEEDED', 'COMPLETED', 'PASS', 'RESOLVED'].includes(status ?? '')) return 'is-positive';
   if (['FAILED', 'FAIL', 'OPEN'].includes(status ?? '')) return 'is-danger';
   if (['RUNNING', 'PENDING', 'WAITING_APPROVAL', 'NEEDS_HUMAN', 'CORRECTION_DRAFTED', 'RESETTING'].includes(status ?? '')) return 'is-waiting';
   return 'is-muted';
-}
-
-function Phase05LoadingState({ label }: { label: string }) {
-  return <div className="phase05-state"><span className="loading-spinner" /><span>{label}</span></div>;
-}
-
-function Phase05ErrorState({ message }: { message: string }) {
-  return <div className="phase05-state phase05-state-error" role="alert"><span className="error-mark">!</span><div><strong>快照读取失败</strong><p>{message}</p></div></div>;
 }
 
 const workflowEditorNodeTypes = new Set<WorkflowNodeType>([
@@ -2364,81 +2275,6 @@ function IncidentAdminPage({ token, refreshKey }: Pick<SharedViewProps, 'token' 
   return <div className="admin-page phase05-page incident-admin-page"><AdminTabs active="incidents" /><Phase05AdminHeader overline="REPLY INCIDENTS" title="错误治理" description="沿着 ReplyIncident 生命周期查看原答、人工修正、根因与回归状态。" />{notice && <div className="inline-notice" role="status">{notice}</div>}{loading ? <Phase05LoadingState label="正在读取错误治理快照…" /> : resourceError ? <Phase05ErrorState message={resourceError} /> : incidents.length === 0 ? <EmptyState title="暂无错误事件" detail="当前 Workspace 没有待治理的 ReplyIncident。" /> : <section className="phase05-resource-list panel-surface"><div className="phase05-list-heading"><span className="overline">INCIDENT LEDGER</span><span className="quiet-label">{incidents.length} 条记录</span></div>{incidents.map((incident) => { const draft = draftFor(incident); const correctionEnabled = incidentCanCorrect(incident.status); const rootCauseEnabled = incidentCanSetRootCause(incident.status); const regressionEnabled = incidentCanAddRegression(incident.status); const resolveEnabled = incidentCanResolve(incident.status); return <article className="incident-review-row" key={incident.id}><div className="phase05-list-row"><div><strong>{incident.errorType || '未分类错误'}</strong><small>Reply · {shortId(incident.replyId)} · {incident.originalAnswer ? incident.originalAnswer.slice(0, 90) : '原答不可用'}</small></div><span className={`status-badge ${phase05StatusClass(incident.status)}`}>{statusLabel(incident.status)}</span><span className={`status-badge ${phase05StatusClass(incident.severity)}`}>{incident.severity}</span></div><div className="incident-original"><span className="overline">ORIGINAL ANSWER</span><p>{incident.originalAnswer || '服务端未返回原答快照。'}</p></div><div className="incident-action-grid"><div><label className="compact-field"><span>Correction</span><textarea value={draft.correctedAnswer} onChange={(event) => updateDraft(incident, { correctedAnswer: event.currentTarget.value })} disabled={!correctionEnabled} rows={2} placeholder="输入人工修正后的答案" /></label><label className="incident-check"><input type="checkbox" checked={draft.sendToBuyer} onChange={(event) => updateDraft(incident, { sendToBuyer: event.currentTarget.checked })} disabled={!correctionEnabled} />发送给买家</label><button className="outline-button" type="button" onClick={() => void runIncidentAction(incident, 'correction')} disabled={!correctionEnabled || action !== ''}>{action === `correction:${incident.id}` ? '提交中…' : '保存修正'}</button></div><div><label className="compact-field"><span>Root cause</span><textarea value={draft.rootCause} onChange={(event) => updateDraft(incident, { rootCause: event.currentTarget.value })} disabled={!rootCauseEnabled} rows={2} placeholder="记录根因与修复方向" /></label><button className="outline-button" type="button" onClick={() => void runIncidentAction(incident, 'rootCause')} disabled={!rootCauseEnabled || action !== ''}>{action === `rootCause:${incident.id}` ? '提交中…' : '保存根因'}</button></div><div><label className="compact-field"><span>Regression case ID（可选）</span><input value={draft.caseId} onChange={(event) => updateDraft(incident, { caseId: event.currentTarget.value })} disabled={!regressionEnabled} placeholder="留空由服务端生成" /></label><button className="outline-button" type="button" onClick={() => void runIncidentAction(incident, 'regression')} disabled={!regressionEnabled || action !== ''}>{action === `regression:${incident.id}` ? '提交中…' : incident.status === 'REGRESSION_ADDED' ? '已加入 Regression' : '加入 Regression'}</button></div></div><div className="incident-footer-actions"><small>{incident.rootCause ? `根因：${incident.rootCause}` : incident.correctedAnswer ? '已有 Correction 快照' : '等待人工治理'}</small><button className="primary-button" type="button" onClick={() => void runIncidentAction(incident, 'resolve')} disabled={!resolveEnabled || action !== ''}>{action === `resolve:${incident.id}` ? '提交中…' : 'Resolve'}</button></div></article>; })}</section>}</div>;
 }
 
-function UsageAdminPage({ token, refreshKey }: Pick<SharedViewProps, 'token' | 'refreshKey'>) {
-  const [usage, setUsage] = useState<UsageSummary>();
-  const [loading, setLoading] = useState(true);
-  const [resourceError, setResourceError] = useState('');
-
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    setResourceError('');
-    void getUsageSummary(token).then((next) => {
-      if (mounted) setUsage(next);
-    }).catch((error: unknown) => {
-      if (!mounted) return;
-      setUsage(undefined);
-      setResourceError(errorMessage(error));
-    }).finally(() => {
-      if (mounted) setLoading(false);
-    });
-    return () => { mounted = false; };
-  }, [refreshKey, token]);
-
-  return <div className="admin-page phase05-page usage-admin-page"><AdminTabs active="usage" /><Phase05AdminHeader overline="AI USAGE" title="用量" description="展示当前 Workspace 的真实 AI 调用、Token、Fallback 与成本快照；不生成虚构 KPI。" />{loading ? <Phase05LoadingState label="正在读取用量快照…" /> : resourceError ? <Phase05ErrorState message={resourceError} /> : !usage ? <EmptyState title="暂无用量快照" detail="服务端尚未返回当前 Workspace 的 AI usage 数据。" /> : <><div className="metric-grid admin-metrics phase05-metrics"><article><span>调用次数</span><strong>{usage.calls}</strong><small>AI invocations</small></article><article><span>Input Tokens</span><strong>{usage.inputTokens}</strong><small>累计输入</small></article><article><span>Output Tokens</span><strong>{usage.outputTokens}</strong><small>累计输出</small></article><article><span>Fallback</span><strong className={usage.fallbacks ? 'metric-warm' : 'metric-positive'}>{usage.fallbacks}</strong><small>{usage.failures} 次失败</small></article></div><section className="phase05-resource-list panel-surface"><div className="phase05-list-heading"><span className="overline">PURPOSE BREAKDOWN</span><span className="quiet-label">估算成本 ¥{usage.estimatedCost}</span></div>{Object.entries(usage.byPurpose).length === 0 ? <div className="table-empty">暂无 purpose 分项。</div> : Object.entries(usage.byPurpose).map(([purpose, item]) => <article className="phase05-list-row" key={purpose}><div><strong>{purpose}</strong><small>{item.calls} calls · {item.inputTokens + item.outputTokens} tokens</small></div><span className="phase05-secondary">失败 {item.failures} · Fallback {item.fallbacks}</span></article>)}</section></>}</div>;
-}
-
-function DataPrivacyPage({ token }: Pick<SharedViewProps, 'token'>) {
-  const [buyerId, setBuyerId] = useState('');
-  const [confirmation, setConfirmation] = useState('');
-  const [result, setResult] = useState<CustomerDataDeletionResult>();
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('');
-  const canDelete = buyerId.trim().length > 0 && confirmation.trim().toUpperCase() === 'DELETE' && !busy;
-
-  const submitDeletion = async () => {
-    if (!canDelete) {
-      setNotice('请输入买家 ID，并输入 DELETE 完成二次确认。');
-      return;
-    }
-    setBusy(true);
-    setNotice('');
-    setResult(undefined);
-    try {
-      const next = await deleteCustomerData(token, buyerId.trim());
-      setResult(next);
-      setConfirmation('');
-      setNotice('客户数据删除与匿名化已完成。');
-    } catch (error) {
-      setNotice(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return <div className="admin-page phase05-page privacy-page"><AdminTabs active="privacy" /><Phase05AdminHeader overline="DATA & PRIVACY" title="数据与隐私" description="在当前匿名 Demo Workspace 内执行 Delete Customer Data；服务端结果是唯一事实来源。" />
-    <div className="privacy-layout">
-      <section className="privacy-danger-card panel-surface" aria-labelledby="customer-data-delete-heading">
-        <div className="privacy-card-heading"><div><span className="overline">DESTRUCTIVE ACTION</span><h3 id="customer-data-delete-heading">删除客户数据</h3></div><span className="status-badge is-danger">不可撤销</span></div>
-        <p className="privacy-lead">此操作会删除客户的聊天、图片、人工记忆与关联候选知识，并匿名化可识别的买家和订单字段。匿名聚合统计与无法反推个人的审计事实会保留。</p>
-        <div className="privacy-scope-grid"><div><span className="overline">DELETE</span><strong>聊天 · 附件 · Memory · Candidate</strong><small>删除后 AI 不得继续读取旧 CustomerMemory。</small></div><div><span className="overline">ANONYMIZE</span><strong>Buyer · Order identifiers</strong><small>保留金额、状态和时间等不可识别业务聚合。</small></div><div><span className="overline">PRESERVE</span><strong>匿名聚合 · Audit facts</strong><small>不保留完整聊天、手机号、地址、Token 或 Cookie。</small></div></div>
-        <div className="privacy-form">
-          <label className="compact-field"><span>输入买家 ID</span><input value={buyerId} onChange={(event) => { setBuyerId(event.currentTarget.value); setResult(undefined); }} placeholder="例如 buyer-demo-001" aria-label="输入买家 ID" autoComplete="off" /></label>
-          <label className="compact-field"><span>二次确认</span><input value={confirmation} onChange={(event) => setConfirmation(event.currentTarget.value)} placeholder="输入 DELETE 以继续" aria-label="二次确认，输入 DELETE" autoComplete="off" /></label>
-          <p className="privacy-confirmation-hint">为避免误操作，请输入大写 <code>DELETE</code>。仅提交当前 Workspace 的买家 ID。</p>
-          <button className="danger-button privacy-submit" type="button" onClick={() => void submitDeletion()} disabled={!canDelete}>{busy ? '删除处理中…' : '确认删除并匿名化'}</button>
-        </div>
-        {notice && <div className={`inline-notice ${notice.includes('失败') || notice.includes('不可用') ? '' : 'is-success'}`} role="status">{notice}</div>}
-      </section>
-      <section className="privacy-retention-card panel-surface" aria-labelledby="retention-heading">
-        <div className="privacy-card-heading"><div><span className="overline">RETENTION POLICY</span><h3 id="retention-heading">数据保留规则</h3></div><span className="observe-only">FROZEN V1</span></div>
-        <div className="retention-list"><div><strong>聊天原文 · 45 天</strong><span>Conversation 原始聊天</span></div><div><strong>图片原件 · 15 天</strong><span>对象存储原图</span></div><div><strong>ConversationSummary · 90 天</strong><span>摘要保留窗口</span></div><div><strong>CustomerMemory · 人工管理 / expiresAt</strong><span>不自动提取长期记忆</span></div><div><strong>企业知识 · 版本 / 状态 / 有效期</strong><span>按知识治理策略管理</span></div><div><strong>AuditLog · 最小化脱敏长期保留</strong><span>仅保留无法反推个人的事实</span></div></div>
-      </section>
-    </div>
-    {result && <section className="privacy-result-card panel-surface" aria-live="polite"><div className="privacy-card-heading"><div><span className="overline">DELETION RECEIPT</span><h3>删除结果</h3></div><span className="status-badge is-positive">{result.status}</span></div><p className="privacy-result-meta">买家请求 {shortId(result.buyerId)} · 完成于 {readableTime(result.completedAt)}</p><div className="privacy-result-columns"><div><span className="overline">DELETED</span><p>Conversation <strong>{result.deleted.conversations}</strong> · Message <strong>{result.deleted.messages}</strong> · Attachment <strong>{result.deleted.attachments}</strong></p><p>CustomerMemory <strong>{result.deleted.customerMemories}</strong> · Candidate <strong>{result.deleted.knowledgeCandidates}</strong></p></div><div><span className="overline">ANONYMIZED</span><p>Buyer <strong>{result.anonymized.buyers}</strong> · Order <strong>{result.anonymized.orders}</strong></p></div><div><span className="overline">PRESERVED</span><p>Anonymous aggregate <strong>{result.preserved.anonymousAggregates}</strong> · Audit fact <strong>{result.preserved.auditFacts}</strong></p></div></div></section>}
-  </div>;
-}
-
 function ScenarioLabPage({ token, refreshKey }: Pick<SharedViewProps, 'token' | 'refreshKey'>) {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2491,7 +2327,9 @@ function FoundationError({ message, onRetry }: { message?: string; onRetry: () =
 }
 
 export default function App() {
-  const path = useAppPath();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const path = resolveAppPath(location.pathname);
   const [foundation, setFoundation] = useState<FoundationState>({ status: 'loading' });
   const [socketStatus, setSocketStatus] = useState<WorkspaceSocketStatus>('idle');
   const [snapshotVersion, setSnapshotVersion] = useState(0);
@@ -2550,9 +2388,9 @@ export default function App() {
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
-    if (window.location.pathname === '/') navigate('/workbench', true);
+    if (window.location.pathname === '/') navigate('/workbench', { replace: true });
     void loadFoundation();
-  }, [loadFoundation]);
+  }, [loadFoundation, navigate]);
 
   const handleSocketStatus = useCallback((status: WorkspaceSocketStatus) => {
     const previous = socketStatusRef.current;
