@@ -115,6 +115,20 @@ export function recallBuyerMessage(token: string, messageId: string): Promise<Mu
   }).then((payload) => extractEntity<MutationResult>(payload, 'message'));
 }
 
+/** Soft-delete an AI or human message while preserving the audit record. */
+export function deleteConversationMessage(
+  token: string,
+  conversationId: string,
+  messageId: string,
+  shopId: string,
+): Promise<MutationResult> {
+  return request<unknown>(`/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`, {
+    method: 'DELETE',
+    headers: jsonHeaders(token),
+    body: JSON.stringify({ shopId }),
+  }).then((payload) => extractEntity<MutationResult>(payload, 'message'));
+}
+
 export function sendBuyerProductCard(token: string, input: BuyerCardInput): Promise<MutationResult> {
   const body = JSON.stringify(input);
   return request<unknown>('/buyer/cards/product', {

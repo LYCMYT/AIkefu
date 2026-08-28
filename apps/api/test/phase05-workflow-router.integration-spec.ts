@@ -2,11 +2,38 @@ import { PrismaMessageApplication } from '../src/messages/prisma-message.applica
 import { ReplyRuntimeService } from '../src/replies/reply-runtime.service';
 import { WorkflowRouterService } from '../src/workflow/workflow-router.service';
 import { WorkflowRuntimeService } from '../src/workflow/workflow-runtime.service';
+import { Prisma } from '@prisma/client';
 
 const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' };
 
 /** Durable Task -> outbox -> Router -> immutable Run -> Approval chain. */
 describe('Phase 05 workflow router production-service integration', () => {
+  it('finishes a claimed workflow route quietly when its demo workspace was deleted', async () => {
+    const eventId = 'workflow-route:deleted-workspace';
+    const tx = {
+      processingReceipt: { findUnique: jest.fn().mockResolvedValue(null) },
+      processingOutbox: { findUnique: jest.fn().mockResolvedValue({
+        eventId,
+        eventType: 'WORKFLOW_ROUTE',
+        workspaceId: 'workspace-deleted',
+        tenantId: 'tenant-a',
+        shopId: 'shop-a',
+        payloadJson: { conversationId: 'conversation-a', taskIds: ['task-a'] },
+      }) },
+    };
+    const prisma = {
+      $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)),
+      processingReceipt: { create: jest.fn().mockRejectedValue(new Prisma.PrismaClientKnownRequestError('deleted scope', { code: 'P2003', clientVersion: 'test' })) },
+      processingOutbox: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+    const router = { route: jest.fn().mockResolvedValue([]) };
+    const app = new PrismaMessageApplication(prisma as never, { publish: jest.fn() } as never, {} as never, {} as never, {} as never, undefined, undefined, undefined, undefined, undefined, undefined, router as never);
+
+    await expect((app as unknown as { consumeOutbox(id: string): Promise<void> }).consumeOutbox(eventId)).resolves.toBeUndefined();
+    expect(router.route).toHaveBeenCalledTimes(1);
+    expect(prisma.processingOutbox.findUnique).toHaveBeenCalledWith({ where: { eventId }, select: { id: true } });
+  });
+
   it('routes persisted reply Tasks once through a durable WORKFLOW_ROUTE receipt into a high-risk waiting approval', async () => {
     const outboxes: Array<Record<string, unknown>> = [];
     const receipts: string[] = [];

@@ -34,5 +34,25 @@ describeReal('Workspace reset against real PostgreSQL', () => {
       knowledge: 80,
       workflows: 2,
     });
+
+    const template = seed.shops.find((shop) => shop.key === 'shop_mia_fashion')!;
+    const shop = await repository.createShop(created, {
+      template, catalog: seed, name: 'Real PG Clone', externalShopId: `real-pg-${randomUUID()}`,
+      aiMode: 'ASSIST_ONLY',
+    });
+    expect(shop).toMatchObject({ name: 'Real PG Clone', aiMode: 'ASSIST_ONLY', platform: 'DOUYIN_DEMO' });
+    const scope = { workspaceId: created.workspaceId, tenantId: created.tenantId };
+    await expect(prisma.product.count({ where: { ...scope, shopId: shop.id } })).resolves.toBe(
+      seed.products.filter((product) => product.shopKey === template.key).length,
+    );
+    await expect(prisma.order.count({ where: { ...scope, shopId: shop.id } })).resolves.toBe(
+      seed.orders.filter((order) => order.shopKey === template.key).length,
+    );
+    await expect(prisma.knowledgeItem.count({ where: { ...scope, shopId: shop.id } })).resolves.toBe(
+      seed.knowledge.filter((item) => item.shopKey === template.key).length,
+    );
+    await expect(repository.setShopAiMode(created, shop.id, 'AUTO_ALLOWED')).resolves.toMatchObject({
+      id: shop.id, aiMode: 'AUTO_ALLOWED',
+    });
   });
 });

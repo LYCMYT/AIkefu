@@ -92,11 +92,54 @@ describeRealInfra('Scenario Lab real PostgreSQL boundary', () => {
     expect(afterReset.body.find((entry: { key: string }) => entry.key === 'duplicate_and_reorder')).toMatchObject({ status: 'READY', traceId: null });
   });
 
-  it('Case07 persists grounded per-shop replies, evidence snapshots, and scoped trace without cross-shop knowledge', async () => {
-    await request(app.getHttpServer())
-      .post('/api/scenarios/two_shops/run')
+  it('Case01 reports success only after the real Message → UserTurn → Task → ReplyJob chain is durable', async () => {
+    const runResponse = await request(app.getHttpServer())
+      .post('/api/scenarios/continuous_messages/run')
+      .set('X-Demo-Workspace-Token', token);
+    if (runResponse.status !== 202) {
+      const failure = await prisma.traceEvent.findFirst({
+        where: { workspaceId, stage: 'SCENARIO_SNAPSHOT', traceId: { contains: ':continuous_messages:' } },
+        orderBy: { createdAt: 'desc' },
+        select: { payloadJson: true },
+      });
+      throw new Error(`Case01 failed with ${runResponse.status}: ${JSON.stringify(failure?.payloadJson ?? runResponse.body)}`);
+    }
+
+    const list = await request(app.getHttpServer())
+      .get('/api/scenarios')
       .set('X-Demo-Workspace-Token', token)
-      .expect(202);
+      .expect(200);
+    const scenario = list.body.find((entry: { key: string }) => entry.key === 'continuous_messages');
+    expect(scenario).toMatchObject({ status: 'SUCCEEDED', synthetic: true });
+    expect(scenario.steps.find((step: { key: string }) => step.key === 'reply-plan')?.actual).toBe('2 Task；1 ReplyJob');
+
+    const conversations = await prisma.conversation.findMany({
+      where: { workspaceId, externalConversationId: { startsWith: 'scenario:continuous_messages:' } },
+      select: { id: true },
+    });
+    expect(conversations).toHaveLength(1);
+    const conversationId = conversations[0]!.id;
+    const [messages, userTurns, tasks, replyJobs] = await Promise.all([
+      prisma.message.count({ where: { workspaceId, conversationId } }),
+      prisma.userTurn.count({ where: { workspaceId, conversationId } }),
+      prisma.task.count({ where: { workspaceId, conversationId } }),
+      prisma.replyJob.count({ where: { workspaceId, conversationId, status: { notIn: ['STALE', 'EXPIRED', 'CANCELLED'] } } }),
+    ]);
+    expect({ messages, userTurns, tasks, replyJobs }).toEqual({ messages: 3, userTurns: 1, tasks: 2, replyJobs: 1 });
+  }, 30_000);
+
+  it('Case07 persists grounded per-shop replies, evidence snapshots, and scoped trace without cross-shop knowledge', async () => {
+    const runResponse = await request(app.getHttpServer())
+      .post('/api/scenarios/two_shops/run')
+      .set('X-Demo-Workspace-Token', token);
+    if (runResponse.status !== 202) {
+      const failure = await prisma.traceEvent.findFirst({
+        where: { workspaceId, stage: 'SCENARIO_SNAPSHOT', traceId: { contains: ':two_shops:' } },
+        orderBy: { createdAt: 'desc' },
+        select: { payloadJson: true },
+      });
+      throw new Error(`Case07 failed with ${runResponse.status}: ${JSON.stringify(failure?.payloadJson ?? runResponse.body)}`);
+    }
 
     const shops = await prisma.shop.findMany({
       where: { workspaceId },
@@ -181,5 +224,5 @@ describeRealInfra('Scenario Lab real PostgreSQL boundary', () => {
         && payload.knowledgeVersionIds.every((id) => typeof id === 'string' && versionIds.has(id)),
       );
     })).toBe(true);
-  });
+  }, 30_000);
 });

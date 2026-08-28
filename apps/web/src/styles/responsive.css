@@ -1,7 +1,7 @@
 /* Responsive overrides remain last to preserve mobile precedence. */
 @media (max-width: 1450px) {
   .workbench-layout {
-    grid-template-columns: 260px minmax(390px, 1fr) 285px;
+    grid-template-columns: 290px minmax(440px, 1fr) 306px;
   }
 }
 
@@ -137,7 +137,8 @@
     justify-content: center;
   }
 
-  .user-avatar {
+  .user-avatar,
+  .connection-pill {
     display: none;
   }
 
@@ -224,6 +225,19 @@
   .admin-page-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .admin-page-header-actions,
+  .overview-filters {
+    width: 100%;
+  }
+
+  .overview-filters label {
+    flex: 1;
+  }
+
+  .overview-filters select {
+    width: 100%;
   }
 
   .admin-header-controls {
@@ -359,6 +373,15 @@
 }
 
 @media (max-width: 900px) {
+  .knowledge-content-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-import-rail {
+    position: static;
+    grid-row: 1;
+  }
+
   .workflow-editor-layout {
     grid-template-columns: 1fr;
   }
@@ -430,6 +453,14 @@
 
   .mode-select select {
     max-width: 98px;
+  }
+
+  .mode-unlock-button {
+    width: 100%;
+  }
+
+  .message-actions {
+    opacity: 1;
   }
 
   .conversation-control-bar,
@@ -527,6 +558,19 @@
     grid-template-columns: 1fr;
   }
 
+  .workflow-workspace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-browser {
+    position: static;
+  }
+
+  .workflow-browser-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 230px;
+  }
+
   .workflow-toolbar > .outline-button {
     flex: 1;
   }
@@ -556,6 +600,10 @@
     flex-direction: column;
   }
 
+  .overview-usage-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .overview-action-buttons {
     justify-content: flex-start;
   }
@@ -572,5 +620,26 @@
   .shop-admin-card-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 1100px) {
+  .workflow-workspace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-browser {
+    position: static;
+  }
+
+  .workflow-browser-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 230px;
+  }
+}
+
+@media (max-width: 560px) {
+  .workflow-browser-list {
+    grid-template-columns: 1fr;
   }
 }

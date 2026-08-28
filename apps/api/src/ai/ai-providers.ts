@@ -348,7 +348,7 @@ function offlineOutput(purpose: AiPurpose, input: unknown): unknown {
       return { narrativeSummary: text, activeTopic: 'UNKNOWN', activeProductId: null, activeOrderId: null, resolvedFacts: [], openQuestions: [], deprecatedFacts: [] };
     }
     case 'INTENT_PLANNER':
-      return { tasks: [{ intent: 'UNKNOWN', riskLevel: 'LOW', requiredContext: [], requiredTools: [] }], summary: '' };
+      return offlineIntentPlan(readString(input, ['turn', 'text']) ?? readString(input, ['text']) ?? '');
     case 'KNOWLEDGE_EXTRACT':
       return { question: '待人工审核', answer: '离线模式不自动生成知识。', scope: 'STORE', candidateType: 'NEW_KNOWLEDGE', shouldCreate: false, containsPII: false };
     case 'QUALITY_JUDGE':
@@ -356,6 +356,37 @@ function offlineOutput(purpose: AiPurpose, input: unknown): unknown {
     case 'REPLY_GENERATION':
       return { text: '', requiresHuman: true };
   }
+}
+
+function offlineIntentPlan(text: string): Record<string, unknown> {
+  const normalized = text.trim();
+  const tasks: Array<Record<string, unknown>> = [];
+  const inventoryRequested = /库存|有货|还有|还剩|现货|缺货|售罄|(?:黑色|白色|红色|蓝色|绿色|灰色).{0,8}(?:有吗|有么|有货)/i.test(normalized);
+  const sizeRequested = /尺码|尺寸|大小|身高|体重|公斤|(?:^|\s)(?:XXL|XL|XS|L|M|S)(?:\s|呢|吗|？|\?|$)/i.test(normalized);
+
+  if (inventoryRequested) {
+    tasks.push({
+      intent: 'INVENTORY_QUERY',
+      riskLevel: 'LOW',
+      requiredContext: ['PRODUCT', 'SKU'],
+      requiredTools: ['GET_INVENTORY'],
+    });
+  }
+  if (sizeRequested) {
+    tasks.push({
+      intent: 'SIZE_RECOMMENDATION',
+      riskLevel: 'LOW',
+      requiredContext: ['PRODUCT', 'SKU', 'CUSTOMER_MEMORY'],
+      requiredTools: ['GET_PRODUCT'],
+    });
+  }
+  if (tasks.length === 0) {
+    return { tasks: [{ intent: 'UNKNOWN', riskLevel: 'LOW', requiredContext: [], requiredTools: [] }], summary: '' };
+  }
+  return {
+    tasks,
+    summary: inventoryRequested && sizeRequested ? '库存与尺码咨询' : inventoryRequested ? '库存咨询' : '尺码咨询',
+  };
 }
 
 function validUsage(value: unknown): value is { inputTokens: number; outputTokens: number } {

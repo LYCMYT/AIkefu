@@ -60,6 +60,31 @@ describe('Phase 01 workspace integration', () => {
       .expect(404);
   });
 
+  it('requires an allowlisted shop template, creates it in scope, and changes its explicit AI ceiling', async () => {
+    const session = (await request(app.getHttpServer()).post('/api/demo/workspaces').expect(201)).body;
+    const header = { 'X-Demo-Workspace-Token': session.token };
+
+    await request(app.getHttpServer()).post('/api/shops').set(header).send({}).expect(400);
+    await request(app.getHttpServer())
+      .post('/api/shops').set(header)
+      .send({ platform: 'DOUYIN_DEMO', templateKey: 'BLANK', name: '不允许的模板' })
+      .expect(400);
+
+    const created = await request(app.getHttpServer())
+      .post('/api/shops').set(header)
+      .send({ platform: 'DOUYIN_DEMO', templateKey: 'FASHION_DEMO', name: '验收店铺' })
+      .expect(201);
+    expect(created.body).toMatchObject({ name: '验收店铺', platform: 'DOUYIN_DEMO', aiMode: 'ASSIST_ONLY' });
+
+    const raised = await request(app.getHttpServer())
+      .patch(`/api/shops/${created.body.id}/ai-mode`).set(header)
+      .send({ mode: 'AUTO_ALLOWED' })
+      .expect(200);
+    expect(raised.body).toMatchObject({ id: created.body.id, aiMode: 'AUTO_ALLOWED' });
+    const shops = await request(app.getHttpServer()).get('/api/shops').set(header).expect(200);
+    expect(shops.body).toHaveLength(3);
+  });
+
   it('resets only A and keeps seed repeatable and idempotent', async () => {
     const sessionA = (await request(app.getHttpServer()).post('/api/demo/workspaces').expect(201)).body;
     const sessionB = (await request(app.getHttpServer()).post('/api/demo/workspaces').expect(201)).body;

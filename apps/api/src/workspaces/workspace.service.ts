@@ -1,9 +1,17 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import type { CreateShopInput } from '@ai-customer-service/contracts';
+import {
+  ConversationTransportMutex,
+  localConversationTransportMutex,
+  transportShopMutexKey,
+} from '../replies/conversation-transport-mutex.service';
 import { createWorkspaceToken, hashWorkspaceToken } from '@ai-customer-service/core';
 import { SeedCatalog } from '../seed/seed-catalog';
 import {
@@ -20,6 +28,7 @@ export class WorkspaceService {
   constructor(
     @Inject(WORKSPACE_REPOSITORY) private readonly repository: WorkspaceRepository,
     @Inject(SeedCatalog) private readonly seeds: SeedCatalog,
+    private readonly transportMutex: ConversationTransportMutex = localConversationTransportMutex,
   ) {}
 
   async create() {
@@ -75,6 +84,43 @@ export class WorkspaceService {
 
   async getShop(scope: WorkspaceScope, shopId: string) {
     const shop = await this.repository.getShop(scope, shopId);
+    if (!shop) this.notFound('Shop');
+    return shop;
+  }
+
+  async createShop(scope: WorkspaceScope, input: CreateShopInput) {
+    const seed = await this.seeds.load();
+    const requestedTemplate = input.templateKey;
+    const seedKey = requestedTemplate === 'FASHION_DEMO' ? 'shop_mia_fashion'
+      : requestedTemplate === 'TECH_DEMO' ? 'shop_pixel_tech'
+        : requestedTemplate;
+    const template = seed.shops.find((shop) => shop.key === seedKey);
+    if (!template) {
+      throw new BadRequestException({
+        code: 'SHOP_TEMPLATE_INVALID',
+        message: 'templateKey must be FASHION_DEMO or TECH_DEMO',
+      });
+    }
+    if (input.platform !== 'DOUYIN_DEMO') {
+      throw new BadRequestException({ code: 'SHOP_PLATFORM_INVALID', message: 'Only DOUYIN_DEMO is supported' });
+    }
+    const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
+    const name = input.name?.trim() || `${template.name} Demo`;
+    const externalShopId = input.externalShopId?.trim() || `dy_demo_${suffix}`;
+    return this.repository.createShop(scope, {
+      template,
+      catalog: seed,
+      name,
+      externalShopId,
+      aiMode: input.aiMode ?? 'ASSIST_ONLY',
+    });
+  }
+
+  async setShopAiMode(scope: WorkspaceScope, shopId: string, mode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY') {
+    const shop = await this.transportMutex.run(
+      transportShopMutexKey({ ...scope, shopId }),
+      () => this.repository.setShopAiMode(scope, shopId, mode),
+    );
     if (!shop) this.notFound('Shop');
     return shop;
   }

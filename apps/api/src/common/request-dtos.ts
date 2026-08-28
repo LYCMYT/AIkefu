@@ -13,6 +13,7 @@ import {
   IsString,
   Max,
   MaxLength,
+  Matches,
   Min,
   Validate,
   ValidationArguments,
@@ -86,6 +87,28 @@ class WorkflowGraphConstraint implements ValidatorConstraintInterface {
 export class ShopScopeDto {
   @IsString() @IsNotEmpty() @MaxLength(ID_MAX)
   shopId!: string;
+}
+
+export class ShopCreateDto {
+  @IsIn(['DOUYIN_DEMO'])
+  platform!: 'DOUYIN_DEMO';
+
+  @IsIn(['FASHION_DEMO', 'TECH_DEMO'])
+  templateKey!: 'FASHION_DEMO' | 'TECH_DEMO';
+
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(80) @Matches(/^[\p{L}\p{N}\s._·-]+$/u)
+  name?: string;
+
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(120) @Matches(/^[A-Za-z0-9_.:-]+$/)
+  externalShopId?: string;
+
+  @IsOptional() @IsIn(['AUTO_ALLOWED', 'ASSIST_ONLY', 'MANUAL_ONLY'])
+  aiMode?: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY';
+}
+
+export class ShopAiModeDto {
+  @IsIn(['AUTO_ALLOWED', 'ASSIST_ONLY', 'MANUAL_ONLY'])
+  mode!: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY';
 }
 
 export class BuyerMessageDto extends ShopScopeDto {

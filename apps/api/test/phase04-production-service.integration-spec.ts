@@ -405,7 +405,10 @@ describe('Phase 04 production-service integration', () => {
     const tx = {
       $queryRaw: jest.fn().mockResolvedValue([]),
       conversation: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', contextVersion: 4, lastCommittedSequence: 3, shopId: scope.shopId }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'conversation-a', contextVersion: 4, lastCommittedSequence: 3,
+          shopId: scope.shopId, shop: { aiMode: 'AUTO_ALLOWED' },
+        }),
         updateMany: jest.fn().mockImplementation(async ({ where, data }: { where: { humanActive?: boolean }; data: { humanActive?: boolean } }) => {
           if (where.humanActive !== undefined && where.humanActive !== state.humanActive) return { count: 0 };
           if (data.humanActive !== undefined) state.humanActive = data.humanActive;

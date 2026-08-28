@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { CurrentWorkspace } from '../auth/current-workspace.decorator';
 import { ConversationMessageDto, ConversationModeDto, ShopScopeDto } from '../common/request-dtos';
 import type { AuthenticatedWorkspace } from '../workspaces/workspace.repository';
@@ -16,7 +16,10 @@ export class ConversationReplyController {
     @Body() input: ConversationModeDto,
   ) {
     const result = await this.controls.setMode(scoped(scope, input?.shopId), conversationId, requiredMode(input?.mode));
-    return { id: result.id, overrideMode: result.overrideMode, humanActive: result.humanActive };
+    return {
+      id: result.id, overrideMode: result.overrideMode, effectiveMode: result.effectiveMode,
+      shopAiMode: result.shopAiMode, humanActive: result.humanActive,
+    };
   }
 
   @Post(':conversationId/takeover')
@@ -54,6 +57,17 @@ export class ConversationReplyController {
       text: input.text, sourceDraftId: input.sourceDraftId, editType: input.editType,
     });
     return { status: 'ACCEPTED' as const, sendOutboxId: result.sendOutboxId, ...(result.candidateId ? { candidateId: result.candidateId } : {}) };
+  }
+
+
+  @Delete(':conversationId/messages/:messageId')
+  async deleteOutgoingMessage(
+    @CurrentWorkspace() scope: AuthenticatedWorkspace,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() input: ShopScopeDto,
+  ) {
+    return this.controls.deleteOutgoingMessage(scoped(scope, input?.shopId), conversationId, messageId);
   }
 }
 

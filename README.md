@@ -7,7 +7,7 @@
 
 本仓库是一个合成数据 Demo，不是已上线的电商客服产品。默认运行不需要真实平台账号或模型密钥；需要真实 PostgreSQL / Redis / MinIO 验收时，必须显式启动 Docker 并打开 opt-in 开关。当前文档不声称在线部署、生产 SLA 或商业 KPI。
 
-![Relay Workbench — 1440×900 真实本地 Workspace 快照](docs/screenshots/workbench-1440x900.png)
+![AIkefu Workbench — 1440×900 真实本地 Workspace 快照](artifacts/ui/final/workbench.png)
 
 ```mermaid
 flowchart LR
@@ -23,7 +23,7 @@ flowchart LR
   O[("MinIO")] --- P
 ```
 
-截图基线同时保留 [1440×900](docs/screenshots/workbench-1440x900.png)、[1366×768](docs/screenshots/workbench-1366x768.png) 与 [390×844](docs/screenshots/workbench-390x844.png)。在线 Demo 与演示视频尚无公网托管地址，不使用本地链接冒充公开 Preview。
+截图基线由连接真实本地服务的 Playwright 流程生成，包含 [Workbench 1440×900](artifacts/ui/final/workbench.png)、[Workbench 1366×768](artifacts/ui/final/workbench-1366x768.png)、[Dashboard 1920×1080](artifacts/ui/final/dashboard-1920x1080.png)、[Workbench 390×844](artifacts/ui/final/workbench-390x844.png)，以及 Buyer Simulator、Knowledge、Workflow、Scenario Lab 等页面。在线 Demo 与演示视频尚无公网托管地址，不使用本地链接冒充公开 Preview。
 
 ## 展示范围
 

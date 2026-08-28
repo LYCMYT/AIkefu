@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, Optional, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { MockDouyinAdapter } from '@ai-customer-service/mock-douyin';
 import { checkForbiddenTerms } from '@ai-customer-service/core';
 import { PrismaService } from '../database/prisma.service';
@@ -13,9 +13,10 @@ import { TraceService } from '../trace/trace.service';
  * leaves ambiguous post-claim failures UNCERTAIN for explicit review.
  */
 @Injectable()
-export class MockDouyinSendWorker implements OnModuleInit, OnApplicationShutdown {
+export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MockDouyinSendWorker.name);
   private timer?: NodeJS.Timeout;
+  private workPromise?: Promise<void>;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -27,13 +28,22 @@ export class MockDouyinSendWorker implements OnModuleInit, OnApplicationShutdown
 
   onModuleInit(): void {
     if (!process.env.DATABASE_URL?.trim()) return;
-    void this.recoverReceiptProjections().catch((error: unknown) => this.logger.error(message(error)));
-    this.timer = setInterval(() => void this.dispatchOnce().catch((error: unknown) => this.logger.error(message(error))), 400);
+    this.runTracked(() => this.recoverReceiptProjections());
+    this.timer = setInterval(() => this.runTracked(() => this.dispatchOnce()), 400);
     this.timer.unref();
   }
 
-  onApplicationShutdown(): void {
+  async onModuleDestroy(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
+    await this.workPromise;
+  }
+
+  private runTracked(work: () => Promise<unknown>): void {
+    if (this.workPromise) return;
+    const run = work()
+      .then(() => undefined, (error: unknown) => { this.logger.error(message(error)); })
+      .finally(() => { if (this.workPromise === run) this.workPromise = undefined; });
+    this.workPromise = run;
   }
 
   async dispatchOnce(): Promise<{ sent: number; skipped: number; failed: number }> {

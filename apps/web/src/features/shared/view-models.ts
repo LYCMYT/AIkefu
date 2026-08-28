@@ -129,6 +129,7 @@ export interface SharedViewProps {
   realtimeEvent?: WorkspaceSocketEvent;
   traceOpen?: boolean;
   onTraceClose?: () => void;
+  onFoundationRefresh?: () => Promise<void>;
 }
 
 export const defaultNavigationItem = navigationItems[0]!;
@@ -285,7 +286,8 @@ export function buildAdminOverviewSnapshot(
 }
 
 /** Build a bounded seven-day conversation trend from returned timestamps. */
-export function buildConversationTrend(conversations: Conversation[], now = new Date()): ConversationTrendPoint[] {
+export function buildConversationTrend(conversations: Conversation[], now = new Date(), days = 7): ConversationTrendPoint[] {
+  const boundedDays = Math.min(30, Math.max(1, Math.trunc(days)));
   const points: ConversationTrendPoint[] = [];
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const counts = new Map<string, number>();
@@ -296,11 +298,11 @@ export function buildConversationTrend(conversations: Conversation[], now = new 
     if (Number.isNaN(parsed.getTime())) continue;
     const day = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
     const age = Math.round((today.getTime() - day.getTime()) / 86_400_000);
-    if (age < 0 || age > 6) continue;
+    if (age < 0 || age >= boundedDays) continue;
     const key = localDayKey(day);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  for (let age = 6; age >= 0; age -= 1) {
+  for (let age = boundedDays - 1; age >= 0; age -= 1) {
     const day = new Date(today.getTime() - age * 86_400_000);
     points.push({
       key: localDayKey(day),

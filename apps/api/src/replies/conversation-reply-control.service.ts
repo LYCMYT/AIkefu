@@ -34,22 +34,39 @@ export class ConversationReplyControlService {
   async setMode(scope: ReplyJobScope, conversationId: string, mode: 'AUTO' | 'ASSIST' | 'MANUAL' | 'HOLD') {
     const result = await this.transportMutex.runMany([transportShopMutexKey(scope), transportMutexKey(scope, conversationId)], () => this.prisma.$transaction(async (tx) => {
       await this.lock(tx, conversationId, scope);
-      const conversation = await tx.conversation.findFirst({ where: { id: conversationId, ...scope }, select: { id: true, contextVersion: true } });
+      const conversation = await tx.conversation.findFirst({
+        where: { id: conversationId, ...scope },
+        select: { id: true, contextVersion: true, shop: { select: { aiMode: true } } },
+      });
       if (!conversation) throw notFound();
+      assertModeWithinShopCeiling(mode, conversation.shop?.aiMode);
       const becomesHumanActive = mode === 'MANUAL' || mode === 'HOLD';
       const updated = await tx.conversation.updateMany({
-        where: { id: conversationId, ...scope }, data: { overrideMode: mode, humanActive: becomesHumanActive },
+        where: { id: conversationId, ...scope },
+        // Explicit operator selection is the new configured base. Keeping an
+        // AUTO request only as an override would remain ASSIST because
+        // effectiveConversationMode intentionally treats overrides as
+        // conservative ceilings rather than privilege escalation.
+        data: { mode, overrideMode: mode, humanActive: becomesHumanActive, needsReplan: true },
       });
       if (updated.count !== 1) throw changed();
       const requiresSaferReply = mode === 'ASSIST' || becomesHumanActive;
       if (requiresSaferReply) await this.staleActive(tx, scope, conversationId, 'MODE_CHANGED');
       await this.cancelScheduled(tx, scope, conversationId);
-      if (mode !== 'ASSIST') return { id: conversationId, overrideMode: mode, humanActive: becomesHumanActive, replyJobId: undefined as string | undefined };
+      if (mode !== 'ASSIST') return {
+        id: conversationId, overrideMode: mode, effectiveMode: mode,
+        shopAiMode: conversation.shop?.aiMode, humanActive: becomesHumanActive,
+        replyJobId: undefined as string | undefined,
+      };
       const userTurns = tx as unknown as { userTurn?: { findFirst(input: unknown): Promise<{ id: string; lastSequence: number; sourceMessageIdsJson: unknown } | null> } };
       const latest = userTurns.userTurn
         ? await userTurns.userTurn.findFirst({ where: { ...scope, conversationId }, orderBy: [{ lastSequence: 'desc' }, { updatedAt: 'desc' }], select: { id: true, lastSequence: true, sourceMessageIdsJson: true } })
         : null;
-      if (!latest) return { id: conversationId, overrideMode: mode, humanActive: false, replyJobId: undefined as string | undefined };
+      if (!latest) return {
+        id: conversationId, overrideMode: mode, effectiveMode: mode,
+        shopAiMode: conversation.shop?.aiMode, humanActive: false,
+        replyJobId: undefined as string | undefined,
+      };
       const sourceIds = Array.isArray(latest.sourceMessageIdsJson) ? latest.sourceMessageIdsJson : [];
       const sourceLastMessageId = sourceIds.at(-1);
       const job = await this.replyJobs.createInTransaction(tx, scope, {
@@ -57,7 +74,10 @@ export class ConversationReplyControlService {
         sourceSequence: latest.lastSequence, sourceContextVersion: conversation.contextVersion,
         idempotencyKey: `reply-mode-assist:${latest.id}:${conversation.contextVersion}:${randomUUID()}`, evidence: [],
       }, { lockHeld: true });
-      return { id: conversationId, overrideMode: mode, humanActive: false, replyJobId: job.id };
+      return {
+        id: conversationId, overrideMode: mode, effectiveMode: mode,
+        shopAiMode: conversation.shop?.aiMode, humanActive: false, replyJobId: job.id,
+      };
     }));
     if (result.replyJobId && this.runtime) await this.runtime.process(scope, result.replyJobId);
     this.publishRefresh(scope, conversationId);
@@ -89,11 +109,20 @@ export class ConversationReplyControlService {
     const resumed = await this.transportMutex.runMany([transportShopMutexKey(scope), transportMutexKey(scope, conversationId)], () => this.prisma.$transaction(async (tx) => {
       await this.lock(tx, conversationId, scope);
       const conversation = await tx.conversation.findFirst({
-        where: { id: conversationId, ...scope }, select: { id: true, contextVersion: true, lastCommittedSequence: true },
+        where: { id: conversationId, ...scope },
+        select: { id: true, contextVersion: true, lastCommittedSequence: true, shop: { select: { aiMode: true } } },
       });
       if (!conversation) throw notFound();
+      if (conversation.shop?.aiMode === 'MANUAL_ONLY') {
+        throw new ConflictException({
+          code: 'SHOP_MANUAL_ONLY',
+          message: 'Raise the Shop AI ceiling before resuming AI',
+        });
+      }
+      const resumedMode = conversation.shop?.aiMode === 'AUTO_ALLOWED' ? 'AUTO' as const : 'ASSIST' as const;
       const result = await tx.conversation.updateMany({
-        where: { id: conversationId, ...scope, humanActive: true }, data: { humanActive: false, overrideMode: null, needsReplan: true },
+        where: { id: conversationId, ...scope, humanActive: true },
+        data: { humanActive: false, mode: resumedMode, overrideMode: null, needsReplan: true },
       });
       if (!result.count) return { id: conversationId, humanActive: false, overrideMode: null, resumed: false, replyJobId: undefined as string | undefined };
       const userTurns = tx as unknown as { userTurn?: { findFirst(input: unknown): Promise<{ id: string; lastSequence: number; sourceMessageIdsJson: unknown } | null> } };
@@ -107,7 +136,7 @@ export class ConversationReplyControlService {
       const sourceIds = Array.isArray(latest.sourceMessageIdsJson) ? latest.sourceMessageIdsJson : [];
       const sourceLastMessageId = sourceIds.at(-1);
       const job = await this.replyJobs.createInTransaction(tx, scope, {
-        conversationId, userTurnId: latest.id, mode: 'AUTO',
+        conversationId, userTurnId: latest.id, mode: resumedMode,
         sourceLastMessageId: typeof sourceLastMessageId === 'string' ? sourceLastMessageId : undefined,
         sourceSequence: latest.lastSequence, sourceContextVersion: conversation.contextVersion,
         idempotencyKey: `reply-resume:${latest.id}:${conversation.contextVersion}:${randomUUID()}`,
@@ -219,6 +248,77 @@ export class ConversationReplyControlService {
     return { sendOutboxId: effect.sendOutboxId, ...(effect.candidateId ? { candidateId: effect.candidateId } : {}) };
   }
 
+  /**
+   * Locally soft-recall an already projected operator/assistant reply. The
+   * immutable version and audit fact remain, and remoteRecalled=false makes
+   * the demo transport boundary explicit instead of pretending a platform
+   * withdrawal occurred.
+   */
+  async deleteOutgoingMessage(scope: ReplyJobScope, conversationId: string, messageId: string) {
+    const result = await this.transportMutex.runMany(
+      [transportShopMutexKey(scope), transportMutexKey(scope, conversationId)],
+      () => this.prisma.$transaction(async (tx) => {
+        await this.lock(tx, conversationId, scope);
+        const conversation = await tx.conversation.findFirst({
+          where: { id: conversationId, ...scope }, select: { id: true },
+        });
+        if (!conversation) throw notFound();
+        const message = await tx.message.findFirst({
+          where: { id: messageId, conversationId, ...scope },
+          include: { _count: { select: { versions: true } } },
+        });
+        if (!message) {
+          throw new NotFoundException({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found in this Conversation and Shop' });
+        }
+        if (message.role !== 'ASSISTANT' && message.role !== 'HUMAN') {
+          throw new BadRequestException({
+            code: 'OUTGOING_MESSAGE_REQUIRED',
+            message: 'Only assistant or human replies can be removed here; use buyer recall for buyer messages',
+          });
+        }
+        if (message.status === 'RECALLED') {
+          return { id: message.id, status: 'RECALLED' as const, remoteRecalled: false as const };
+        }
+        if (message.status === 'DELETED') {
+          throw new ConflictException({ code: 'MESSAGE_PRIVACY_DELETED', message: 'Privacy-deleted messages cannot be changed' });
+        }
+        await tx.messageVersion.create({
+          data: {
+            workspaceId: scope.workspaceId, tenantId: scope.tenantId,
+            messageId: message.id, version: message._count.versions + 1,
+            status: message.status,
+            contentJson: message.contentJson === null ? Prisma.JsonNull : message.contentJson,
+          },
+        });
+        await tx.message.update({ where: { id: message.id }, data: { status: 'RECALLED' } });
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { contextVersion: { increment: 1 }, needsReplan: true },
+        });
+        await this.staleActive(tx, scope, conversationId, 'OUTGOING_MESSAGE_RECALLED');
+        await this.cancelScheduled(tx, scope, conversationId);
+        await tx.conversationMemory.updateMany({
+          where: { ...scope, conversationId, basedOnThroughSequence: { gte: message.sequence } },
+          data: { status: 'DIRTY' },
+        });
+        await tx.auditLog.create({
+          data: {
+            workspaceId: scope.workspaceId, tenantId: scope.tenantId,
+            action: 'OUTGOING_MESSAGE_SOFT_RECALLED', entityType: 'MESSAGE', entityId: message.id,
+            metadataJson: {
+              shopId: scope.shopId, conversationId, role: message.role,
+              previousStatus: message.status, sequence: message.sequence,
+              remoteRecalled: false,
+            },
+          },
+        });
+        return { id: message.id, status: 'RECALLED' as const, remoteRecalled: false as const };
+      }),
+    );
+    this.publishRefresh(scope, conversationId);
+    return result;
+  }
+
   private async cancelScheduled(tx: Prisma.TransactionClient, scope: ReplyJobScope, conversationId: string): Promise<void> {
     await tx.processingOutbox.updateMany({
       where: { ...scope, aggregateType: 'CONVERSATION', aggregateId: conversationId, eventType: { in: ['SCHEDULED_WELCOME', 'SCHEDULED_CLOSING'] }, status: 'PENDING' },
@@ -269,4 +369,24 @@ function notFound(): NotFoundException {
 
 function changed(): ConflictException {
   return new ConflictException({ code: 'CONVERSATION_CHANGED', message: 'Conversation changed; retry the command' });
+}
+
+function assertModeWithinShopCeiling(
+  requested: 'AUTO' | 'ASSIST' | 'MANUAL' | 'HOLD',
+  shopMode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY' | undefined,
+): void {
+  if (requested === 'AUTO' && shopMode !== 'AUTO_ALLOWED') {
+    throw new ConflictException({
+      code: 'SHOP_AUTO_MODE_DISABLED',
+      message: 'Enable AUTO_ALLOWED for this Shop before selecting AUTO',
+      shopAiMode: shopMode ?? 'UNKNOWN', requestedMode: requested,
+    });
+  }
+  if (requested === 'ASSIST' && shopMode === 'MANUAL_ONLY') {
+    throw new ConflictException({
+      code: 'SHOP_AI_MODE_CEILING',
+      message: 'This Shop is MANUAL_ONLY; raise the Shop ceiling before selecting ASSIST',
+      shopAiMode: shopMode, requestedMode: requested,
+    });
+  }
 }

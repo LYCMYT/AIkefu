@@ -1,4 +1,5 @@
 import type { SeedData } from '../seed/seed-catalog';
+import type { SeedShop } from '../seed/seed-catalog';
 
 export const WORKSPACE_REPOSITORY = Symbol('WORKSPACE_REPOSITORY');
 
@@ -38,6 +39,14 @@ export type ShopView = {
   syncComplete: boolean;
 };
 
+export type CreateShopRepositoryInput = {
+  name: string;
+  externalShopId: string;
+  aiMode: ShopView['aiMode'];
+  template: SeedShop;
+  catalog: Pick<SeedData, 'buyers' | 'products' | 'orders' | 'knowledge'>;
+};
+
 export type SeedCounts = {
   shops: number;
   buyers: number;
@@ -66,5 +75,7 @@ export interface WorkspaceRepository {
   getBootstrap(scope: WorkspaceScope): Promise<BootstrapView | null>;
   listShops(scope: WorkspaceScope): Promise<ShopView[]>;
   getShop(scope: WorkspaceScope, shopId: string): Promise<ShopView | null>;
+  createShop(scope: WorkspaceScope, input: CreateShopRepositoryInput): Promise<ShopView>;
+  setShopAiMode(scope: WorkspaceScope, shopId: string, mode: ShopView['aiMode']): Promise<ShopView | null>;
   deleteExpired(now: Date): Promise<number>;
 }

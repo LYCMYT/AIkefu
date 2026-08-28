@@ -6,6 +6,7 @@ const fallbackBaseUrl = 'http://127.0.0.1:4173';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
+  workers: runRealInfra ? 1 : undefined,
   forbidOnly: true,
   retries: 0,
   reporter: 'list',

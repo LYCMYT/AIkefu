@@ -163,7 +163,7 @@
 
 - Docker Desktop 29.7.2 / WSL2 已运行，Compose 中 PostgreSQL、Redis、MinIO 均为 `healthy`。
 - 18 个 Prisma migrations 已真实部署；`prisma generate`、`prisma validate`、全仓 build 与 typecheck 通过。
-- 最新回归：456 unit、48 real-infra integration、4 条连接态 Playwright E2E 通过；DeepSeek 配置下另复跑 Buyer→Human Final 主链 1/1 通过。4 条离线降级用例按互斥环境条件跳过，不计为 PASS。
+- 最新回归：482 unit、51 real-infra integration、7 条连接态 Playwright E2E 通过。4 条离线降级用例按互斥环境条件跳过，不计为 PASS。
 - 应用已常驻启动：Web `http://localhost:5173`、API `http://localhost:3000`；应用内浏览器确认 `API READY · 实时已连接`。
 - Scenario Lab 八个固定合成场景已从真实浏览器界面逐一运行并全部 `SUCCEEDED`。
 - 独立生产验证项目的 Web/API/PostgreSQL/pgvector/Redis/MinIO 5 容器全部 `healthy`；18 migrations、`/healthz`、SPA fallback、同源 REST Workspace 创建、Socket.IO heartbeat、Redis 密码与 Nginx 安全响应头实测通过。验证容器/网络/卷已定向清理，本地开发栈保留。
@@ -181,14 +181,14 @@
 
 ### 前端重构验证记录
 
-- `pnpm typecheck`：5 个工作区包全部通过。
-- `pnpm test:unit`：463 tests 通过（含 Release Hygiene 4、Contracts 6、Core 57、MockDouyin 3、Web 69、API 324）。
-- `RUN_REAL_INFRA_INTEGRATION=1 pnpm test:integration`：13 suites / 48 tests 全部通过。
+- 本轮前端 `pnpm --filter @ai-customer-service/web typecheck` 与生产构建通过。
+- 本轮 Web unit：16 files / 75 tests 全部通过。
+- `RUN_REAL_INFRA_INTEGRATION=1 pnpm test:integration`：13 suites / 51 tests 全部通过。
 - `pnpm build`：API、Web、contracts、core、mock-douyin 全部通过。
-- Playwright：离线 Foundation 边界 6 pass / 3 条连接态用例按环境跳过；真实连接态 5 pass / 4 条离线用例按环境跳过。
+- Playwright 真实连接态：7 pass；4 条离线 Foundation 故障态用例按 opt-in 规则显式跳过。
 - 真实产品化链：Reset → Buyer 三连发 → Workbench Draft → Dashboard / Knowledge → Workflow 保存并发布 → Scenario Run → 390px Workbench，全程通过。
-- 最终截图：`artifacts/ui/final/`，包含要求的 Workbench、Buyer Simulator、Knowledge、Workflow、Dashboard、Scenario Lab，以及 Shops / Quality / Incident / Trace / Mobile 补充图。
-- `App.tsx` 13 行、`api.ts` 31 行、`styles.css` 8 行；各 feature 主文件均不超过 600 行。
+- 最终截图：`artifacts/ui/final/`，包含最新 Workbench、Buyer Simulator、Knowledge、Workflow、Dashboard、Scenario Lab，以及 Shops / Quality / Incident / Trace / 390×844、1366×768、1920×1080 补充图。
+- `App.tsx`、`api.ts` 与根 `styles.css` 已保持 facade；Workbench、Knowledge 与领域 CSS 仍有进一步细拆空间，不把“文件小于 600 行”作为已完成事实。
 
 ## 外部深度审查整改（R0–R6）
 

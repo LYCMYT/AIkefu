@@ -103,6 +103,7 @@ import { connectWorkspaceSocket, refreshConversationForWorkspaceEvent, type Work
 import { buyerTextSubmissionEnabled, humanFinalSubmission } from '../../workbench-actions';
 import { navIcons, navigationItems, resolveAppPath, type AppPath } from '../../app/routes';
 import { EmptyState, ErrorState as Phase05ErrorState, LoadingState as Phase05LoadingState } from '../../components/ui/feedback';
+import { ConfirmDialog } from '../../components/ui/primitives';
 import { AdminPageHeader as Phase05AdminHeader, AdminTabs } from '../admin/AdminChrome';
 import { DataPrivacyPage } from '../privacy/DataPrivacyPage';
 import { UsageAdminPage } from '../usage/UsageAdminPage';
@@ -127,7 +128,7 @@ import { Avatar, MessageBubble, ShopRail, ContextProduct, ContextOrder, Develope
 
 
 export function BuyerSimulatorPage({ token, shops, activeShopId, onShopChange, refreshKey }: SharedViewProps) {
-  const [shopId, setShopId] = useState(activeShopId || shops[0]?.id || '');
+  const shopId = activeShopId || shops[0]?.id || '';
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -145,13 +146,9 @@ export function BuyerSimulatorPage({ token, shops, activeShopId, onShopChange, r
   const [editingId, setEditingId] = useState('');
   const [editingText, setEditingText] = useState('');
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  const [pendingRemovalId, setPendingRemovalId] = useState('');
+  const [removingId, setRemovingId] = useState('');
 
-  useEffect(() => {
-    if (activeShopId && activeShopId !== shopId) setShopId(activeShopId);
-  }, [activeShopId, shopId]);
-  useEffect(() => {
-    if (shopId) onShopChange(shopId);
-  }, [onShopChange, shopId]);
   useEffect(() => {
     if (!shopId) return;
     let mounted = true;
@@ -299,6 +296,7 @@ export function BuyerSimulatorPage({ token, shops, activeShopId, onShopChange, r
   };
 
   const recall = async (messageId: string) => {
+    setRemovingId(messageId);
     try {
       const updated = await recallBuyerMessage(token, messageId);
       setLocalMessages((current) => {
@@ -306,37 +304,41 @@ export function BuyerSimulatorPage({ token, shops, activeShopId, onShopChange, r
         const next = { ...(base ?? { id: messageId, role: 'BUYER', kind: 'TEXT' as const }), ...(isMessage(updated) ? updated : {}), status: isMessage(updated) ? (updated.status ?? 'RECALLED') : 'RECALLED' };
         return current.some((message) => message.id === messageId) ? current.map((message) => message.id === messageId ? next : message) : [...current, next];
       });
-      setNotice('消息已撤回');
+      setNotice('消息已从本演示会话隐藏；审计记录仍保留，不代表抖音平台已撤回');
     } catch (error) {
       setNotice(errorMessage(error));
+    } finally {
+      setRemovingId('');
+      setPendingRemovalId('');
     }
   };
 
   return (
     <div className="simulator-page">
+      {pendingRemovalId && <ConfirmDialog busy={removingId === pendingRemovalId} confirmLabel="确认隐藏" description="消息仅会从本演示工作台的会话中隐藏，审计记录仍保留；不代表抖音平台消息已撤回。" onCancel={() => setPendingRemovalId('')} onConfirm={() => void recall(pendingRemovalId)} open title="从会话隐藏这条买家消息？" />}
       <section className="simulator-header panel-surface">
         <div><span className="overline">EXTERNAL VIEW · MOCK DOUYIN</span><h2>买家模拟器</h2><p>以消费者视角发送事件，观察消息如何进入工作台。</p></div>
-        <div className="simulator-selection"><label><span>店铺</span><select value={shopId} onChange={(event) => setShopId(event.currentTarget.value)}>{shops.map((shop) => <option value={shop.id} key={shop.id}>{shop.name}</option>)}</select></label><label><span>买家</span><select value={buyerId} onChange={(event) => setBuyerId(event.currentTarget.value)}>{buyers.length === 0 ? <option value="">等待买家快照</option> : buyers.map((buyer) => <option value={buyer.id} key={buyer.id}>{buyerName(buyer)}</option>)}</select></label></div>
+        <div className="simulator-selection"><label><span>店铺</span><select value={shopId} onChange={(event) => onShopChange(event.currentTarget.value)}>{shops.map((shop) => <option value={shop.id} key={shop.id}>{shop.name}</option>)}</select></label><label><span>买家</span><select value={buyerId} onChange={(event) => setBuyerId(event.currentTarget.value)}>{buyers.length === 0 ? <option value="">等待买家快照</option> : buyers.map((buyer) => <option value={buyer.id} key={buyer.id}>{buyerName(buyer)}</option>)}</select></label></div>
       </section>
       <div className="simulator-layout">
         <section className="phone-stage">
           <div className="phone-stage-heading"><div><span className="overline">BUYER CHAT</span><strong>{activeShop?.name ?? '当前店铺'}</strong></div><span className="stage-live"><i /> LIVE PREVIEW</span></div>
           <div className="phone-shell">
             <div className="phone-notch" aria-hidden="true" />
-            <header className="phone-header"><button type="button" className="phone-back" aria-label="返回">‹</button><Avatar label={buyerName(selectedBuyer)} tone="mint" /><div><strong>{activeShop?.name ?? '店铺客服'}</strong><small><i /> 在线 · 模拟消费者端</small></div><button type="button" className="phone-more" aria-label="更多">•••</button></header>
+            <header className="phone-header"><Avatar label={buyerName(selectedBuyer)} tone="mint" /><div><strong>{activeShop?.name ?? '店铺客服'}</strong><small><i /> 在线 · 模拟消费者端</small></div></header>
             <div className="phone-date">今天 {readableDate(new Date().toISOString())}</div>
             <div className="phone-messages">
               <div className="seller-welcome"><span className="welcome-spark">✦</span><strong>{activeShop?.name ?? '店铺'}的智能客服</strong><small>欢迎咨询商品、订单和售后问题</small></div>
-              {loading ? <div className="phone-empty">正在读取对话…</div> : messages.length === 0 ? <div className="phone-empty"><span>○</span><strong>开始一次新的咨询</strong><small>你发送的内容会同步到客服工作台</small></div> : messages.map((message) => <div className="buyer-message-wrap" key={message.id}><MessageBubble message={message} dense />{message.role === 'BUYER' && message.status !== 'RECALLED' && message.status !== 'DELETED' && !message.id.startsWith('local-') && <div className="buyer-message-actions"><button type="button" onClick={() => { setEditingId(message.id); setEditingText(messageText(message)); }}>编辑</button><button type="button" onClick={() => void recall(message.id)}>撤回</button></div>}{editingId === message.id && <div className="inline-edit"><textarea value={editingText} onChange={(event) => setEditingText(event.currentTarget.value)} rows={2} /><div><button type="button" onClick={() => setEditingId('')}>取消</button><button className="save-mini" type="button" onClick={() => void saveEdit(message.id)}>保存</button></div></div>}</div>)}
+              {loading ? <div className="phone-empty">正在读取对话…</div> : messages.length === 0 ? <div className="phone-empty"><span>○</span><strong>开始一次新的咨询</strong><small>你发送的内容会同步到客服工作台</small></div> : messages.map((message) => <div className="buyer-message-wrap" key={message.id}><MessageBubble message={message} dense />{message.role === 'BUYER' && message.status !== 'RECALLED' && message.status !== 'DELETED' && !message.id.startsWith('local-') && <div className="buyer-message-actions"><button type="button" onClick={() => { setEditingId(message.id); setEditingText(messageText(message)); }}>编辑</button><button type="button" onClick={() => setPendingRemovalId(message.id)}>隐藏</button></div>}{editingId === message.id && <div className="inline-edit"><textarea value={editingText} onChange={(event) => setEditingText(event.currentTarget.value)} rows={2} /><div><button type="button" onClick={() => setEditingId('')}>取消</button><button className="save-mini" type="button" onClick={() => void saveEdit(message.id)}>保存</button></div></div>}</div>)}
             </div>
-            <div className="phone-composer"><div className="phone-input-row"><button type="button" disabled title="图片消息暂不可用">＋</button><textarea value={composer} onChange={(event) => setComposer(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(); } }} placeholder="输入咨询内容…" rows={1} /><button type="button" className="phone-send" onClick={() => void sendText()} disabled={!buyerTextSubmissionEnabled({ text: composer, shopId, buyerId, loading, sending })} aria-label="发送">↑</button></div><small>图片消息暂不可用</small></div>
+            <div className="phone-composer"><div className="phone-input-row"><textarea value={composer} onChange={(event) => setComposer(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(); } }} placeholder="输入咨询内容…" rows={1} /><button type="button" className="phone-send" onClick={() => void sendText()} disabled={!buyerTextSubmissionEnabled({ text: composer, shopId, buyerId, loading, sending })} aria-label="发送">↑</button></div></div>
           </div>
         </section>
         <aside className="simulator-tools">
           <div className="tool-heading"><div><span className="overline">EVENT COMPOSER</span><h2>发送测试事件</h2></div><span className="tool-status">{sending ? '发送中' : '就绪'}</span></div>
           <div className="selected-buyer-card"><Avatar label={buyerName(selectedBuyer)} tone="mint" /><div><strong>{buyerName(selectedBuyer)}</strong><span>{tagsFromBuyer(selectedBuyer).join(' · ') || '当前买家'} · {activeShop?.name ?? '当前店铺'}</span></div><span className="connection-check">✓</span></div>
           <div className="event-tool-section"><div className="section-label-row"><span>快捷卡片</span><span className="quiet-label">BUYER EVENT</span></div><label className="tool-select"><span>选择商品</span><select value={productId} onChange={(event) => setProductId(event.currentTarget.value)}><option value="">暂无商品快照</option>{products.map((product) => <option value={product.id} key={product.id}>{productName(product)}</option>)}</select></label><button type="button" className="event-button product-event" onClick={() => void sendProduct()} disabled={!productId || !buyerId || sending}><span className="event-button-icon">✦</span><span><strong>发送商品卡</strong><small>作为买家分享商品</small></span><b>→</b></button><label className="tool-select"><span>选择订单</span><select value={orderId} onChange={(event) => setOrderId(event.currentTarget.value)}><option value="">暂无订单快照</option>{orders.map((order) => <option value={order.id} key={order.id}>{orderName(order)} · {statusLabel(order.status)}</option>)}</select></label><button type="button" className="event-button order-event" onClick={() => void sendOrder()} disabled={!orderId || !buyerId || sending}><span className="event-button-icon">#</span><span><strong>发送订单卡</strong><small>作为买家分享订单</small></span><b>→</b></button></div>
-          <div className="event-tool-section"><div className="section-label-row"><span>事件状态</span><span className="status-badge is-positive">REST + WS</span></div><div className="event-flow"><span className="flow-node">BUYER</span><i>→</i><span className="flow-node">ADAPTER</span><i>→</i><span className="flow-node is-emphasis">WORKBENCH</span></div><p className="muted-copy">每次事件均带当前 Workspace 凭据；收到 Socket 事件后会重新拉取资源快照。</p></div>
+          <div className="event-tool-section"><div className="section-label-row"><span>同步状态</span><span className="status-badge is-positive">实时</span></div><p className="muted-copy">发送后会自动同步到客服工作台。</p></div>
           {notice && <div className={`simulator-notice ${notice.includes('已') ? 'is-success' : ''}`} role="status">{notice}</div>}
           {resourceError && <div className="simulator-notice">{resourceError}</div>}
         </aside>

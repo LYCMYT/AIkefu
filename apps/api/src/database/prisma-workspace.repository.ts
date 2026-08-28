@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import type { SeedData } from '../seed/seed-catalog';
 import { PrismaService } from './prisma.service';
@@ -7,6 +7,7 @@ import type {
   AuthenticatedWorkspace,
   BootstrapView,
   SeedCounts,
+  CreateShopRepositoryInput,
   ShopView,
   WorkspaceRepository,
   WorkspaceScope,
@@ -134,6 +135,230 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       where: { id: shopId, ...this.scope(scope) },
     });
     return shop ? this.shopView(shop) : null;
+  }
+
+  async createShop(scope: WorkspaceScope, input: CreateShopRepositoryInput): Promise<ShopView> {
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        const normalizedScope = this.scope(scope);
+        const count = await transaction.shop.count({ where: normalizedScope });
+        if (count >= 20) {
+          throw new ConflictException({ code: 'SHOP_LIMIT_REACHED', message: 'A demo workspace supports at most 20 shops' });
+        }
+        const shop = await transaction.shop.create({
+          data: {
+            ...normalizedScope,
+            seedKey: `runtime:${randomUUID()}`,
+            platform: 'DOUYIN_DEMO',
+            externalShopId: input.externalShopId,
+            name: input.name,
+            aiMode: input.aiMode,
+            connectionState: 'CONNECTED',
+            syncComplete: true,
+          },
+        });
+        await transaction.shopSettings.create({
+          data: {
+            ...normalizedScope,
+            shopId: shop.id,
+            tone: input.template.settings.tone,
+            logisticsPolicy: input.template.settings.logisticsPolicy,
+            shippingPolicy: input.template.settings.shippingPolicy,
+            afterSalesPolicy: input.template.settings.afterSalesPolicy,
+            welcomeMessage: input.template.settings.welcomeMessage,
+            closingMessagesJson: input.template.settings.closingMessages,
+            transferKeywordsJson: input.template.settings.transferKeywords,
+            forbiddenTermsJson: input.template.settings.forbiddenTerms,
+          },
+        });
+        const productSources = input.catalog.products.filter((source) => source.shopKey === input.template.key);
+        const productIds = new Map<string, string>();
+        const skuIds = new Map<string, string>();
+        for (const source of productSources) {
+          const product = await transaction.product.create({
+            data: {
+              ...normalizedScope, shopId: shop.id,
+              seedKey: `runtime:${shop.id}:${source.key}`,
+              externalProductId: source.externalProductId,
+              title: source.title, description: source.description,
+              contentHash: createHash('sha256').update(source.description).digest('hex'),
+              status: source.status, recommendable: source.recommendable,
+            },
+          });
+          productIds.set(source.key, product.id);
+          for (const skuSource of source.skus) {
+            const sku = await transaction.productSku.create({
+              data: {
+                ...normalizedScope, shopId: shop.id, productId: product.id,
+                externalSkuId: skuSource.externalSkuId,
+                attributesJson: skuSource.attributes,
+                price: new Prisma.Decimal(skuSource.price), inventory: skuSource.inventory, status: 'ACTIVE',
+              },
+            });
+            skuIds.set(skuSource.externalSkuId, sku.id);
+          }
+        }
+
+        const orderSources = input.catalog.orders.filter((source) => source.shopKey === input.template.key);
+        const buyerKeys = [...new Set(orderSources.map((source) => source.buyerKey))];
+        const buyers = buyerKeys.length
+          ? await transaction.buyer.findMany({
+              where: { ...normalizedScope, seedKey: { in: buyerKeys } }, select: { id: true, seedKey: true },
+            })
+          : [];
+        const buyerIds = new Map(buyers.map((buyer) => [buyer.seedKey, buyer.id]));
+        for (const source of orderSources) {
+          const buyerId = buyerIds.get(source.buyerKey);
+          const productId = productIds.get(source.productKey);
+          const skuId = skuIds.get(source.sku);
+          if (!buyerId || !productId || !skuId) {
+            throw new Error(`SHOP_TEMPLATE_CATALOG_INVALID:${source.key}`);
+          }
+          await transaction.order.create({
+            data: {
+              ...normalizedScope, shopId: shop.id, buyerId, productId, skuId,
+              seedKey: `runtime:${shop.id}:${source.key}`,
+              externalOrderId: source.externalOrderId, status: source.status,
+              amount: new Prisma.Decimal(source.amount), orderedAt: new Date(source.orderedAt),
+              shippedAt: source.shippedAt ? new Date(source.shippedAt) : undefined,
+              logisticsSnapshotJson: source.logistics === null ? Prisma.DbNull : this.json(source.logistics),
+            },
+          });
+        }
+
+        const knowledgeSources = input.catalog.knowledge.filter((source) => source.shopKey === input.template.key);
+        for (const source of knowledgeSources) {
+          const item = await transaction.knowledgeItem.create({
+            data: {
+              ...normalizedScope, shopId: shop.id,
+              productId: source.productKey ? productIds.get(source.productKey) : undefined,
+              seedKey: `runtime:${shop.id}:${source.key}`,
+              scope: source.scope, sourceType: source.sourceType, businessStatus: source.businessStatus,
+            },
+          });
+          const version = await transaction.knowledgeVersion.create({
+            data: {
+              ...normalizedScope, knowledgeItemId: item.id, version: 1,
+              question: source.question, answer: source.answer,
+              sourceText: `${source.question}\n${source.answer}`,
+              sourceVersion: `template:${input.template.key}`,
+              confidence: source.sourceType === 'AUTO_LEARNED' ? 0.9 : 1,
+              indexStatus: source.indexStatus,
+            },
+          });
+          if (source.indexStatus === 'READY') {
+            await transaction.knowledgeItem.update({ where: { id: item.id }, data: { activeVersionId: version.id } });
+          }
+        }
+        await transaction.auditLog.create({
+          data: {
+            ...normalizedScope,
+            action: 'SHOP_CREATED',
+            entityType: 'SHOP',
+            entityId: shop.id,
+            metadataJson: {
+              platform: 'DOUYIN_DEMO', templateKey: input.template.key,
+              aiMode: input.aiMode, externalShopId: input.externalShopId,
+              clonedProducts: productSources.length, clonedOrders: orderSources.length,
+              clonedKnowledge: knowledgeSources.length,
+            },
+          },
+        });
+        return this.shopView(shop);
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException({ code: 'SHOP_ALREADY_EXISTS', message: 'externalShopId already exists in this Workspace' });
+      }
+      throw error;
+    }
+  }
+
+  async setShopAiMode(
+    scope: WorkspaceScope,
+    shopId: string,
+    mode: ShopView['aiMode'],
+  ): Promise<ShopView | null> {
+    return this.prisma.$transaction(async (transaction) => {
+      const normalizedScope = this.scope(scope);
+      const current = await transaction.shop.findFirst({ where: { id: shopId, ...normalizedScope } });
+      if (!current) return null;
+      if (current.aiMode === mode) return this.shopView(current);
+
+      const rank = { AUTO_ALLOWED: 0, ASSIST_ONLY: 1, MANUAL_ONLY: 2 } as const;
+      const isDowngrade = rank[mode] > rank[current.aiMode];
+      if (isDowngrade) {
+        const unsafeModes = mode === 'ASSIST_ONLY' ? ['AUTO'] as const : ['AUTO', 'ASSIST'] as const;
+        const activeJobs = await transaction.replyJob.findMany({
+          where: {
+            ...normalizedScope, shopId, mode: { in: [...unsafeModes] },
+            status: { in: ['PENDING', 'FAST_PATH_READY', 'GENERATING', 'WAITING_HUMAN', 'CANCELLING', 'RECOVERY_PENDING'] },
+          },
+          select: { id: true },
+        });
+        const jobIds = activeJobs.map((job) => job.id);
+        await transaction.replyJob.updateMany({
+          where: { ...normalizedScope, shopId, id: { in: jobIds } },
+          data: { status: 'STALE', staleReason: 'SHOP_AI_MODE_DOWNGRADED' },
+        });
+        if (jobIds.length) {
+          await transaction.replyDraft.updateMany({
+            where: { ...normalizedScope, shopId, replyJobId: { in: jobIds }, status: { in: ['GENERATING', 'WAITING_HUMAN'] } },
+            data: { status: 'STALE', staleReason: 'SHOP_AI_MODE_DOWNGRADED' },
+          });
+        }
+        const sendWhere = {
+          ...normalizedScope, shopId, replyJobId: { in: jobIds },
+          payloadJson: { path: ['senderRole'], equals: 'AI' } as const,
+        };
+        await transaction.sendOutbox.updateMany({
+          where: { ...sendWhere, status: 'PENDING' },
+          data: {
+            status: 'CANCELLED', failureCode: 'SHOP_AI_MODE_DOWNGRADED',
+            failureReason: 'Shop AI ceiling was lowered before transport',
+          },
+        });
+        await transaction.sendOutbox.updateMany({
+          where: { ...sendWhere, status: 'SENDING', transportStartedAt: null },
+          data: {
+            status: 'CANCELLED', failureCode: 'SHOP_AI_MODE_DOWNGRADED',
+            failureReason: 'Shop AI ceiling was lowered before transport',
+          },
+        });
+        await transaction.sendOutbox.updateMany({
+          where: { ...sendWhere, status: 'SENDING', transportStartedAt: { not: null } },
+          data: {
+            status: 'UNCERTAIN', failureCode: 'SEND_TRANSPORT_UNKNOWN',
+            failureReason: 'Shop AI ceiling changed after transport started',
+          },
+        });
+        await transaction.processingOutbox.updateMany({
+          where: {
+            ...normalizedScope, shopId, aggregateType: 'CONVERSATION',
+            eventType: { in: ['SCHEDULED_WELCOME', 'SCHEDULED_CLOSING'] }, status: 'PENDING',
+          },
+          data: { status: 'FAILED' },
+        });
+        await transaction.conversation.updateMany({
+          where: mode === 'ASSIST_ONLY'
+            ? { ...normalizedScope, shopId, OR: [{ mode: 'AUTO' }, { overrideMode: 'AUTO' }] }
+            : { ...normalizedScope, shopId },
+          data: mode === 'ASSIST_ONLY'
+            ? { mode: 'ASSIST', overrideMode: 'ASSIST', needsReplan: true }
+            : { mode: 'MANUAL', overrideMode: 'MANUAL', humanActive: true, needsReplan: true },
+        });
+      }
+
+      const updated = await transaction.shop.update({ where: { id: current.id }, data: { aiMode: mode } });
+      await transaction.auditLog.create({
+        data: {
+          ...normalizedScope,
+          action: 'SHOP_AI_MODE_CHANGED', entityType: 'SHOP', entityId: current.id,
+          metadataJson: { previousMode: current.aiMode, mode, killSwitchApplied: isDowngrade },
+        },
+      });
+      return this.shopView(updated);
+    });
   }
 
   async deleteExpired(now: Date): Promise<number> {

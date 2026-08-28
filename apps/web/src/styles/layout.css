@@ -439,6 +439,33 @@
   font-weight: 800;
 }
 
+.connection-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #667085;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.connection-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.connection-pill.is-ready i {
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+}
+
 /* Product design system primitives and global store controls. */
 .global-shop-switcher {
   display: flex;

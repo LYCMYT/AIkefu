@@ -298,9 +298,10 @@ export class ScenarioLabService {
     const context = await this.prepareConversation(scope, 'shop_mia_fashion', 'buyer_002', 'continuous_messages', operationId, resources);
     const texts = ['黑色有吗', 'XL呢', '我165，55公斤'];
     await Promise.all(texts.map((text, index) => this.sendText(scope, context, text, index + 1, `${operationId}:continuous:${index + 1}`)));
-    await this.flushConversation(context.id);
+    await this.flushConversation(context.id, texts.length);
     const artifacts = await this.ensureReplyArtifacts(scope, context, operationId, resources);
-    const counts = await this.countConversation(scope, context.id);
+    if (!artifacts.replyJobId) throw new Error('SCENARIO_CONTINUOUS_REPLY_JOB_MISSING');
+    const counts = await this.waitForContinuousArtifacts(scope, context.id);
     return {
       resources,
       result: {
@@ -445,7 +446,7 @@ export class ScenarioLabService {
     if (!repository?.findFirst) throw new Error('SCENARIO_CASE07_REPLY_JOB_MISSING');
     let replyJobId = initialReplyJobId;
     let lastStatus = 'MISSING';
-    for (let attempt = 0; attempt < 80; attempt += 1) {
+    for (let attempt = 0; attempt < 300; attempt += 1) {
       const replyJob = await repository.findFirst({
         where: { ...this.scope(scope), shopId, id: replyJobId },
         select: { status: true, conversationId: true, userTurnId: true },
@@ -477,7 +478,7 @@ export class ScenarioLabService {
           return { replyJobId, status: processed.status };
         }
       }
-      if (attempt < 79) await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      if (attempt < 299) await new Promise<void>((resolve) => setTimeout(resolve, 50));
     }
     throw new Error(`SCENARIO_CASE07_REPLY_NOT_COMPLETED:${lastStatus}`);
   }
@@ -807,7 +808,7 @@ export class ScenarioLabService {
     });
   }
 
-  private async flushConversation(conversationId: string): Promise<void> {
+  private async flushConversation(conversationId: string, expectedLatestSequence?: number): Promise<void> {
     const buffers = this.repo('conversationTurnBuffer');
     if (!buffers?.findUnique || !buffers.updateMany) {
       throw new Error('SCENARIO_TURN_BUFFER_REPOSITORY_REQUIRED');
@@ -816,14 +817,17 @@ export class ScenarioLabService {
     // necessarily opens TurnBuffer. Give the in-process consumer a short,
     // bounded chance to finish rather than treating an empty buffer as a
     // successful Scenario animation.
-    let buffer: { generation: number } | null | undefined;
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    let buffer: { generation: number; latestSequence?: number } | null | undefined;
+    for (let attempt = 0; attempt < 80; attempt += 1) {
       buffer = await buffers.findUnique({ where: { conversationId } });
-      if (buffer) break;
+      if (buffer && (expectedLatestSequence === undefined || Number(buffer.latestSequence ?? 0) >= expectedLatestSequence)) break;
       await this.drainMessagePipeline();
-      if (attempt < 7) await new Promise<void>((resolve) => setTimeout(resolve, 15));
+      if (attempt < 79) await new Promise<void>((resolve) => setTimeout(resolve, 25));
     }
     if (!buffer) throw new Error('SCENARIO_TURN_BUFFER_MISSING');
+    if (expectedLatestSequence !== undefined && Number(buffer.latestSequence ?? 0) < expectedLatestSequence) {
+      throw new Error('SCENARIO_TURN_BUFFER_INCOMPLETE');
+    }
     await buffers.updateMany({ where: { conversationId }, data: { idleDeadline: new Date(0), hardDeadline: new Date(0) } });
     const application = this.messages as unknown as { flushTurn?: (id: string, generation: number) => Promise<void> };
     if (typeof application.flushTurn === 'function') await application.flushTurn(conversationId, buffer.generation);
@@ -920,6 +924,24 @@ export class ScenarioLabService {
       this.repo('replyJob')?.count?.({ where }) ?? 0,
     ]);
     return { messages, userTurns, tasks, replyJobs };
+  }
+
+  private async waitForContinuousArtifacts(scope: ScenarioScope, conversationId: string) {
+    const where = { ...this.scope(scope), conversationId };
+    let snapshot = { messages: 0, userTurns: 0, tasks: 0, replyJobs: 0 };
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const [messages, userTurns, tasks, replyJobs] = await Promise.all([
+        this.repo('message')?.count?.({ where }) ?? 0,
+        this.repo('userTurn')?.count?.({ where }) ?? 0,
+        this.repo('task')?.count?.({ where }) ?? 0,
+        this.repo('replyJob')?.count?.({ where: { ...where, status: { notIn: ['STALE', 'EXPIRED', 'CANCELLED'] } } }) ?? 0,
+      ]);
+      snapshot = { messages, userTurns, tasks, replyJobs };
+      if (messages === 3 && userTurns === 1 && tasks === 2 && replyJobs === 1) return snapshot;
+      await this.drainMessagePipeline();
+      if (attempt < 299) await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error(`SCENARIO_CONTINUOUS_INVARIANT_FAILED:${snapshot.messages}/${snapshot.userTurns}/${snapshot.tasks}/${snapshot.replyJobs}`);
   }
 
   private async bumpContextAndStale(scope: ScenarioScope, conversationId: string, oldReplyJobId?: string) {
