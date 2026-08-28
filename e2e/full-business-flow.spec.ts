@@ -44,5 +44,5 @@ test('real buyer-to-human-final flow stays visible across Buyer Simulator and Wo
   await expect(chat.getByText(humanFinal, { exact: true })).toBeVisible();
 
   await page.getByRole('link', { name: /买家模拟器/ }).click();
-  await expect(page.getByText(humanFinal, { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.phone-messages').getByText(humanFinal, { exact: true })).toBeVisible({ timeout: 20_000 });
 });
