@@ -1,0 +1,576 @@
+/* Responsive overrides remain last to preserve mobile precedence. */
+@media (max-width: 1450px) {
+  .workbench-layout {
+    grid-template-columns: 260px minmax(390px, 1fr) 285px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .app-shell {
+    grid-template-columns: 194px minmax(0, 1fr);
+  }
+
+  .workbench-layout {
+    grid-template-columns: 250px minmax(360px, 1fr);
+  }
+
+  .context-panel {
+    display: block;
+    grid-column: 1 / -1;
+    min-height: 360px;
+  }
+
+  .simulator-layout {
+    grid-template-columns: minmax(400px, 1fr) 300px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    display: block;
+  }
+
+  .sidebar {
+    position: static;
+    min-height: auto;
+    padding: 15px 16px 12px;
+  }
+
+  .workspace-switcher,
+  .sidebar-divider,
+  .sidebar-shortcuts,
+  .sidebar-footer {
+    display: none;
+  }
+
+  .brand {
+    padding: 0 4px;
+  }
+
+  .navigation {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    margin-top: 14px;
+  }
+
+  .nav-item {
+    justify-content: center;
+    min-height: 38px;
+    padding: 6px 5px;
+  }
+
+  .nav-label small,
+  .nav-notification {
+    display: none;
+  }
+
+  .nav-label strong {
+    font-size: 10px;
+  }
+
+  .nav-icon {
+    width: 21px;
+    height: 21px;
+    font-size: 12px;
+  }
+
+  .content {
+    padding: 20px 17px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .current-shop-indicator {
+    display: none;
+  }
+
+  .workbench-layout {
+    grid-template-columns: 230px minmax(320px, 1fr);
+    min-height: 680px;
+  }
+
+  .chat-panel {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .conversation-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .context-panel { grid-column: 1 / -1; grid-row: 2; }
+
+  .simulator-header,
+  .simulator-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .simulator-header {
+    display: grid;
+  }
+
+  .simulator-layout {
+    display: grid;
+  }
+
+  .phone-stage {
+    min-height: 620px;
+  }
+}
+
+@media (max-width: 620px) {
+  .topbar {
+    display: grid;
+    gap: 13px;
+  }
+
+  .topbar-actions {
+    justify-content: space-between;
+  }
+
+  .trace-toggle,
+  .reset-button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .user-avatar {
+    display: none;
+  }
+
+  .workbench-layout {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .conversation-panel {
+    order: 1;
+    min-height: 280px;
+  }
+
+  .chat-panel {
+    order: 2;
+    min-height: 610px;
+  }
+
+  .context-panel { order: 3; min-height: 520px; }
+  .global-shop-switcher { flex: 1; min-width: 0; }
+  .global-shop-switcher select { width: 100%; max-width: none; }
+
+  .simulator-selection {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .simulator-selection select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .phone-stage {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .phone-shell {
+    width: min(100%, 350px);
+  }
+
+  .page-footer {
+    display: grid;
+  }
+}
+
+@media (max-width: 980px) {
+  .scenario-lab-layout { grid-template-columns: 255px minmax(0, 1fr); }
+  .scenario-metric-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 1260px) {
+  .workflow-editor-layout { grid-template-columns: 150px minmax(0, 1fr); }
+  .workflow-editor-controls { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .workflow-editor-layout { display: flex; flex-direction: column; padding-inline: 12px; }
+  .workflow-node-palette { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workflow-node-palette .workflow-editor-subheading { grid-column: 1 / -1; }
+  .workflow-canvas-toolbar { align-items: flex-start; flex-direction: column; }
+  .workflow-canvas-toolbar > div { flex-wrap: wrap; }
+}
+
+@media (max-width: 700px) {
+  .scenario-lab-header { display: grid; }
+  .scenario-scope-note { min-width: 0; }
+  .scenario-lab-layout { display: flex; flex-direction: column; }
+  .scenario-index { max-height: 390px; }
+  .scenario-detail { padding: 18px 14px; }
+  .scenario-detail-actions { align-items: stretch; flex-wrap: wrap; }
+  .scenario-detail-actions > div { flex-basis: 100%; margin-bottom: 8px; }
+  .scenario-detail-actions .primary-button, .scenario-detail-actions .outline-button { flex: 1; justify-content: center; }
+}
+
+@media (max-width: 1180px) {
+  .learning-main-grid {
+    grid-template-columns: minmax(0, 1fr) 235px;
+  }
+}
+
+@media (max-width: 980px) {
+  .admin-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-header-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .learning-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .runtime-observe {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-page {
+    margin-top: 13px;
+  }
+
+  .admin-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .admin-tabs a,
+  .admin-tab-disabled {
+    min-width: 0;
+    justify-content: center;
+    padding: 0 6px;
+  }
+
+  .admin-tabs a small,
+  .admin-tab-disabled small {
+    display: none;
+  }
+
+  .admin-page-header {
+    padding: 17px 15px;
+  }
+
+  .admin-header-controls {
+    align-items: stretch;
+  }
+
+  .compact-field {
+    flex: 1 1 100%;
+  }
+
+  .compact-field select {
+    width: 100%;
+  }
+
+  .admin-header-controls > button {
+    flex: 1;
+  }
+
+  .admin-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-metrics article {
+    min-height: 74px;
+    padding: 11px;
+  }
+
+  .admin-metrics article strong {
+    font-size: 20px;
+  }
+
+  .learning-progress-card {
+    padding: 15px;
+  }
+
+  .progress-foot {
+    flex-wrap: wrap;
+  }
+
+  .table-heading {
+    padding: 15px;
+  }
+
+  .table-actions {
+    width: 100%;
+  }
+
+  .table-actions .small-button {
+    flex: 1;
+  }
+
+  .runtime-observe {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .knowledge-filters {
+    padding: 0 15px 12px;
+  }
+
+  .import-drawer {
+    padding: 19px 15px 15px;
+  }
+
+  .import-template {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .import-template a {
+    margin-left: 38px;
+  }
+
+  .import-drawer-footer {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .import-drawer-footer > span {
+    width: 100%;
+    max-width: none;
+    margin: 0 0 5px;
+  }
+
+  .import-drawer-footer > button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .workflow-editor-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-edge-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .workflow-edge-form button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .quality-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .incident-action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .workflow-editor-layout {
+    padding-inline: 12px;
+  }
+
+  .workflow-editor-inline,
+  .workflow-edge-form,
+  .workflow-config-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-edge-form span {
+    display: none;
+  }
+
+  .quality-trigger {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quality-trigger .primary-button {
+    width: 100%;
+  }
+
+  .trace-event-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .conversation-control-bar {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+
+  .draft-card {
+    margin-right: 12px;
+    margin-left: 12px;
+  }
+}
+
+@media (max-width: 620px) {
+  .chat-heading-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .mode-select select {
+    max-width: 98px;
+  }
+
+  .conversation-control-bar,
+  .draft-card-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .control-actions,
+  .draft-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .draft-card-heading {
+    flex-wrap: wrap;
+  }
+
+  .draft-card-heading .draft-ttl {
+    width: 100%;
+    margin-left: 32px;
+  }
+
+  .draft-card-footer > span {
+    width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .knowledge-view-tabs {
+    width: 100%;
+  }
+
+  .knowledge-view-tabs button {
+    flex: 1;
+    justify-content: center;
+    padding: 0 4px;
+  }
+
+  .conflict-card {
+    padding: 15px;
+  }
+
+  .conflict-sides {
+    grid-template-columns: 1fr;
+  }
+
+  .conflict-vs {
+    margin: -2px auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .privacy-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .privacy-scope-grid,
+  .privacy-result-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .privacy-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .phase05-resource-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .phase05-list-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .phase05-list-row > div {
+    flex-basis: calc(100% - 12px);
+  }
+
+  .phase05-secondary {
+    margin-left: 20px;
+  }
+
+  .scenario-grid .phase05-card-actions .primary-button,
+  .scenario-grid .phase05-card-actions .outline-button {
+    flex: 1;
+  }
+
+  .workflow-runtime-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-toolbar > .outline-button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 1000px) {
+  .admin-overview-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-overview-grid,
+  .shops-admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-overview-metric-grid,
+  .overview-secondary-grid,
+  .shop-admin-facts,
+  .shop-boundary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .overview-action-buttons {
+    justify-content: flex-start;
+  }
+
+  .overview-source-list > div {
+    grid-template-columns: 1fr auto;
+  }
+
+  .overview-source-list span {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .shop-admin-card-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

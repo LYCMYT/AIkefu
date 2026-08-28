@@ -3,6 +3,7 @@ import type { WorkflowGraph } from '@ai-customer-service/contracts';
 import {
   addWorkflowEdge,
   addWorkflowNode,
+  autoLayoutWorkflowGraph,
   isActionProposalDecisionEnabled,
   moveWorkflowNode,
   removeWorkflowEdge,
@@ -30,6 +31,13 @@ describe('Phase 05 Workflow editor helpers', () => {
     const moved = moveWorkflowNode(graph, 'generate', { x: 320, y: 120 });
     expect(moved.nodes.find((node) => node.id === 'generate')?.position).toEqual({ x: 320, y: 120 });
     expect(graph.nodes.find((node) => node.id === 'generate')?.position).toEqual({ x: 280, y: 0 });
+  });
+
+  it('lays out the directed graph by dependency level without changing graph semantics', () => {
+    const arranged = autoLayoutWorkflowGraph(graph);
+    expect(arranged.nodes.map((node) => node.position.x)).toEqual([60, 290, 520]);
+    expect(arranged.edges).toEqual(graph.edges);
+    expect(graph.nodes[1]?.position).toEqual({ x: 280, y: 0 });
   });
 
   it('adds and removes only allowlisted nodes and their connected edges', () => {

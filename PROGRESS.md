@@ -169,6 +169,27 @@
 - 独立生产验证项目的 Web/API/PostgreSQL/pgvector/Redis/MinIO 5 容器全部 `healthy`；18 migrations、`/healthz`、SPA fallback、同源 REST Workspace 创建、Socket.IO heartbeat、Redis 密码与 Nginx 安全响应头实测通过。验证容器/网络/卷已定向清理，本地开发栈保留。
 - 当前总进度：44 / 46（95.7%）。剩余在线部署与完整 3 分钟人工走台；均不扩大 V1，也不接真实电商私有接口。
 
+## 前端产品化重构（2026-08-28）
+
+- [x] Phase 1：AppShell、冻结四入口导航、店铺切换、桌面 / 移动响应式骨架。
+- [x] Phase 2：Workbench 三栏工作台、会话筛选、Trace Drawer、CustomerMemory 与危险操作确认。
+- [x] Phase 3：Buyer Simulator 真实消息 / 卡片 / 编辑 / 撤回链路与手机形态。
+- [x] Phase 4：Dashboard、Shop、Product Learning、Knowledge、Quality、Incident、Usage、Privacy 产品化页面。
+- [x] Phase 5：Workflow 三栏编辑器、缩放 / 自动排布、发布与 Proposal 二次确认。
+- [x] Phase 6：Scenario Lab 八场景列表 / 详情 / Timeline、空态 / 错误态 / 窄屏与无横向溢出。
+- [x] Phase 7：`App.tsx` / `api.ts` facade、feature / API / CSS 模块拆分、真实连接态验收与指定截图。
+
+### 前端重构验证记录
+
+- `pnpm typecheck`：5 个工作区包全部通过。
+- `pnpm test:unit`：463 tests 通过（含 Release Hygiene 4、Contracts 6、Core 57、MockDouyin 3、Web 69、API 324）。
+- `RUN_REAL_INFRA_INTEGRATION=1 pnpm test:integration`：13 suites / 48 tests 全部通过。
+- `pnpm build`：API、Web、contracts、core、mock-douyin 全部通过。
+- Playwright：离线 Foundation 边界 6 pass / 3 条连接态用例按环境跳过；真实连接态 5 pass / 4 条离线用例按环境跳过。
+- 真实产品化链：Reset → Buyer 三连发 → Workbench Draft → Dashboard / Knowledge → Workflow 保存并发布 → Scenario Run → 390px Workbench，全程通过。
+- 最终截图：`artifacts/ui/final/`，包含要求的 Workbench、Buyer Simulator、Knowledge、Workflow、Dashboard、Scenario Lab，以及 Shops / Quality / Incident / Trace / Mobile 补充图。
+- `App.tsx` 13 行、`api.ts` 31 行、`styles.css` 8 行；各 feature 主文件均不超过 600 行。
+
 ## 外部深度审查整改（R0–R6）
 
 - [x] R0：Secret scan、tracked-file 白名单源码归档、交付忽略规则。
@@ -179,7 +200,7 @@
 - [x] R4 外部 Chat Gate：DeepSeek `deepseek-v4-flash` 风险探针与 Intent/Risk/Reply 合成浏览器主链通过，Key 仅从仓库外文件读取。
 - [ ] R4 完整 Eval Gate：Judge、Embedding、Image 与 36 Eval 尚未执行，不虚构成本或准确率。
 - [x] R5 安全拆分基线：React Router、TanStack Query、`app/`、`features/`、`components/ui/`，Usage / Privacy 移出 `App.tsx`；三尺寸快照已视觉复核。
-- [ ] R5 渐进技术债：Workbench / Buyer / Workflow 与 `api.ts` / `styles.css` 仍需后续按 feature 拆分；本轮不做无回归的全量重写。
+- [x] R5 产品化拆分：Workbench / Buyer / Workflow、`api.ts` 与 `styles.css` 已按 feature / client / normalizer / endpoint / style domain 拆分，并由 69 条 Web unit 与真实连接态 E2E 回归。
 - [x] R6 本地/CI/容器交付：CI 现实跑非 skip 基础设施 integration 与连接态 Playwright；生产风格五容器验收通过。
 - [ ] R6 外部发布：没有公网主机/域名/TLS，因此不宣称 Preview 已上线。
 

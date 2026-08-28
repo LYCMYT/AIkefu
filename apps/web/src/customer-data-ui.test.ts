@@ -8,7 +8,7 @@ const readRepositoryFile = (relativePath: string) => readFileSync(resolve(reposi
 describe('Customer data controls', () => {
   it('keeps the destructive route and result semantics visible at the Web boundary', () => {
     const api = readRepositoryFile('apps/web/src/api.ts');
-    const app = readRepositoryFile('apps/web/src/App.tsx');
+    const app = readRepositoryFile('apps/web/src/app/Application.tsx');
     const privacy = readRepositoryFile('apps/web/src/features/privacy/DataPrivacyPage.tsx');
 
     expect(api).toContain("/buyers/${encodeURIComponent(normalizedBuyerId)}/customer-data");

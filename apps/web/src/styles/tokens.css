@@ -1,0 +1,33 @@
+/* UI pack core palette and semantic aliases. */
+:root {
+  color: #111827;
+  background: #f6f8fc;
+  font-family: Inter, "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  --ink: #111827;
+  --muted: #667085;
+  --muted-2: #98a2b3;
+  --line: #e7eaf1;
+  --surface: #ffffff;
+  --canvas: #f6f8fc;
+  --navy: #0b1428;
+  --navy-2: #111c33;
+  --primary: #4f46e5;
+  --primary-strong: #4338ca;
+  --primary-soft: #eef2ff;
+  --success: #12b76a;
+  --success-soft: #ecfdf3;
+  --warning: #f79009;
+  --warning-soft: #fffaeb;
+  --danger: #f04438;
+  --danger-soft: #fef3f2;
+
+  /* Existing semantic aliases remain available to every current class. */
+  --mint: #d1fadf;
+  --mint-strong: var(--success);
+  --orange: var(--warning);
+  --blue: var(--primary);
+  --yellow: #fef0c7;
+}

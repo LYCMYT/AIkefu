@@ -16,6 +16,7 @@
   "dependencies": {
     "@ai-customer-service/contracts": "workspace:*",
     "@tanstack/react-query": "^5.85.5",
+    "lucide-react": "^0.468.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^6.30.1",

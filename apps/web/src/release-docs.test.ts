@@ -56,19 +56,29 @@ describe('Phase 05 release handoff documentation', () => {
   });
 
   it('keeps Phase 05 resource pages on real loading/error/empty branches and narrow layouts', () => {
-    const app = readRepositoryFile('apps/web/src/App.tsx');
+    const application = readRepositoryFile('apps/web/src/app/Application.tsx');
+    const workflow = readRepositoryFile('apps/web/src/features/workflows/WorkflowPage.tsx');
+    const quality = readRepositoryFile('apps/web/src/features/quality/QualityPage.tsx');
+    const incidents = readRepositoryFile('apps/web/src/features/incidents/IncidentPage.tsx');
+    const scenarios = readRepositoryFile('apps/web/src/features/scenario-lab/ScenarioLabPage.tsx');
     const usage = readRepositoryFile('apps/web/src/features/usage/UsageAdminPage.tsx');
-    const phase05Sources = `${app}\n${usage}`;
-    const styles = readRepositoryFile('apps/web/src/styles.css');
+    const phase05Sources = [application, workflow, quality, incidents, scenarios, usage].join('\n');
+    const styles = [
+      'apps/web/src/styles.css',
+      'apps/web/src/styles/admin.css',
+      'apps/web/src/styles/workflow.css',
+      'apps/web/src/styles/responsive.css',
+    ].map(readRepositoryFile).join('\n');
 
-    for (const page of ['WorkflowAdminPage', 'QualityAdminPage', 'IncidentAdminPage', 'ScenarioLabPage']) {
-      expect(app).toContain(`function ${page}`);
-    }
+    expect(workflow).toContain('function WorkflowAdminPage');
+    expect(quality).toContain('function QualityPage');
+    expect(incidents).toContain('function IncidentPage');
+    expect(scenarios).toContain('function ScenarioLabPage');
     expect(usage).toContain('function UsageAdminPage');
     expect(phase05Sources.match(/(?:Phase05LoadingState|LoadingState)/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
     expect(phase05Sources.match(/(?:Phase05ErrorState|ErrorState) message=/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
     expect(usage).toContain('暂无用量快照');
-    expect(app).toContain('暂无场景快照');
+    expect(scenarios).toContain('暂无场景快照');
     expect(styles).toContain('@media (max-width: 700px)');
     expect(styles).toContain('.phase05-resource-grid');
     expect(styles).toContain('.workflow-canvas-wrap');

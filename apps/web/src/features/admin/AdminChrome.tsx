@@ -16,7 +16,7 @@ export function AdminTabs({ active }: { active: AdminSection }) {
     { key: 'usage', path: '/admin/usage', label: '用量', note: 'Usage' },
     { key: 'privacy', path: '/admin/privacy', label: '数据与隐私', note: 'Privacy' },
   ];
-  return <div className="admin-tabs" role="tablist" aria-label="运营模块">{tabs.map((tab) => <a className={active === tab.key ? 'is-active' : ''} href={tab.path} key={tab.path} onClick={(event) => { event.preventDefault(); navigate(tab.path); }}>{tab.label} <small>{tab.note}</small></a>)}</div>;
+  return <div className="admin-tabs" role="tablist" aria-label="运营模块">{tabs.map((tab) => <a aria-selected={active === tab.key} className={active === tab.key ? 'is-active' : ''} href={tab.path} key={tab.path} onClick={(event) => { event.preventDefault(); navigate(tab.path); }} role="tab">{tab.label} <small>{tab.note}</small></a>)}</div>;
 }
 
 export function AdminPageHeader({ overline, title, description }: { overline: string; title: string; description: string }) {
