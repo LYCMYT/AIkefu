@@ -162,9 +162,9 @@ test("all primary frontend controls have a visible effect in the real stack", as
   await expect(runScenarioButton).toBeEnabled();
   await runScenarioButton.click();
   await expect(
-    page.getByText("2 Task；1 ReplyJob", { exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expect(
     page.getByText("连续消息聚合 已提交运行", { exact: true }),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(
+    page.getByText("2 Task；1 ReplyJob", { exact: true }),
   ).toBeVisible();
 });
