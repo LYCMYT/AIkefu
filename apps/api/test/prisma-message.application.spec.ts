@@ -4,6 +4,24 @@ import { NotFoundException } from '@nestjs/common';
 const scope = { workspaceId: 'workspace-1', tenantId: 'tenant-1' };
 
 describe('PrismaMessageApplication memory invalidation', () => {
+  it('rejects an outgoing role before the buyer adapter recall is attempted', async () => {
+    const adapter = { editMessage: jest.fn(), recallMessage: jest.fn() };
+    const app = new PrismaMessageApplication(
+      { message: { findFirst: jest.fn().mockResolvedValue({
+        shopId: 'shop-1', conversationId: 'conversation-1', externalMessageId: 'outgoing-1', role: 'HUMAN',
+      }) } } as never,
+      { publish: jest.fn() } as never,
+      adapter as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(app.recallMessage(scope, 'outgoing-message')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'BUYER_MESSAGE_REQUIRED' }),
+    });
+    expect(adapter.recallMessage).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['editMessage', 'EDITED', 'MESSAGE_EDITED'],
     ['recallMessage', 'RECALLED', 'MESSAGE_RECALLED'],
@@ -41,7 +59,7 @@ describe('PrismaMessageApplication memory invalidation', () => {
       conversationMemory: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     const prisma = {
-      message: { findFirst: jest.fn().mockResolvedValue({ shopId: 'shop-1', externalMessageId: 'external-message-1' }) },
+      message: { findFirst: jest.fn().mockResolvedValue({ shopId: 'shop-1', conversationId: 'conversation-1', externalMessageId: 'external-message-1', role: 'BUYER' }) },
       conversation: { findFirst: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn(async (work: (client: typeof tx) => Promise<unknown>) => {
         const result = await work(tx);

@@ -3,7 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  type OnApplicationShutdown,
+  type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
 import {
@@ -92,7 +92,7 @@ function runtimeJobId(kind: string, eventId: string): string {
 }
 
 @Injectable()
-export class PrismaMessageApplication implements MessageApplication, OnModuleInit, OnApplicationShutdown {
+export class PrismaMessageApplication implements MessageApplication, OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaMessageApplication.name);
   private readonly localTimers = new Set<NodeJS.Timeout>();
   private queue?: Queue<RuntimeJob>;
@@ -144,10 +144,11 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
     this.dispatcherTimer.unref();
   }
 
-  async onApplicationShutdown(): Promise<void> {
+  async onModuleDestroy(): Promise<void> {
     if (this.dispatcherTimer) clearInterval(this.dispatcherTimer);
     for (const timer of this.localTimers) clearTimeout(timer);
     this.localTimers.clear();
+    await this.dispatchPromise;
     await this.worker?.close();
     await this.queue?.close();
     await this.workerRedis?.quit();
@@ -819,11 +820,25 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
         include: { _count: { select: { versions: true } } },
       });
       if (!message) throw missing('MESSAGE_NOT_FOUND', 'Message not found in this Workspace');
-      if (status === 'EDITED' && (message.kind !== PrismaMessageKind.TEXT || message.status === PrismaMessageStatus.RECALLED)) {
+      // These commands are exposed only under /buyer. Do not let a guessed
+      // outgoing message id turn the buyer recall route into an operator
+      // privilege that can hide AI/HUMAN replies.
+      if (message.role !== PrismaMessageRole.BUYER) {
+        throw bad('BUYER_MESSAGE_REQUIRED', 'Only buyer messages can be edited or recalled through this endpoint');
+      }
+      if (
+        status === 'EDITED'
+        && (message.kind !== PrismaMessageKind.TEXT
+          || message.status === PrismaMessageStatus.RECALLED
+          || message.status === PrismaMessageStatus.DELETED)
+      ) {
         throw bad('MESSAGE_NOT_EDITABLE', 'Only active text messages can be edited');
       }
       if (status === 'RECALLED' && message.status === PrismaMessageStatus.RECALLED) {
         return { message: message as unknown as Record<string, unknown> };
+      }
+      if (message.status === PrismaMessageStatus.DELETED) {
+        throw bad('MESSAGE_PRIVACY_DELETED', 'Privacy-deleted messages cannot be changed');
       }
       await tx.messageVersion.create({
         data: {
@@ -1164,7 +1179,18 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
     }
     if (result.kind === 'WORKFLOW_ROUTE') {
       await this.workflowRouter?.route(result.scope, { conversationId: result.conversationId, taskIds: result.taskIds });
-      await this.prisma.processingReceipt.create({ data: { ...result.scope, eventId: result.eventId } });
+      try {
+        await this.prisma.processingReceipt.create({ data: { ...result.scope, eventId: result.eventId } });
+      } catch (error) {
+        // A deleted demo workspace cascades its durable outbox rows, but a
+        // BullMQ delivery that was already claimed may finish a few ms later.
+        // With no source outbox left there is nothing to acknowledge or retry.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+          const sourceStillExists = await this.prisma.processingOutbox.findUnique({ where: { eventId: result.eventId }, select: { id: true } });
+          if (!sourceStillExists) return;
+        }
+        throw error;
+      }
       return;
     }
     if (result.kind === 'BUFFER') {
@@ -1797,10 +1823,13 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
   ): Promise<{ shopId: string; conversationId: string; externalMessageId: string }> {
     const message = await this.prisma.message.findFirst({
       where: { id: messageId, ...this.scope(scope) },
-      select: { shopId: true, conversationId: true, externalMessageId: true },
+      select: { shopId: true, conversationId: true, externalMessageId: true, role: true },
     });
     if (!message) throw missing('MESSAGE_NOT_FOUND', 'Message not found in this Workspace');
-    return message;
+    if (message.role !== PrismaMessageRole.BUYER) {
+      throw bad('BUYER_MESSAGE_REQUIRED', 'Only buyer messages can be edited or recalled through this endpoint');
+    }
+    return { shopId: message.shopId, conversationId: message.conversationId, externalMessageId: message.externalMessageId };
   }
 
   private adapterKind(message: MockDouyinMessage): MessageKind {

@@ -8,14 +8,13 @@ test('real buyer-to-human-final flow stays visible across Buyer Simulator and Wo
   const humanFinal = '您好，偏远地区发货时效以实际物流信息为准，我来继续为您处理。';
 
   await page.goto('/buyer-simulator');
-  await expect(page.getByText('API READY')).toBeVisible();
-  await expect(page.getByText('实时已连接', { exact: true })).toBeVisible();
+  await expect(page.getByLabel(/服务状态：实时已连接/)).toBeVisible();
 
   // This isolated browser context owns a newly created synthetic Workspace.
   // Reset proves the durable seed/reset path without touching another test.
-  const reset = page.getByRole('button', { name: 'Reset demo' });
+  const reset = page.getByRole('button', { name: '重置演示' });
   await reset.click();
-  await expect(reset).toHaveText('Reset demo', { timeout: 30_000 });
+  await expect(reset).toHaveText('重置演示', { timeout: 30_000 });
   await expect(page.getByRole('combobox', { name: '买家' })).not.toHaveValue('');
 
   const composer = page.getByPlaceholder('输入咨询内容…');
@@ -45,5 +44,5 @@ test('real buyer-to-human-final flow stays visible across Buyer Simulator and Wo
   await expect(chat.getByText(humanFinal, { exact: true })).toBeVisible();
 
   await page.getByRole('link', { name: /买家模拟器/ }).click();
-  await expect(page.getByText(humanFinal, { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.phone-messages').getByText(humanFinal, { exact: true })).toBeVisible({ timeout: 20_000 });
 });

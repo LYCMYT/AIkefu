@@ -112,6 +112,13 @@ export interface BuyerMessageRecallCommand {
   recalledAt?: IsoDateTime;
 }
 
+/** A local operator soft-recall. It never claims a remote platform recall. */
+export interface OutgoingMessageRecallResult {
+  id: string;
+  status: 'RECALLED';
+  remoteRecalled: false;
+}
+
 /** Explicit aliases keep REST/controller code readable without duplicating contracts. */
 export type CreateBuyerMessageInput = BuyerMessageCommand;
 export type CreateBuyerProductCardInput = BuyerProductCardCommand;

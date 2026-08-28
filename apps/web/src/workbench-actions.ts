@@ -20,3 +20,9 @@ export function buyerTextSubmissionEnabled(input: {
 }): boolean {
   return Boolean(input.text.trim() && input.shopId && input.buyerId && !input.loading && !input.sending);
 }
+
+export function canSoftRemoveMessage(message: { role?: string; status?: string }): boolean {
+  if (message.role === 'SYSTEM') return false;
+  if (message.status === 'RECALLED' || message.status === 'DELETED') return false;
+  return ['BUYER', 'ASSISTANT', 'AI', 'HUMAN'].includes(message.role ?? 'ASSISTANT');
+}

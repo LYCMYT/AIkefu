@@ -15,6 +15,12 @@ import { TraceService } from '../trace/trace.service';
 import { WorkflowRouterService } from '../workflow/workflow-router.service';
 
 type ReplyGeneration = { text: string; requiresHuman: boolean };
+type IntentPlanTask = {
+  intent: string;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  requiredContext: string[];
+  requiredTools: string[];
+};
 
 /**
  * The durable reply executor. Network/model work happens only after a
@@ -72,20 +78,19 @@ export class ReplyRuntimeService {
     let output: ReplyGeneration | undefined;
     try {
       const contextSupport = await this.buildContextSupport(scope, job);
-      const intent = await this.runtime.runStructured<{ tasks: Array<{
-        intent: string; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; requiredContext: string[]; requiredTools: string[];
-      }> }>(scope, {
+      const intent = await this.runtime.runStructured<{ tasks: IntentPlanTask[] }>(scope, {
         purpose: 'INTENT_PLANNER', schema: 'IntentPlan', context: { turn: { text: job.userTurn.normalizedText }, ...contextSupport },
         allowedDataClasses: ['turn', 'conversationSummary', 'customerMemory'], promptVersion: 'reply-intent-plan-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
       });
+      const plannedTasks = augmentExplicitIntentTasks(job.userTurn.normalizedText, intent.output.tasks);
       const risk = await this.runtime.runStructured<{ riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; reasons: string[]; recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' }>(scope, {
         purpose: 'RISK_CLASSIFIER', schema: 'RiskResult',
-        context: { tasks: intent.output.tasks.map((task) => ({ intent: task.intent, riskLevel: task.riskLevel })) },
+        context: { tasks: plannedTasks.map((task) => ({ intent: task.intent, riskLevel: task.riskLevel })) },
         allowedDataClasses: ['tasks'], promptVersion: 'reply-risk-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
       });
       void this.recordTrace(scope, job, 'AI_USAGE', { invocations: [intent, risk].map((result) => ({ invocationId: result.invocationId, provider: result.provider, model: result.model, fallbackUsed: result.fallbackUsed })) });
       const taskBundle = createTaskBundle({
-        tasks: intent.output.tasks.slice(0, 4).map((task, index) => ({
+        tasks: plannedTasks.slice(0, 4).map((task, index) => ({
           id: `${job.id}:${index}`, intent: task.intent, operation: 'READ' as const, riskLevel: maxRisk(task.riskLevel, risk.output.riskLevel),
           requiredContext: task.requiredContext, requiredTools: task.requiredTools, blocking: task.requiredTools.length > 0,
         })),
@@ -709,6 +714,24 @@ function conservativeRecommendation(value: unknown): 'AUTO' | 'ASSIST' | 'MANUAL
 function maxRisk(left: 'LOW' | 'MEDIUM' | 'HIGH', right: 'LOW' | 'MEDIUM' | 'HIGH'): 'LOW' | 'MEDIUM' | 'HIGH' {
   const rank = { LOW: 0, MEDIUM: 1, HIGH: 2 } as const;
   return rank[left] >= rank[right] ? left : right;
+}
+
+/** A model may merge two explicit low-risk questions into one task. Keep its
+ * plan, but deterministically restore obvious inventory/size intents so a
+ * multi-intent turn cannot silently drop one of the buyer's questions. */
+function augmentExplicitIntentTasks(text: string, tasks: IntentPlanTask[]): IntentPlanTask[] {
+  const inventoryRequested = /库存|有货|还有|还剩|现货|缺货|售罄|(?:黑色|白色|红色|蓝色|绿色|灰色).{0,8}(?:有吗|有么|有货)/i.test(text);
+  const sizeRequested = /尺码|尺寸|大小|合身|身高|体重|公斤|(?:^|[\s，,])(?:XXL|XL|XS|L|M|S)\s*(?:呢|多大|适合|怎么选|推荐|穿|吗|？|\?|$)/i.test(text);
+  if (!inventoryRequested && !sizeRequested) return tasks.slice(0, 4);
+
+  const augmented = tasks.filter((task) => task.intent !== 'UNKNOWN');
+  if (inventoryRequested && !augmented.some((task) => /(?:^|_)INVENTORY(?:_|$)/.test(task.intent))) {
+    augmented.push({ intent: 'INVENTORY_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'], requiredTools: ['GET_INVENTORY'] });
+  }
+  if (sizeRequested && !augmented.some((task) => task.intent === 'SIZE_RECOMMENDATION')) {
+    augmented.push({ intent: 'SIZE_RECOMMENDATION', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU', 'CUSTOMER_MEMORY'], requiredTools: ['GET_PRODUCT'] });
+  }
+  return augmented.slice(0, 4);
 }
 
 function stringValues(value: unknown): string[] {

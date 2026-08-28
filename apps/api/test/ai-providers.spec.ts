@@ -32,6 +32,22 @@ describe('server AI providers', () => {
     }));
   });
 
+  it('plans the frozen inventory and size intents deterministically in offline demo mode', async () => {
+    const provider = new OfflineStructuredProvider();
+
+    const plan = await provider.invoke(request('INTENT_PLANNER', {
+      turn: { text: '黑色有吗\nXL呢\n我165，55公斤' },
+    }));
+
+    expect(plan.output).toEqual({
+      tasks: [
+        { intent: 'INVENTORY_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'], requiredTools: ['GET_INVENTORY'] },
+        { intent: 'SIZE_RECOMMENDATION', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU', 'CUSTOMER_MEMORY'], requiredTools: ['GET_PRODUCT'] },
+      ],
+      summary: '库存与尺码咨询',
+    });
+  });
+
   it('calls an explicitly configured server-side JSON model gateway without leaking its secret into the body', async () => {
     const fetcher = jest.fn().mockResolvedValue({
       ok: true,

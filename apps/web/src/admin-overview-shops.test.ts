@@ -99,6 +99,17 @@ describe('Phase 05 Admin Overview and Shops helpers', () => {
     expect(trend.at(-3)).toMatchObject({ count: 1 });
   });
 
+  it('supports a bounded thirty-day operational range without inventing metrics', () => {
+    const trend = buildConversationTrend(
+      [conversation('old', { lastMessageAt: '2026-08-01T10:00:00.000Z' })],
+      new Date('2026-08-27T12:00:00.000Z'),
+      30,
+    );
+
+    expect(trend).toHaveLength(30);
+    expect(trend.reduce((total, point) => total + point.count, 0)).toBe(1);
+  });
+
   it('uses frozen labels for shop AI modes and connection states', () => {
     expect(modeLabel('AUTO_ALLOWED')).toBe('自动接待');
     expect(modeLabel('ASSIST_ONLY')).toBe('辅助模式');

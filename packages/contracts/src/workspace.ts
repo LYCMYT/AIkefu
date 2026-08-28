@@ -57,6 +57,22 @@ export interface Shop {
   syncComplete: boolean;
 }
 
+export type DemoShopTemplateKey = 'FASHION_DEMO' | 'TECH_DEMO';
+
+export interface CreateShopInput {
+  /** The demo transport is deliberately the only supported V1 platform. */
+  platform: 'DOUYIN_DEMO';
+  templateKey: DemoShopTemplateKey;
+  name?: string;
+  externalShopId?: string;
+  /** Omitted values start at the safer ASSIST_ONLY ceiling. */
+  aiMode?: ShopAIMode;
+}
+
+export interface UpdateShopAiModeInput {
+  mode: ShopAIMode;
+}
+
 export interface SeedCounts {
   shops: number;
   buyers: number;

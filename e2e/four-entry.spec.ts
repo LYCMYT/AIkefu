@@ -49,6 +49,6 @@ test('real-infrastructure entry state is opt-in and never confused with the fall
     await page.goto(entry.route);
     await expect(page.getByRole('heading', { level: 1, name: entry.heading })).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
-    await expect(page.getByText(/API READY/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByLabel(/服务状态：实时已连接/)).toBeVisible({ timeout: 30_000 });
   }
 });

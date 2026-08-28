@@ -2142,6 +2142,44 @@
   font-weight: 700;
 }
 
+.mode-unlock-button {
+  min-height: 27px;
+  padding: 0 9px;
+  border: 1px solid #b9ddd0;
+  border-radius: 7px;
+  color: #2f715c;
+  background: #eaf8f2;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mode-unlock-button:hover:not(:disabled) {
+  border-color: #77b9a1;
+  background: #dcf3e9;
+}
+
+.message-actions {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 20px;
+  margin-top: 3px;
+  opacity: 1;
+}
+
+.message-remove-button {
+  padding: 2px 5px;
+  border: 0;
+  color: #89989e;
+  background: transparent;
+  font-size: 8px;
+}
+
+.message-remove-button:hover:not(:disabled) {
+  color: #a55555;
+  text-decoration: underline;
+}
+
 .job-inline-status {
   margin-left: auto;
   color: #658496;
@@ -2442,4 +2480,121 @@
 
 .memory-disabled {
   opacity: 0.65;
+}
+
+/* Reference-pack readability and 1440px showcase pass. */
+@media (min-width: 1181px) {
+  .route-workbench .content {
+    height: 100vh;
+    padding-top: 20px;
+    padding-bottom: 16px;
+    overflow: hidden;
+  }
+
+  .route-workbench .topbar {
+    min-height: 62px;
+    padding-bottom: 12px;
+  }
+
+  .route-workbench .workbench-layout {
+    grid-template-columns: 300px minmax(470px, 1fr) 316px;
+    height: calc(100vh - 110px);
+    min-height: 0;
+    margin-top: 12px;
+  }
+
+  .route-workbench .page-footer {
+    display: none;
+  }
+}
+
+.workbench-layout .overline {
+  font-size: 10px;
+}
+
+.conversation-heading h2,
+.context-heading h2,
+.tool-heading h2 {
+  font-size: 17px;
+}
+
+.inbox-summary,
+.control-summary,
+.conversation-tabs button,
+.context-tabs button,
+.conversation-context-strip,
+.message-meta,
+.section-label-row,
+.context-intro {
+  font-size: 11px;
+}
+
+.search-box input,
+.chat-person p,
+.conversation-row-main small,
+.conversation-row-side small,
+.conversation-row-tags em,
+.mode-chip,
+.draft-state,
+.tool-status,
+.status-badge,
+.quiet-label,
+.draft-card-heading strong,
+.draft-card-heading > div:nth-child(2) span,
+.draft-card-footer > span,
+.draft-edit-type,
+.draft-edit-type select,
+.task-row,
+.task-row small,
+.memory-form select,
+.memory-form input,
+.memory-card strong,
+.memory-card p,
+.memory-card small,
+.message-remove-button {
+  font-size: 10px;
+}
+
+.conversation-row-main strong,
+.chat-person h2,
+.context-section > strong,
+.context-object-heading strong,
+.order-context-top strong,
+.assistant-status-card strong,
+.empty-state strong {
+  font-size: 12px;
+}
+
+.message-bubble,
+.chat-composer textarea,
+.draft-editor {
+  font-size: 13px;
+}
+
+.message-row.is-system .message-bubble,
+.muted-copy,
+.assistant-status-card p,
+.context-object-card p,
+.fact-grid dt,
+.fact-grid dd,
+.order-context-top small,
+.order-context-product strong,
+.order-context-product small,
+.logistics-snapshot small,
+.logistics-snapshot strong,
+.composer-footer,
+.draft-empty-copy {
+  font-size: 10px;
+}
+
+.context-tabs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.compact-button,
+.text-button,
+.send-button,
+.primary-button {
+  font-size: 11px;
 }

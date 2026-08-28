@@ -3,6 +3,7 @@ import type { SeedData } from '../src/seed/seed-catalog';
 import type {
   AuthenticatedWorkspace,
   BootstrapView,
+  CreateShopRepositoryInput,
   SeedCounts,
   ShopView,
   WorkspaceRepository,
@@ -92,6 +93,28 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
 
   async getShop(scope: WorkspaceScope, shopId: string): Promise<ShopView | null> {
     return this.scoped(scope)?.shops.find((shop) => shop.id === shopId) ?? null;
+  }
+
+  async createShop(scope: WorkspaceScope, input: CreateShopRepositoryInput): Promise<ShopView> {
+    const record = this.scoped(scope);
+    if (!record) throw new Error('workspace not found');
+    if (record.shops.length >= 20) throw new Error('SHOP_LIMIT_REACHED');
+    if (record.shops.some((shop) => shop.externalShopId === input.externalShopId)) throw new Error('SHOP_ALREADY_EXISTS');
+    const shop: ShopView = {
+      id: `shop_${randomUUID()}`, ...scope, platform: 'DOUYIN_DEMO',
+      externalShopId: input.externalShopId, name: input.name, aiMode: input.aiMode,
+      connectionState: 'CONNECTED', syncComplete: true,
+    };
+    record.shops.push(shop);
+    record.seedCounts.shops = record.shops.length;
+    return { ...shop };
+  }
+
+  async setShopAiMode(scope: WorkspaceScope, shopId: string, mode: ShopView['aiMode']): Promise<ShopView | null> {
+    const shop = this.scoped(scope)?.shops.find((entry) => entry.id === shopId);
+    if (!shop) return null;
+    shop.aiMode = mode;
+    return { ...shop };
   }
 
   async deleteExpired(now: Date): Promise<number> {

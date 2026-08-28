@@ -3,6 +3,114 @@ import { ConversationReplyControlService } from '../src/replies/conversation-rep
 describe('ConversationReplyControlService', () => {
   const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' };
 
+  it('rejects AUTO when the scoped shop ceiling is not AUTO_ALLOWED', async () => {
+    const tx = {
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', contextVersion: 3, shop: { aiMode: 'ASSIST_ONLY' } }),
+        updateMany: jest.fn(),
+      },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+    const service = new ConversationReplyControlService(
+      { $transaction: jest.fn((work: Function) => work(tx)) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(service.setMode(scope, 'conversation-a', 'AUTO')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'SHOP_AUTO_MODE_DISABLED' }),
+    });
+    expect(tx.conversation.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('persists AUTO as the configured base when the shop ceiling allows it', async () => {
+    const tx = {
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', contextVersion: 3, shop: { aiMode: 'AUTO_ALLOWED' } }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      processingOutbox: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+    const service = new ConversationReplyControlService(
+      { $transaction: jest.fn((work: Function) => work(tx)) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(service.setMode(scope, 'conversation-a', 'AUTO')).resolves.toMatchObject({
+      overrideMode: 'AUTO', effectiveMode: 'AUTO', shopAiMode: 'AUTO_ALLOWED', humanActive: false,
+    });
+    expect(tx.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'conversation-a', ...scope },
+      data: { mode: 'AUTO', overrideMode: 'AUTO', humanActive: false, needsReplan: true },
+    });
+  });
+
+  it('soft-recalls only a scoped outgoing message while preserving its version and audit facts', async () => {
+    const message = {
+      id: 'message-human', conversationId: 'conversation-a', shopId: 'shop-a', role: 'HUMAN', status: 'ACTIVE',
+      contentJson: { text: '人工回复' }, sequence: 9, _count: { versions: 1 },
+    };
+    const tx = {
+      conversation: { findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a' }), update: jest.fn().mockResolvedValue({ id: 'conversation-a' }) },
+      message: {
+        findFirst: jest.fn().mockResolvedValue(message),
+        update: jest.fn().mockResolvedValue({ ...message, status: 'RECALLED' }),
+      },
+      messageVersion: { create: jest.fn().mockResolvedValue({ id: 'version-2' }) },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
+      conversationMemory: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      replyDraft: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      replyJob: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      processingOutbox: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+    const gateway = { publish: jest.fn() };
+    const service = new ConversationReplyControlService(
+      { $transaction: jest.fn((work: Function) => work(tx)) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      undefined,
+      gateway as never,
+    );
+
+    await expect(service.deleteOutgoingMessage(scope, 'conversation-a', 'message-human')).resolves.toEqual({
+      id: 'message-human', status: 'RECALLED', remoteRecalled: false,
+    });
+    expect(tx.messageVersion.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      workspaceId: 'workspace-a', tenantId: 'tenant-a', messageId: 'message-human', version: 2, status: 'ACTIVE',
+    }) });
+    expect(tx.message.update).toHaveBeenCalledWith({ where: { id: 'message-human' }, data: { status: 'RECALLED' } });
+    expect(tx.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: 'OUTGOING_MESSAGE_SOFT_RECALLED', entityType: 'MESSAGE', entityId: 'message-human',
+    }) });
+    expect(gateway.publish).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'CONVERSATION_UPDATED', entityId: 'conversation-a',
+    }));
+  });
+
+  it('refuses to delete a buyer message through the operator reply endpoint', async () => {
+    const tx = {
+      conversation: { findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a' }) },
+      message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-buyer', role: 'BUYER', status: 'ACTIVE', _count: { versions: 0 } }) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+    const service = new ConversationReplyControlService(
+      { $transaction: jest.fn((work: Function) => work(tx)) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(service.deleteOutgoingMessage(scope, 'conversation-a', 'message-buyer')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'OUTGOING_MESSAGE_REQUIRED' }),
+    });
+  });
+
   it('takes over in the exact scope and stales active jobs before an automatic send can claim them', async () => {
     const tx = {
       conversation: {
@@ -76,7 +184,7 @@ describe('ConversationReplyControlService', () => {
 
     await expect(service.setMode(scope, 'conversation-a', 'MANUAL')).resolves.toMatchObject({ humanActive: true });
     expect(tx.conversation.updateMany).toHaveBeenCalledWith({
-      where: { id: 'conversation-a', ...scope }, data: { overrideMode: 'MANUAL', humanActive: true },
+      where: { id: 'conversation-a', ...scope }, data: { mode: 'MANUAL', overrideMode: 'MANUAL', humanActive: true, needsReplan: true },
     });
     expect(tx.processingOutbox.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ aggregateId: 'conversation-a', eventType: { in: ['SCHEDULED_WELCOME', 'SCHEDULED_CLOSING'] }, status: 'PENDING' }),
@@ -85,7 +193,7 @@ describe('ConversationReplyControlService', () => {
 
     await expect(service.resumeAi(scope, 'conversation-a')).resolves.toMatchObject({ resumed: true, humanActive: false });
     expect(tx.conversation.updateMany).toHaveBeenLastCalledWith({
-      where: { id: 'conversation-a', ...scope, humanActive: true }, data: { humanActive: false, overrideMode: null, needsReplan: true },
+      where: { id: 'conversation-a', ...scope, humanActive: true }, data: { humanActive: false, mode: 'ASSIST', overrideMode: null, needsReplan: true },
     });
   });
 
@@ -122,7 +230,7 @@ describe('ConversationReplyControlService', () => {
 
     await expect(service.resumeAi(scope, 'conversation-a')).resolves.toMatchObject({ resumed: true, replyJobId: 'reply-new' });
     expect(replyJobs.createInTransaction).toHaveBeenCalledWith(tx, scope, expect.objectContaining({
-      conversationId: 'conversation-a', userTurnId: 'turn-new', sourceLastMessageId: 'message-9', sourceSequence: 9, sourceContextVersion: 7, mode: 'AUTO',
+      conversationId: 'conversation-a', userTurnId: 'turn-new', sourceLastMessageId: 'message-9', sourceSequence: 9, sourceContextVersion: 7, mode: 'ASSIST',
     }), { lockHeld: true });
     expect(runtime.process).toHaveBeenCalledWith(scope, 'reply-new');
   });

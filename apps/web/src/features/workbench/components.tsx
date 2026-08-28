@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -129,7 +129,7 @@ export function Avatar({ label, tone = 'mint' }: { label?: string; tone?: 'mint'
   return <span className={`avatar avatar-${tone}`} aria-hidden="true">{(label ?? 'R').slice(0, 1)}</span>;
 }
 
-export function MessageBubble({ message, dense = false }: { message: Message; dense?: boolean }) {
+export function MessageBubble({ message, dense = false, actions }: { message: Message; dense?: boolean; actions?: ReactNode }) {
   const role = message.role ?? 'ASSISTANT';
   const isBuyer = role === 'BUYER';
   const isSystem = role === 'SYSTEM';
@@ -159,7 +159,7 @@ export function MessageBubble({ message, dense = false }: { message: Message; de
           {message.status === 'EDITED' && <span className="message-status">已编辑</span>}
         </div>
         {recalled ? (
-          <div className="message-bubble is-recalled">这条消息已撤回</div>
+          <div className="message-bubble is-recalled">这条消息已从会话隐藏（审计记录保留）</div>
         ) : isProductCard ? (
           <div className="message-bubble card-bubble product-message-card">
             <div className="card-art product-art" aria-hidden="true">✦</div>
@@ -183,6 +183,7 @@ export function MessageBubble({ message, dense = false }: { message: Message; de
         ) : (
           <div className="message-bubble">{text || '（空消息）'}</div>
         )}
+        {actions && <div className="message-actions">{actions}</div>}
       </div>
       {isBuyer && <Avatar label="买" tone="mint" />}
     </div>

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   classifyImportRows,
   commitKnowledgeImport,
+  createShop,
   createCustomerMemory,
   extractCollection,
   getKnowledgeCandidates,
@@ -16,6 +17,7 @@ import {
   takeoverConversation,
   updateCustomerMemory,
   deleteCustomerMemory,
+  deleteConversationMessage,
   draftRemainingMs,
   disableCustomerMemory,
   isDraftExpired,
@@ -28,6 +30,7 @@ import {
   startProductLearning,
   updateDynamicFactInventory,
   updateDynamicFactOrderStatus,
+  updateShopAiMode,
   type Buyer,
 } from './api';
 
@@ -69,6 +72,55 @@ describe('Phase 02 API boundary helpers', () => {
           Accept: 'application/json',
           'X-Demo-Workspace-Token': 'workspace-token',
         }),
+      }),
+    );
+  });
+
+  it('creates a MockDouyin shop and upgrades its AUTO policy through scoped shop endpoints', async () => {
+    const shop = {
+      id: 'shop-new',
+      name: '演示新店',
+      platform: 'DOUYIN_DEMO',
+      externalShopId: 'demo-new',
+      aiMode: 'ASSIST_ONLY',
+      connectionState: 'CONNECTED',
+      syncComplete: false,
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(shop), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...shop, aiMode: 'AUTO_ALLOWED' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    await createShop('workspace-token', { platform: 'DOUYIN_DEMO', templateKey: 'FASHION_DEMO', name: '演示新店' });
+    await updateShopAiMode('workspace-token', 'shop-new', 'AUTO_ALLOWED');
+
+    expect(fetchMock.mock.calls.map(([input, init]) => [String(input), init?.method, init?.body])).toEqual([
+      ['/api/shops', 'POST', JSON.stringify({ platform: 'DOUYIN_DEMO', templateKey: 'FASHION_DEMO', name: '演示新店' })],
+      ['/api/shops/shop-new/ai-mode', 'PATCH', JSON.stringify({ mode: 'AUTO_ALLOWED' })],
+    ]);
+  });
+
+  it('soft-hides an AI or human message through the conversation-scoped endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ id: 'message-1', status: 'RECALLED', remoteRecalled: false }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const deleted = await deleteConversationMessage('workspace-token', 'conversation-1', 'message-1', 'shop-1');
+
+    expect(deleted).toMatchObject({ id: 'message-1', status: 'RECALLED' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/conversations/conversation-1/messages/message-1',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ shopId: 'shop-1' }),
       }),
     );
   });

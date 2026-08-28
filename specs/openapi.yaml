@@ -105,6 +105,15 @@ paths:
                   enum: [DOUYIN_DEMO]
                 templateKey:
                   type: string
+                  enum: [FASHION_DEMO, TECH_DEMO]
+                name:
+                  type: string
+                  maxLength: 80
+                externalShopId:
+                  type: string
+                  maxLength: 120
+                aiMode:
+                  $ref: "#/components/schemas/ShopAIMode"
       responses:
         "201":
           description: Shop created
@@ -750,6 +759,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConversationControlResult"
+        "409":
+          description: Requested mode exceeds the current Shop AI ceiling
+
+  /conversations/{conversationId}/messages/{messageId}:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Conversations]
+      summary: Locally soft-recall an assistant or human reply
+      description: Preserves MessageVersion and audit history. It does not claim that the remote platform recalled an already delivered message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [shopId]
+              properties:
+                shopId: { type: string }
+      responses:
+        "200":
+          description: Local soft-recall result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status, remoteRecalled]
+                properties:
+                  id: { type: string }
+                  status: { type: string, enum: [RECALLED] }
+                  remoteRecalled: { type: boolean, enum: [false] }
 
   /conversations/{conversationId}/reply/regenerate:
     parameters:
@@ -2391,6 +2436,10 @@ components:
           allOf:
             - $ref: "#/components/schemas/ConversationMode"
           nullable: true
+        effectiveMode:
+          $ref: "#/components/schemas/ConversationMode"
+        shopAiMode:
+          $ref: "#/components/schemas/ShopAIMode"
         humanActive: { type: boolean }
         resumed: { type: boolean }
 

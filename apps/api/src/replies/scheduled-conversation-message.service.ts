@@ -1,4 +1,4 @@
-import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Prisma, ProcessingOutboxStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import type { ReplyJobScope } from './reply-job.service';
@@ -71,9 +71,10 @@ export class ScheduledConversationMessageService {
 
 /** Converts only still-valid schedule intents into an idempotent SendOutbox. */
 @Injectable()
-export class ScheduledConversationMessageWorker implements OnModuleInit, OnApplicationShutdown {
+export class ScheduledConversationMessageWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ScheduledConversationMessageWorker.name);
   private timer?: NodeJS.Timeout;
+  private workPromise?: Promise<void>;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -83,12 +84,22 @@ export class ScheduledConversationMessageWorker implements OnModuleInit, OnAppli
 
   onModuleInit(): void {
     if (!process.env.DATABASE_URL?.trim()) return;
-    this.timer = setInterval(() => void this.dispatchOnce().catch((error: unknown) => this.logger.error(errorMessage(error))), 1_000);
+    this.timer = setInterval(() => this.runTracked(), 1_000);
     this.timer.unref();
   }
 
-  onApplicationShutdown(): void {
+  async onModuleDestroy(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
+    await this.workPromise;
+  }
+
+  private runTracked(): void {
+    if (this.workPromise) return;
+    const run = this.dispatchOnce()
+      .catch((error: unknown) => this.logger.error(errorMessage(error)))
+      .then(() => undefined)
+      .finally(() => { if (this.workPromise === run) this.workPromise = undefined; });
+    this.workPromise = run;
   }
 
   async dispatchOnce(now = new Date()): Promise<{ dispatched: number; cancelled: number }> {
