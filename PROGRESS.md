@@ -205,3 +205,30 @@
 - [ ] R6 外部发布：没有公网主机/域名/TLS，因此不宣称 Preview 已上线。
 
 详细“已做 / 部分做 / 未做”证据见 `docs/20_REVIEW_REMEDIATION_R0_R6.md`。
+
+## 本轮发布文档收口（2026-08-29）
+
+- [x] Workspace 会话分离：运营工作台创建与 Reset 使用 `EMPTY`，Scenario Lab 创建与 Reset 使用 `SEEDED`；两者使用独立的本地 token key：`aikefu_operational_workspace_token_v2`、`aikefu_scenario_workspace_token`，不会读取、覆盖或清除旧共享 key。
+- [x] 空店主链：`/workbench` 空态 → 服饰/数码 MockDouyin 模板建店 → 自动商品学习 `PREPARING` → 成功后 `READY`。`PREPARING`、`DEGRADED`、`FAILED` 均不作为自动发送许可。
+- [x] 店铺级二元 AI 开关：`ON = AUTO_ALLOWED`，`OFF = MANUAL_ONLY`。关闭期间的买家消息保留给人工处理，不生成伪装为人工的 AI Job；durable receipt 阻止之后重新开启 AI 时复活该期间工作。
+- [x] 店铺级真实页面和路由：`/workbench/shops/:shopId`、`/workbench/shops/:shopId/settings`、`/workbench/shops/:shopId/knowledge/import`、`/live-test/:shopId`。设置页读写当前店铺策略；导入页走服务端 CSV/XLSX 预览、行级校验与提交。
+
+### 当前后端 Gate
+
+- [x] API unit：64 suites / 359 tests 通过。
+- [x] Web unit：23 files / 100 tests 通过。
+- [x] API integration：13 suites / 55 tests 通过，基于本地真实 PostgreSQL、Redis、MinIO、pgvector。
+- [x] Contracts：6 / 6 通过。
+- [x] 真实基础设施测试已在本机 opt-in 环境通过；这不是公网部署，也不代表真实平台凭据已接入。
+
+### 前端终态 Gate
+
+- [x] Playwright 13 项：9 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0。
+- [x] 1440×900 最新真实截图已覆盖空店首页、店铺概览、店铺聊天、基础设置、知识导入、AI 管理中心、Workflow、Buyer Simulator、实时联调和 Scenario Lab；Workflow 保持运营 Workspace 真实空态，没有为截图制造数据。
+
+### 仍未完成（不得记为通过）
+- [ ] 在线部署 / 公网 Preview：尚未部署。
+- [ ] 3 分钟演示视频：仓库保留人工脚本，但未录制或验收视频。
+- [ ] 真实外部凭据：不随本次交付提供或验证；真实电商平台凭据仍不在 V1 范围，模型凭据仅为服务端可选配置。
+
+以上状态为本轮最新发布记录，优先于本文中带日期的历史 Gate 计数。

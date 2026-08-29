@@ -7,7 +7,31 @@
 
 本仓库是一个合成数据 Demo，不是已上线的电商客服产品。默认运行不需要真实平台账号或模型密钥；需要真实 PostgreSQL / Redis / MinIO 验收时，必须显式启动 Docker 并打开 opt-in 开关。当前文档不声称在线部署、生产 SLA 或商业 KPI。
 
-![AIkefu Workbench — 1440×900 真实本地 Workspace 快照](artifacts/ui/final/workbench.png)
+## 本轮发布收口（2026-08-29）
+
+本节只记录当前工作区已经落盘并在本地复验的能力；任何“通过”均不等同于公网部署、真实电商平台接入或生产验收。
+
+- Workspace 已分为两个互不共享的浏览器会话：运营工作台使用 `EMPTY`，Scenario Lab 使用 `SEEDED`；创建和 Reset 都维持各自的 profile。浏览器仅使用本地 `aikefu_operational_workspace_token_v2` 与 `aikefu_scenario_workspace_token` 两个 token key，旧的共享 key 不会被读取、覆盖或清除；服务端仍只持久化 token hash。
+- 空店首次进入 `/workbench` 会展示建店首页；选择服饰或数码 MockDouyin 模板后创建店铺并触发商品学习。学习期间为 `PREPARING`，不会自动发送；只有学习成功后才投影为 `READY`。`DEGRADED` / `FAILED` 继续按失败关闭语义处理。
+- 店铺 AI 开关是二元的：`ON = AUTO_ALLOWED`，`OFF = MANUAL_ONLY`。关闭时，买家消息仍留在人工作业上下文，但不会生成伪装为人工的 AI Job；持久化 receipt 会阻止之后重新开启 AI 时复活关闭期间的工作。`ASSIST_ONLY` 不是这个总开关的中间态。
+- 已接入的店铺级路由为 `/workbench/shops/:shopId`、`/workbench/shops/:shopId/settings`、`/workbench/shops/:shopId/knowledge/import` 和 `/live-test/:shopId`。设置页会读写当前 Workspace/店铺的真实设置；知识导入页调用服务端 CSV/XLSX 预览、行级校验与确认提交，不是本地静态样例。
+
+### 当前 Gate 与未完成项
+
+| 范围 | 当前状态 |
+| --- | --- |
+| API unit | 64 suites / 359 tests 通过 |
+| Web unit | 23 files / 100 tests 通过 |
+| API integration | 13 suites / 55 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
+| Contracts | 6 / 6 通过 |
+| 前端终态 Gate | Playwright 13 项：9 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0 |
+| 公网部署 | 未完成；没有把本地服务或容器验收表述为在线 Preview |
+| 3 分钟演示视频 | 未完成；现有演示脚本不是已录制、已验收的视频 |
+| 真实外部凭据 | 未随本次交付提供或验证；真实平台凭据仍不在 V1 范围，模型凭据仅可作为服务端可选配置 |
+
+真实基础设施 Gate 已在本机 opt-in 环境通过，但尚未部署到公网。
+
+![AIkefu 空店首页 — 1440×900 真实本地 EMPTY Workspace 快照](artifacts/ui/final/empty-home.png)
 
 ```mermaid
 flowchart LR
@@ -23,7 +47,7 @@ flowchart LR
   O[("MinIO")] --- P
 ```
 
-截图基线由连接真实本地服务的 Playwright 流程生成，包含 [Workbench 1440×900](artifacts/ui/final/workbench.png)、[Workbench 1366×768](artifacts/ui/final/workbench-1366x768.png)、[Dashboard 1920×1080](artifacts/ui/final/dashboard-1920x1080.png)、[Workbench 390×844](artifacts/ui/final/workbench-390x844.png)，以及 Buyer Simulator、Knowledge、Workflow、Scenario Lab 等页面。在线 Demo 与演示视频尚无公网托管地址，不使用本地链接冒充公开 Preview。
+截图基线由连接真实本地服务的 Playwright 流程生成。当前 1440×900 终态证据包括 [空店首页](artifacts/ui/final/empty-home.png)、[店铺概览](artifacts/ui/final/shop-overview.png)、[店铺聊天](artifacts/ui/final/shop-chat.png)、[基础设置](artifacts/ui/final/shop-settings.png)、[知识导入](artifacts/ui/final/knowledge-import.png)、[AI 管理中心](artifacts/ui/final/admin.png)、[Workflow](artifacts/ui/final/workflow.png)、[Buyer Simulator](artifacts/ui/final/buyer-simulator.png)、[实时联调](artifacts/ui/final/live-test.png) 与 [Scenario Lab](artifacts/ui/final/scenario-lab.png)。Workflow 图保持真实运营 Workspace 的空态，没有为截图制造工作流数据。在线 Demo 与演示视频尚无公网托管地址，不使用本地链接冒充公开 Preview。
 
 ## 展示范围
 
@@ -66,7 +90,7 @@ pnpm db:deploy
 pnpm dev
 ```
 
-默认地址：Web `http://localhost:5173`，API `http://localhost:3000/api`，MinIO Console `http://localhost:9001`。首次访问 Web 会创建匿名 Sandbox Workspace；明文 Workspace token 只在创建时返回，数据库保存 hash。
+默认地址：Web `http://localhost:5173`，API `http://localhost:3000/api`，MinIO Console `http://localhost:9001`。首次进入运营工作台会创建匿名 `EMPTY` Workspace，Scenario Lab 则使用独立的 `SEEDED` Workspace；明文 Workspace token 只在创建时返回，数据库保存 hash。
 
 停止依赖：
 
@@ -163,11 +187,13 @@ Remove-Item Env:RUN_REAL_INFRA_E2E
 Remove-Item Env:E2E_BASE_URL
 ```
 
-该开关只验证本地 PostgreSQL/pgvector/MinIO 持久化、隔离、索引、Outbox 与恢复边界，从不调用真实平台或模型。若未启动相应依赖，不要把 skipped 当作真实 infra PASS；本次文档收口也未声称已在无 Docker 环境执行该复验。
+该开关只验证本地 PostgreSQL/pgvector、Redis 与 MinIO 的持久化、隔离、索引、Outbox 与恢复边界，从不调用真实平台或模型。当前 opt-in 真实基础设施 Gate 已在本机通过；若未启动相应依赖，不要把 skipped 当作真实 infra PASS，也不要把本地 PASS 表述为公网部署。
 
 OpenAPI 与 WebSocket JSON schema 的引用、数组 items、discriminator 和 Phase05 DTO 由 Web contract tests 检查；它们不等同于在线部署或 E2E 全量验收。
 
 ## 3 分钟演示
+
+**未完成：**仓库有人工演示脚本，但尚未交付或验收 3 分钟录制视频；不能将脚本、截图或本地页面当作已完成的视频交付。
 
 人工演示顺序、输入文本、预期状态和每一步的验证边界见 [`docs/18_DEMO_SCRIPT.md`](docs/18_DEMO_SCRIPT.md)。演示前至少执行：
 
