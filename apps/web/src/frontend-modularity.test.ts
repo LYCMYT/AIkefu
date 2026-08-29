@@ -41,4 +41,13 @@ describe('frontend module boundaries', () => {
       expect(readFileSync(file, 'utf8').split(/\r?\n/).length, file).toBeLessThanOrEqual(600);
     }
   });
+
+  it('loads feature pages on demand instead of shipping every route in the entry bundle', () => {
+    const application = readFileSync(resolve(root, 'apps/web/src/app/Application.tsx'), 'utf8');
+    expect(application).toContain("lazy(() => import('../features/workbench/WorkbenchPage')");
+    expect(application).toContain("lazy(() => import('../features/live-test/LiveTestPage')");
+    expect(application).toContain("lazy(() => import('../features/workflows/WorkflowPage')");
+    expect(application).not.toMatch(/^import \{[^\n]+Page[^\n]+\} from '\.\.\/features\//m);
+    expect(application).toContain('<Suspense fallback={<RouteLoading />}>');
+  });
 });
