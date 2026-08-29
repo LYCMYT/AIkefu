@@ -1,183 +1,82 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import {
+  captureConsoleDiagnostics,
+  createOperationalShop,
+  expectConnected,
+  expectNoDiagnostics,
+  expectNoGlobalOverflow,
+} from './rearchitecture-helpers';
 
-async function expectNoPageOverflow(page: Page) {
-  const dimensions = await page.evaluate(() => ({
-    clientWidth: document.documentElement.clientWidth,
-    scrollWidth: document.documentElement.scrollWidth,
-  }));
-  expect(dimensions.scrollWidth).toBeLessThanOrEqual(
-    dimensions.clientWidth + 1,
-  );
+const viewports = [
+  { width: 1280, height: 800 },
+  { width: 1366, height: 850 },
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
+  { width: 390, height: 844 },
+] as const;
+
+async function attach(page: Page, testInfo: TestInfo, name: string) {
+  await testInfo.attach(name, { body: await page.screenshot({ fullPage: false }), contentType: 'image/png' });
 }
 
-async function attachScreenshot(
-  page: Page,
-  testInfo: TestInfo,
-  name: string,
-  fullPage = false,
-) {
-  const body = await page.screenshot({ fullPage });
-  const finalUiDir = resolve(process.cwd(), "artifacts", "ui", "final");
-  await mkdir(finalUiDir, { recursive: true });
-  await writeFile(resolve(finalUiDir, `${name}.png`), body);
-  await testInfo.attach(name, {
-    body,
-    contentType: "image/png",
-  });
-}
-
-test("captures the productized frontend from a real synthetic Workspace", async ({
-  page,
-}, testInfo) => {
+test('rearchitected routes stay usable at release viewport widths', async ({ page }, testInfo) => {
   test.setTimeout(240_000);
   test.skip(
-    process.env.RUN_REAL_INFRA_E2E !== "1",
-    "requires the local PostgreSQL, Redis, MinIO, API and Web stack",
+    process.env.RUN_REAL_INFRA_E2E !== '1',
+    'requires the local PostgreSQL, Redis, MinIO, API and Web stack',
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/buyer-simulator");
-  await expect(page.getByText(/服务已连接/)).toBeVisible();
-  const reset = page.getByRole("button", { name: "重置演示" });
-  await reset.click();
-  await expect(reset).toBeDisabled();
-  await expect(reset).toBeEnabled({ timeout: 30_000 });
-  await expect(page.getByRole("combobox", { name: "买家" })).not.toHaveValue(
-    "",
-  );
+  const diagnostics = captureConsoleDiagnostics(page);
+  const { shopId, name } = await createOperationalShop(page, `Luna-visual-${Date.now()}`);
+  const shopPath = `/workbench/shops/${encodeURIComponent(shopId)}`;
+  const routes = [
+    { path: shopPath, heading: '店铺工作台' },
+    { path: `${shopPath}/settings`, heading: '基础设置' },
+    { path: `${shopPath}/knowledge/import`, heading: '导入知识' },
+    { path: `/live-test/${encodeURIComponent(shopId)}`, heading: '实时联调' },
+    { path: '/buyer-simulator', heading: '买家模拟器' },
+    { path: '/admin', heading: '数据概览' },
+  ] as const;
 
-  const composer = page.getByPlaceholder("输入咨询内容…");
-  const send = page.getByRole("button", { name: "发送", exact: true });
-  for (const message of ["你好", "什么时候发货？", "我是新疆的"]) {
-    await composer.fill(message);
-    await send.click();
-    await expect(page.getByText(message, { exact: true })).toBeVisible();
-    await expect(composer).toHaveValue("");
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    for (const route of routes) {
+      await page.goto(route.path);
+      await expect(page.getByRole('heading', { level: 1, name: route.heading })).toBeVisible({ timeout: 30_000 });
+      await expectConnected(page);
+      await expectNoGlobalOverflow(page);
+      if (viewport.width === 1440 && route.path === shopPath) await attach(page, testInfo, 'workbench-1440x900');
+      if (viewport.width === 390 && route.path.startsWith('/live-test/')) await attach(page, testInfo, 'live-test-390x844');
+    }
+    // Keep the active operational shop visible after each route sweep. This
+    // also catches a route transition accidentally returning to EMPTY state.
+    await page.goto(shopPath);
+    await expect(page.getByRole('button', { name: new RegExp(`${name} AI `) })).toBeVisible({ timeout: 30_000 });
+    await expectNoGlobalOverflow(page);
   }
-  await attachScreenshot(page, testInfo, "buyer-simulator");
 
-  await page.getByRole("link", { name: /工作台/ }).click();
-  await expect(
-    page.getByRole("button", { name: /小林.*我是新疆的/ }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expect(
-    page.getByRole("textbox", { name: "Human Final 编辑区" }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expectNoPageOverflow(page);
-  await attachScreenshot(page, testInfo, "workbench");
+  await expectNoDiagnostics(diagnostics);
+});
 
-  await page.getByRole("button", { name: "调试", exact: true }).click();
-  await expect(
-    page.getByRole("dialog", { name: "Developer Trace" }),
-  ).toBeVisible();
-  await attachScreenshot(page, testInfo, "workbench-trace-1440x900");
-  await page
-    .getByRole("button", { name: "关闭Developer Trace" })
-    .last()
-    .click();
+test('scenario lab is seeded independently from the operational shop token', async ({ page }) => {
+  test.setTimeout(120_000);
+  test.skip(
+    process.env.RUN_REAL_INFRA_E2E !== '1',
+    'requires the local PostgreSQL, Redis, MinIO, API and Web stack',
+  );
+  const diagnostics = captureConsoleDiagnostics(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { name } = await createOperationalShop(page, `Luna-scope-${Date.now()}`);
 
-  await page.getByRole("link", { name: /运营后台/ }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "数据概览" }),
-  ).toBeVisible();
-  await expectNoPageOverflow(page);
-  await attachScreenshot(page, testInfo, "dashboard");
+  await page.goto('/scenario-lab');
+  await expect(page.getByRole('heading', { level: 1, name: '场景实验室' })).toBeVisible({ timeout: 30_000 });
+  await expectConnected(page);
+  await expect(page.getByText('连续消息聚合', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('固定八个合成场景', { exact: false })).toBeVisible();
 
-  await page.getByRole("tab", { name: /店铺/ }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "店铺配置" }),
-  ).toBeVisible();
-  await attachScreenshot(page, testInfo, "shops");
-
-  await page.getByRole("tab", { name: /知识运营/ }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "知识运营" }),
-  ).toBeVisible();
-  await expect(page.getByRole("table")).toBeVisible();
-  await expect(page.getByText("正在读取知识快照…")).toBeHidden({
-    timeout: 20_000,
-  });
-  await expect(page.getByRole("cell", { name: /可以退款吗/ })).toBeVisible({
-    timeout: 20_000,
-  });
-  await attachScreenshot(page, testInfo, "knowledge");
-
-  await page.getByRole("tab", { name: /工作流/ }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "工作流" }),
-  ).toBeVisible();
-  await expect(page.getByText("流程画布")).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("button", { name: /自动排列/ }).click();
-  await page.getByRole("spinbutton", { name: "maxSteps" }).fill("19");
-  await page.getByRole("button", { name: "保存草稿" }).click();
-  await expect(page.getByRole("status")).toContainText("草稿已提交保存");
-  await page.getByRole("button", { name: "发布版本" }).click();
-  await expect(
-    page.getByRole("dialog", { name: "发布 Workflow 版本" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "确认发布" }).click();
-  await expect(page.getByRole("status")).toContainText("发布请求已提交");
-  await page.waitForTimeout(300);
-  await expect(page.getByText("流程画布")).toBeVisible({ timeout: 30_000 });
-  await expect(
-    page.getByText("正在读取 Workflow 详情与运行日志…"),
-  ).toBeHidden();
-  await attachScreenshot(page, testInfo, "workflow");
-
-  await page.getByRole("tab", { name: /质检/ }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "质检" }),
-  ).toBeVisible();
-  await attachScreenshot(page, testInfo, "quality");
-
-  await page.getByRole("tab", { name: /错误治理/ }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "错误治理" }),
-  ).toBeVisible();
-  await attachScreenshot(page, testInfo, "incident");
-
-  await page.getByRole("link", { name: /场景实验室/ }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "场景实验室" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("连续消息聚合", { exact: true }).first(),
-  ).toBeVisible();
-  await page.getByRole("button", { name: /运行场景/ }).click();
-  await expect(page.getByRole("status")).toContainText("已提交运行", {
-    timeout: 30_000,
-  });
-  await expectNoPageOverflow(page);
-  await attachScreenshot(page, testInfo, "scenario-lab");
-
-  await page.setViewportSize({ width: 1366, height: 768 });
-  await page.goto("/workbench");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "消息工作台" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /小林.*我是新疆的/ }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expectNoPageOverflow(page);
-  await attachScreenshot(page, testInfo, "workbench-1366x768", false);
-
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto("/admin");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "数据概览" }),
-  ).toBeVisible();
-  await expectNoPageOverflow(page);
-  await attachScreenshot(page, testInfo, "dashboard-1920x1080", false);
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/workbench");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "消息工作台" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /小林.*我是新疆的/ }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expectNoPageOverflow(page);
-  await attachScreenshot(page, testInfo, "workbench-390x844", false);
+  await page.goto('/workbench');
+  await expect(page.getByRole('heading', { level: 1, name: '店铺工作台' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: new RegExp(`${name} AI `) })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { level: 2, name: '添加第一家店铺，让 AI 客服开始工作' })).toHaveCount(0);
+  await expectNoGlobalOverflow(page);
+  await expectNoDiagnostics(diagnostics);
 });

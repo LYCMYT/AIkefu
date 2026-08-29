@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const entries = [
-  { route: '/workbench', heading: '消息工作台' },
+  { route: '/workbench', heading: '店铺工作台' },
   { route: '/buyer-simulator', heading: '买家模拟器' },
   { route: '/admin', heading: '数据概览' },
   { route: '/scenario-lab', heading: '场景实验室' },
@@ -26,7 +26,7 @@ test('the four primary entry links remain discoverable on desktop and narrow scr
   for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await page.goto('/workbench');
-    const navigation = page.getByRole('navigation', { name: 'Primary' });
+    const navigation = page.getByRole('navigation', { name: '产品模块' });
     await expect(navigation.getByRole('link', { name: /工作台/ })).toBeVisible();
     await expect(navigation.getByRole('link', { name: /买家模拟器/ })).toBeVisible();
     await expect(navigation.getByRole('link', { name: /运营后台/ })).toBeVisible();

@@ -128,6 +128,7 @@ export interface SharedViewProps {
   refreshKey: number;
   realtimeEvent?: WorkspaceSocketEvent;
   traceOpen?: boolean;
+  onTraceOpen?: () => void;
   onTraceClose?: () => void;
   onFoundationRefresh?: () => Promise<void>;
 }
@@ -560,6 +561,34 @@ export function learningProgress(job?: ProductLearningJob, products: Product[] =
     return value?.status === 'SUCCEEDED';
   }).length;
   return products.length ? Math.round((learned / products.length) * 100) : 0;
+}
+
+/**
+ * Project the operator-facing AI readiness from the freshest available
+ * learning snapshot. Bootstrap is intentionally long-lived, while learning
+ * jobs are refreshed after PRODUCT_LEARNING_UPDATED events; without this
+ * projection the UI can keep showing PREPARING after the server has already
+ * completed the job.
+ */
+export function projectedShopAiReadiness(
+  shop?: ShopSummary,
+  learningJob?: ProductLearningJob,
+): ShopSummary['aiReadiness'] {
+  if (!shop) return 'PREPARING';
+  if (shop.aiMode === 'MANUAL_ONLY') return 'OFF';
+  switch (learningJob?.status) {
+    case 'SUCCEEDED':
+      return 'READY';
+    case 'PARTIAL_SUCCESS':
+      return 'DEGRADED';
+    case 'FAILED':
+      return 'FAILED';
+    case 'PENDING':
+    case 'RUNNING':
+      return 'PREPARING';
+    default:
+      return shop.aiReadiness;
+  }
 }
 
 export function eventHasWorkspaceShape(event: WorkspaceSocketEvent): boolean {

@@ -5,6 +5,7 @@ export interface CreateShopInput {
   platform: 'DOUYIN_DEMO';
   templateKey: string;
   name?: string;
+  aiMode?: ShopAiMode;
 }
 
 export type ShopAiMode = ShopSummary['aiMode'];
@@ -25,4 +26,18 @@ export function updateShopAiMode(token: string, shopId: string, mode: ShopAiMode
     headers: jsonHeaders(token),
     body: JSON.stringify({ mode }),
   }).then((payload) => extractEntity<ShopSummary>(payload, 'shop'));
+}
+
+export function getShopSettings(token: string, shopId: string): Promise<import('../types').ShopSettings> {
+  return request<unknown>(`/shops/${encodeURIComponent(shopId)}/settings`, {
+    headers: { 'X-Demo-Workspace-Token': token },
+  }).then((payload) => extractEntity<import('../types').ShopSettings>(payload, 'settings'));
+}
+
+export function updateShopSettings(token: string, shopId: string, input: import('../types').ShopSettingsInput): Promise<import('../types').ShopSettings> {
+  return request<unknown>(`/shops/${encodeURIComponent(shopId)}/settings`, {
+    method: 'PUT',
+    headers: jsonHeaders(token),
+    body: JSON.stringify(input),
+  }).then((payload) => extractEntity<import('../types').ShopSettings>(payload, 'settings'));
 }

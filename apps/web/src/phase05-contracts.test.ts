@@ -8,30 +8,31 @@ import type {
 
 describe('Phase 05 OpenAPI and WebSocket contracts', () => {
   it('declares strict workflow, approval, quality, incident, trace and scenario routes', () => {
-    expect(openapiText).toContain('/workflows/{workflowId}:');
-    expect(openapiText).toContain('/workflows/{workflowId}/enable:');
-    expect(openapiText).toContain('/workflows/{workflowId}/disable:');
-    expect(openapiText).toContain('/workflow-runs/{runId}:');
-    expect(openapiText).toContain('/quality/reviews/{reviewId}:');
-    expect(openapiText).toContain('/quality/reviews/{reviewId}/conclusion:');
-    expect(openapiText).toContain('/incidents/{incidentId}/resolve:');
-    expect(openapiText).toContain('/incidents/{incidentId}/add-regression:');
-    expect(openapiText).toContain('/incidents/{incidentId}/root-cause:');
-    expect(openapiText).toContain('  /incidents:\n    parameters:\n      - in: query\n        name: conversationId');
-    expect(openapiText).toContain('name: status');
-    expect(openapiText).toContain('name: severity');
-    expect(openapiText).toContain('/conversations/{conversationId}/trace:');
-    expect(openapiText).toContain('required: [nodes, edges, settings]');
-    expect(openapiText).toContain('    NodeRun:');
-    expect(openapiText).toContain('    ActionProposal:');
-    expect(openapiText).toContain('    QualityDeterministicResult:');
-    expect(openapiText).toContain('    QualityConclusionInput:');
-    expect(openapiText).toContain('    TraceEvent:');
-    expect(openapiText).toContain('    ScenarioStep:');
-    expect(openapiText).toContain('    RootCauseInput:');
-    expect(openapiText).toContain('trace:');
-    expect(openapiText).toContain('x-demo-only: true');
-    expect(openapiText).toContain('x-synthetic: true');
+    const normalizedOpenApi = openapiText.replace(/\r\n/g, '\n');
+    expect(normalizedOpenApi).toContain('/workflows/{workflowId}:');
+    expect(normalizedOpenApi).toContain('/workflows/{workflowId}/enable:');
+    expect(normalizedOpenApi).toContain('/workflows/{workflowId}/disable:');
+    expect(normalizedOpenApi).toContain('/workflow-runs/{runId}:');
+    expect(normalizedOpenApi).toContain('/quality/reviews/{reviewId}:');
+    expect(normalizedOpenApi).toContain('/quality/reviews/{reviewId}/conclusion:');
+    expect(normalizedOpenApi).toContain('/incidents/{incidentId}/resolve:');
+    expect(normalizedOpenApi).toContain('/incidents/{incidentId}/add-regression:');
+    expect(normalizedOpenApi).toContain('/incidents/{incidentId}/root-cause:');
+    expect(normalizedOpenApi).toContain('  /incidents:\n    parameters:\n      - in: query\n        name: conversationId');
+    expect(normalizedOpenApi).toContain('name: status');
+    expect(normalizedOpenApi).toContain('name: severity');
+    expect(normalizedOpenApi).toContain('/conversations/{conversationId}/trace:');
+    expect(normalizedOpenApi).toContain('required: [nodes, edges, settings]');
+    expect(normalizedOpenApi).toContain('    NodeRun:');
+    expect(normalizedOpenApi).toContain('    ActionProposal:');
+    expect(normalizedOpenApi).toContain('    QualityDeterministicResult:');
+    expect(normalizedOpenApi).toContain('    QualityConclusionInput:');
+    expect(normalizedOpenApi).toContain('    TraceEvent:');
+    expect(normalizedOpenApi).toContain('    ScenarioStep:');
+    expect(normalizedOpenApi).toContain('    RootCauseInput:');
+    expect(normalizedOpenApi).toContain('trace:');
+    expect(normalizedOpenApi).toContain('x-demo-only: true');
+    expect(normalizedOpenApi).toContain('x-synthetic: true');
   });
 
   it('declares the workspace-scoped delete-customer-data route and count result', () => {

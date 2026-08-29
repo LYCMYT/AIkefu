@@ -60,6 +60,8 @@ import type {
   IncidentStatus,
   RejectActionProposalInput,
   ScenarioKey,
+  CreateWorkspaceInput,
+  ResetWorkspaceInput,
   WorkspaceSession,
 } from '@ai-customer-service/contracts';
 
@@ -91,8 +93,12 @@ import {
   qualityResults,
 } from '../normalizers';
 
-export async function createWorkspace(): Promise<WorkspaceSession> {
-  const session = await request<WorkspaceSession>('/demo/workspaces', { method: 'POST' });
+export async function createWorkspace(input?: CreateWorkspaceInput): Promise<WorkspaceSession> {
+  const session = await request<WorkspaceSession>('/demo/workspaces', {
+    method: 'POST',
+    headers: input ? { 'Content-Type': 'application/json' } : undefined,
+    body: input ? JSON.stringify(input) : undefined,
+  });
 
   if (!session.token) {
     throw new ApiError('API 没有返回可用的 Workspace 凭据。', 500, 'WORKSPACE_TOKEN_MISSING');
@@ -107,9 +113,10 @@ export function getBootstrap(token: string): Promise<BootstrapPayload> {
   });
 }
 
-export function resetCurrentWorkspace(token: string): Promise<WorkspaceResetResult> {
+export function resetCurrentWorkspace(token: string, input?: ResetWorkspaceInput): Promise<WorkspaceResetResult> {
   return request<WorkspaceResetResult>('/demo/workspaces/current/reset', {
     method: 'POST',
-    headers: workspaceHeaders(token),
+    headers: input ? jsonHeaders(token) : workspaceHeaders(token),
+    body: input ? JSON.stringify(input) : undefined,
   });
 }

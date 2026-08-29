@@ -313,6 +313,17 @@ export function BuyerSimulatorPage({ token, shops, activeShopId, onShopChange, r
     }
   };
 
+  if (!shopId) {
+    return (
+      <section className="simulator-page simulator-empty panel-surface" aria-labelledby="buyer-simulator-empty-title">
+        <span className="empty-glyph" aria-hidden="true">○</span>
+        <h2 id="buyer-simulator-empty-title">添加店铺后使用买家模拟器</h2>
+        <p>买家事件必须绑定当前运营 Workspace 中的真实演示店铺。</p>
+        <a className="primary-button" href="/workbench">返回工作台添加店铺</a>
+      </section>
+    );
+  }
+
   return (
     <div className="simulator-page">
       {pendingRemovalId && <ConfirmDialog busy={removingId === pendingRemovalId} confirmLabel="确认隐藏" description="消息仅会从本演示工作台的会话中隐藏，审计记录仍保留；不代表抖音平台消息已撤回。" onCancel={() => setPendingRemovalId('')} onConfirm={() => void recall(pendingRemovalId)} open title="从会话隐藏这条买家消息？" />}
@@ -329,9 +340,9 @@ export function BuyerSimulatorPage({ token, shops, activeShopId, onShopChange, r
             <div className="phone-date">今天 {readableDate(new Date().toISOString())}</div>
             <div className="phone-messages">
               <div className="seller-welcome"><span className="welcome-spark">✦</span><strong>{activeShop?.name ?? '店铺'}的智能客服</strong><small>欢迎咨询商品、订单和售后问题</small></div>
-              {loading ? <div className="phone-empty">正在读取对话…</div> : messages.length === 0 ? <div className="phone-empty"><span>○</span><strong>开始一次新的咨询</strong><small>你发送的内容会同步到客服工作台</small></div> : messages.map((message) => <div className="buyer-message-wrap" key={message.id}><MessageBubble message={message} dense />{message.role === 'BUYER' && message.status !== 'RECALLED' && message.status !== 'DELETED' && !message.id.startsWith('local-') && <div className="buyer-message-actions"><button type="button" onClick={() => { setEditingId(message.id); setEditingText(messageText(message)); }}>编辑</button><button type="button" onClick={() => setPendingRemovalId(message.id)}>隐藏</button></div>}{editingId === message.id && <div className="inline-edit"><textarea value={editingText} onChange={(event) => setEditingText(event.currentTarget.value)} rows={2} /><div><button type="button" onClick={() => setEditingId('')}>取消</button><button className="save-mini" type="button" onClick={() => void saveEdit(message.id)}>保存</button></div></div>}</div>)}
+              {loading ? <div className="phone-empty">正在读取对话…</div> : messages.length === 0 ? <div className="phone-empty"><span>○</span><strong>开始一次新的咨询</strong><small>你发送的内容会同步到客服工作台</small></div> : messages.map((message) => <div className="buyer-message-wrap" key={message.id}><MessageBubble message={message} dense />{message.role === 'BUYER' && message.status !== 'RECALLED' && message.status !== 'DELETED' && !message.id.startsWith('local-') && <div className="buyer-message-actions"><button type="button" onClick={() => { setEditingId(message.id); setEditingText(messageText(message)); }}>编辑</button><button type="button" onClick={() => setPendingRemovalId(message.id)}>隐藏</button></div>}{editingId === message.id && <div className="inline-edit"><textarea aria-label="编辑买家消息" value={editingText} onChange={(event) => setEditingText(event.currentTarget.value)} rows={2} /><div><button type="button" onClick={() => setEditingId('')}>取消</button><button className="save-mini" type="button" onClick={() => void saveEdit(message.id)}>保存</button></div></div>}</div>)}
             </div>
-            <div className="phone-composer"><div className="phone-input-row"><textarea value={composer} onChange={(event) => setComposer(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(); } }} placeholder="输入咨询内容…" rows={1} /><button type="button" className="phone-send" onClick={() => void sendText()} disabled={!buyerTextSubmissionEnabled({ text: composer, shopId, buyerId, loading, sending })} aria-label="发送">↑</button></div></div>
+            <div className="phone-composer"><div className="phone-input-row"><textarea aria-label="买家咨询内容" value={composer} onChange={(event) => setComposer(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendText(); } }} placeholder="输入咨询内容…" rows={1} /><button type="button" className="phone-send" onClick={() => void sendText()} disabled={!buyerTextSubmissionEnabled({ text: composer, shopId, buyerId, loading, sending })} aria-label="发送">↑</button></div></div>
           </div>
         </section>
         <aside className="simulator-tools">

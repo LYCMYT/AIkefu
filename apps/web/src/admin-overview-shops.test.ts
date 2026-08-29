@@ -9,13 +9,15 @@ import {
 } from './App';
 import type { Conversation } from './api';
 import type { Shop } from '@ai-customer-service/contracts';
+import { shopAiSwitchMode } from './features/dashboard/DashboardPage';
 
 const shops: Shop[] = [
   {
     id: 'shop-a',
     name: 'Shop A',
     platform: 'DOUYIN_DEMO',
-    aiMode: 'AUTO_ALLOWED',
+  aiMode: 'AUTO_ALLOWED',
+  aiReadiness: 'READY',
     connectionState: 'CONNECTED',
     syncComplete: true,
   },
@@ -23,7 +25,8 @@ const shops: Shop[] = [
     id: 'shop-b',
     name: 'Shop B',
     platform: 'DOUYIN_DEMO',
-    aiMode: 'ASSIST_ONLY',
+  aiMode: 'ASSIST_ONLY',
+  aiReadiness: 'DEGRADED',
     connectionState: 'DEGRADED',
     syncComplete: false,
   },
@@ -117,5 +120,12 @@ describe('Phase 05 Admin Overview and Shops helpers', () => {
     expect(connectionStateLabel('CONNECTED')).toBe('已连接');
     expect(connectionStateLabel('DEGRADED')).toBe('降级');
     expect(connectionStateLabel('UNKNOWN')).toBe('未知状态');
+  });
+
+  it('maps the shop-level AI switch to the binary operational modes only', () => {
+    expect(shopAiSwitchMode(true)).toBe('AUTO_ALLOWED');
+    expect(shopAiSwitchMode(false)).toBe('MANUAL_ONLY');
+    expect(shopAiSwitchMode(true)).not.toBe('ASSIST_ONLY');
+    expect(shopAiSwitchMode(false)).not.toBe('ASSIST_ONLY');
   });
 });

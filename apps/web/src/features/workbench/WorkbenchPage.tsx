@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Bot, ChevronRight, MoreHorizontal, PackageCheck, Power, ShoppingBag } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import {
   approveActionProposal,
   ApiError,
   clearStoredWorkspaceToken,
+  createShop,
   createWorkspace,
   editBuyerMessage,
   getBootstrap,
@@ -117,7 +119,7 @@ import type {
 
 
 import * as viewModel from '../shared/view-models';
-const { defaultNavigationItem, readableTime, readableDate, shortId, buyerName, productName, orderName, statusLabel, errorMessage, modeLabel, connectionStateLabel, localDayKey, conversationTimestamp, metric, buildAdminOverviewSnapshot, buildConversationTrend, isConversationModeAllowed, conversationModeOptionLabel, draftStatusLabel, draftRemainingLabel, taskStatusLabel, tagsFromBuyer, firstSku, productPrice, productInventory, objectValue, redactTraceValue, redactDeveloperTracePayload, shouldLoadDeveloperTrace, traceRequestedBySearch, visibleDeveloperTraceEvents, isMessage, cardData, messageKindLabel, messageRoleLabel, messageSort, knowledgeScopeLabel, knowledgeSourceLabel, knowledgeBusinessLabel, knowledgeIndexLabel, knowledgeVersion, knowledgeStatusClass, learningStatusLabel, learningStatusClass, learningProgress, eventHasWorkspaceShape, isPhase03SnapshotEvent } = viewModel;
+const { defaultNavigationItem, readableTime, readableDate, shortId, buyerName, productName, orderName, statusLabel, errorMessage, modeLabel, connectionStateLabel, localDayKey, conversationTimestamp, metric, buildAdminOverviewSnapshot, buildConversationTrend, isConversationModeAllowed, conversationModeOptionLabel, draftStatusLabel, draftRemainingLabel, taskStatusLabel, tagsFromBuyer, firstSku, productPrice, productInventory, objectValue, redactTraceValue, redactDeveloperTracePayload, shouldLoadDeveloperTrace, traceRequestedBySearch, visibleDeveloperTraceEvents, isMessage, cardData, messageKindLabel, messageRoleLabel, messageSort, knowledgeScopeLabel, knowledgeSourceLabel, knowledgeBusinessLabel, knowledgeIndexLabel, knowledgeVersion, knowledgeStatusClass, learningStatusLabel, learningStatusClass, learningProgress, projectedShopAiReadiness, eventHasWorkspaceShape, isPhase03SnapshotEvent } = viewModel;
 type FoundationState = viewModel.FoundationState;
 type SharedViewProps = viewModel.SharedViewProps;
 type AdminMetricSnapshot = viewModel.AdminMetricSnapshot;
@@ -126,11 +128,38 @@ type ConversationTrendPoint = viewModel.ConversationTrendPoint;
 type WorkbenchConversationMode = viewModel.WorkbenchConversationMode;
 
 import { Avatar, MessageBubble, ContextProduct, ContextOrder, DeveloperTracePanel } from '../workbench/components';
-import { ConfirmDialog, SegmentedTabs } from '../../components/ui/primitives';
-import { filterConversations, type ConversationFilter } from './workbench-model';
+import { ConfirmDialog, Drawer, SegmentedTabs } from '../../components/ui/primitives';
+import { conversationAiState, filterConversations, type ConversationFilter } from './workbench-model';
+import { EmptyStoreHome } from './EmptyStoreHome';
+import { StoreContextMenu } from './StoreContextMenu';
 
+function ShopOverview({ shop, products, learningJob, onOpenProducts }: { shop?: ShopSummary; products: Product[]; learningJob?: ProductLearningJob; onOpenProducts: () => void }) {
+  const readiness = projectedShopAiReadiness(shop, learningJob);
+  const completed = learningJob?.completed ?? learningJob?.items?.filter((item) => item.status === 'SUCCEEDED').length ?? 0;
+  const total = learningJob?.total ?? learningJob?.items?.length ?? products.length;
+  return <div className="shop-overview"><div className="shop-overview-hero"><span className="shop-overview-mark"><ShoppingBag size={28} /></span><span className="workbench-eyebrow">SHOP WORKSPACE</span><h2>{shop?.name ?? '当前店铺'} 已准备好</h2><p>选择左侧联系人开始处理会话；商品信息和 AI 准备状态会持续保持在当前店铺范围内。</p><div className="shop-overview-actions"><button className="primary-button" onClick={onOpenProducts} type="button">查看商品学习<ChevronRight size={16} /></button></div></div><div className="shop-overview-facts"><article><span>AI 状态</span><strong>{readiness === 'READY' ? '可以回复' : readiness === 'OFF' ? '已停止' : readiness === 'FAILED' ? '准备失败' : readiness === 'DEGRADED' ? '需要处理' : '正在准备'}</strong><small>{shop?.aiMode === 'AUTO_ALLOWED' ? '低风险任务允许自动发送' : '当前不会自动发送'}</small></article><article><span>商品</span><strong>{products.length}</strong><small>来自当前 MockDouyin 模板</small></article><article><span>学习进度</span><strong>{total ? `${completed}/${total}` : '等待任务'}</strong><small>{learningStatusLabel(learningJob?.status)}</small></article></div></div>;
+}
 
-export function WorkbenchPage({ token, shops, activeShopId, onShopChange, refreshKey, realtimeEvent, traceOpen = false, onTraceClose = () => undefined, onFoundationRefresh }: SharedViewProps) {
+export function WorkbenchPage(props: SharedViewProps) {
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const addShop = async (input: Parameters<typeof createShop>[1]) => {
+    setCreating(true); setCreateError('');
+    try {
+      const shop = await createShop(props.token, input);
+      props.onShopChange(shop.id);
+      await props.onFoundationRefresh?.();
+      navigate(`/workbench/shops/${encodeURIComponent(shop.id)}`);
+    } catch (error) { setCreateError(errorMessage(error)); }
+    finally { setCreating(false); }
+  };
+  if (props.shops.length === 0) return <EmptyStoreHome busy={creating} error={createError} onCreate={addShop} />;
+  return <ShopWorkbenchPage {...props} />;
+}
+
+function ShopWorkbenchPage({ token, shops, activeShopId, onShopChange, refreshKey, realtimeEvent, traceOpen = false, onTraceOpen = () => undefined, onTraceClose = () => undefined, onFoundationRefresh }: SharedViewProps) {
+  const navigate = useNavigate();
   const [shopId, setShopId] = useState(activeShopId || shops[0]?.id || '');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -140,7 +169,11 @@ export function WorkbenchPage({ token, shops, activeShopId, onShopChange, refres
   const [detail, setDetail] = useState<Conversation>();
   const [query, setQuery] = useState('');
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all');
-  const [contextTab, setContextTab] = useState<'assistant' | 'product' | 'order' | 'memory'>('assistant');
+  const [contextDrawer, setContextDrawer] = useState<'order' | 'memory' | 'advanced' | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [learningJob, setLearningJob] = useState<ProductLearningJob>();
+  const [shopModeAction, setShopModeAction] = useState('');
+  const [menu, setMenu] = useState<{ shopId: string; x: number; y: number }>();
   const [composer, setComposer] = useState('');
   const [loading, setLoading] = useState(true);
   const [resourceError, setResourceError] = useState('');
@@ -194,16 +227,18 @@ export function WorkbenchPage({ token, shops, activeShopId, onShopChange, refres
     setResourceError('');
     setConversations([]);
     setProducts([]);
+    setLearningJob(undefined);
     setOrders([]);
     setMemories([]);
     setDraft(null);
     setDraftText('');
     setDraftEditType('STYLE_EDIT');
-    Promise.all([getConversations(token, shopId), getProducts(token, shopId)])
-      .then(([nextConversations, nextProducts]) => {
+    Promise.all([getConversations(token, shopId), getProducts(token, shopId), getProductLearningJobs(token, shopId).catch(() => [])])
+      .then(([nextConversations, nextProducts, learningJobs]) => {
         if (!mounted) return;
         setConversations(nextConversations);
         setProducts(nextProducts);
+        setLearningJob(learningJobs[0]);
       })
       .catch((error: unknown) => {
         if (!mounted) return;
@@ -225,9 +260,7 @@ export function WorkbenchPage({ token, shops, activeShopId, onShopChange, refres
       const name = buyerName(conversation.buyer);
       return `${name} ${text} ${conversation.externalConversationId ?? ''}`.toLowerCase().includes(query.toLowerCase());
     });
-    if (!selectedConversationId || !visible.some((conversation) => conversation.id === selectedConversationId)) {
-      setSelectedConversationId(visible[0]?.id ?? '');
-    }
+    if (selectedConversationId && !visible.some((conversation) => conversation.id === selectedConversationId)) setSelectedConversationId('');
   }, [conversations, query, selectedConversationId]);
 
   useEffect(() => {
@@ -304,6 +337,7 @@ export function WorkbenchPage({ token, shops, activeShopId, onShopChange, refres
   const activeBuyer = activeConversation?.buyer;
   const activeProduct = activeConversation?.currentProduct ?? products.find((product) => product.id === activeConversation?.currentProductId);
   const activeOrder = activeConversation?.currentOrder ?? orders.find((order) => order.id === activeConversation?.currentOrderId);
+  const selectedProduct = products.find((product) => product.id === selectedProductId) ?? activeProduct ?? products[0];
   const snapshotDraft = activeConversation?.currentDraft ?? activeConversation?.activeReplyJob?.currentDraft ?? activeConversation?.activeReplyJob?.draft ?? null;
 
   const applyConversationSnapshot = useCallback((next: Conversation) => {
@@ -575,14 +609,30 @@ export function WorkbenchPage({ token, shops, activeShopId, onShopChange, refres
     }
   };
 
-  const contextProductList = activeProduct ? [activeProduct, ...products.filter((product) => product.id !== activeProduct.id).slice(0, 2)] : products.slice(0, 3);
+  const toggleShopAi = async (shop: ShopSummary) => {
+    const nextMode: ShopSummary['aiMode'] = shop.aiMode === 'AUTO_ALLOWED' ? 'MANUAL_ONLY' : 'AUTO_ALLOWED';
+    setShopModeAction(shop.id);
+    setActionNotice(''); setSendError('');
+    try {
+      await updateShopAiMode(token, shop.id, nextMode);
+      // Surface the durable mutation immediately. The foundation refresh can
+      // trigger a large snapshot update while this page is still mounted;
+      // feedback should not wait behind that asynchronous refresh.
+      setActionNotice(nextMode === 'MANUAL_ONLY' ? `“${shop.name}”的会话 AI 已停止；商品学习任务会继续。` : `“${shop.name}”的 AI 已开启；准备完成前不会自动发送。`);
+      await onFoundationRefresh?.();
+    } catch (error) { setSendError(errorMessage(error)); }
+    finally { setShopModeAction(''); }
+  };
 
   return (
     <div className="workbench-layout">
       {pendingMemoryDelete && <ConfirmDialog busy={memoryAction === `delete-${pendingMemoryDelete.id}`} confirmLabel="确认删除" description={`记忆“${pendingMemoryDelete.key}”将从当前店铺与买家的人工记忆中删除。`} onCancel={() => setPendingMemoryDelete(undefined)} onConfirm={() => void removeMemory(pendingMemoryDelete)} open title="删除 CustomerMemory" />}
       {pendingMessageRemoval && <ConfirmDialog busy={messageAction === `remove-${pendingMessageRemoval.id}`} confirmLabel="确认隐藏" description="消息会从本演示工作台的会话中隐藏，审计记录仍然保留；此操作不代表抖音平台消息已撤回。" onCancel={() => setPendingMessageRemoval(undefined)} onConfirm={() => void removeMessage(pendingMessageRemoval)} open title="从会话隐藏这条消息？" />}
       {pendingAutoEnable && activeShop && <ConfirmDialog busy={conversationAction === 'enable-auto'} confirmLabel="确认开启" description={`这会把“${activeShop.name}”整店设置为允许 AUTO，并将当前会话设为 AUTO。只影响后续新任务；高风险消息仍会按规则转人工。`} onCancel={() => setPendingAutoEnable(false)} onConfirm={() => void enableShopAuto()} open title="开启整店 AUTO？" />}
+      {menu && <StoreContextMenu anchor={{ x: menu.x, y: menu.y }} onClose={() => setMenu(undefined)} onShopChange={onShopChange} open shopId={menu.shopId} />}
+      {actionNotice && <p className="inline-notice is-success" role="status">{actionNotice}</p>}
       <section className="conversation-panel panel-surface" aria-label="会话列表">
+        <div className="store-rail" aria-label="我的店铺"><div className="store-rail-heading"><div><span className="overline">MY SHOPS</span><strong>我的店铺</strong></div><button aria-label="添加店铺" onClick={() => navigate('/admin/shops')} title="添加店铺" type="button">＋</button></div>{shops.map((shop) => { const selected = shop.id === shopId; const readiness = projectedShopAiReadiness(shop, selected ? learningJob : undefined); const aiOn = shop.aiMode === 'AUTO_ALLOWED'; return <article className={`store-rail-item ${selected ? 'is-selected' : ''}`} key={shop.id} onContextMenu={(event) => { event.preventDefault(); setMenu({ shopId: shop.id, x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => { if (event.shiftKey && event.key === 'F10') { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setMenu({ shopId: shop.id, x: rect.left + 24, y: rect.bottom - 4 }); } }} tabIndex={0}><button className="store-rail-main" onClick={() => { setShopId(shop.id); onShopChange(shop.id); setSelectedConversationId(''); navigate(`/workbench/shops/${encodeURIComponent(shop.id)}`); }} type="button"><span className="store-rail-logo"><ShoppingBag size={18} /></span><span><strong>{shop.name}</strong><small><i className={`store-ready-dot is-${String(readiness).toLowerCase()}`} />{readiness === 'READY' ? 'AI 已就绪' : readiness === 'OFF' ? 'AI 已停止' : readiness === 'FAILED' ? '准备失败' : readiness === 'DEGRADED' ? '需要处理' : 'AI 正在准备'}</small></span></button><label className="store-ai-switch" title={aiOn ? '关闭会话 AI' : '开启会话 AI'}><span className="sr-only">{shop.name} AI 开关</span><input aria-label={`${shop.name} AI 开关`} checked={aiOn} disabled={shopModeAction !== ''} onChange={() => void toggleShopAi(shop)} type="checkbox" /><i /><b>{aiOn ? 'ON' : 'OFF'}</b></label><button aria-haspopup="menu" aria-label={`${shop.name} 更多操作`} className="store-more-button" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setMenu({ shopId: shop.id, x: rect.right - 206, y: rect.bottom + 6 }); }} title="店铺操作" type="button"><MoreHorizontal size={17} /></button></article>; })}</div>
         <div className="conversation-heading">
           <div><span className="overline">INBOX</span><h2>会话</h2></div>
           <span className="count-pill dark-pill">{visibleConversations.length}</span>
@@ -602,28 +652,31 @@ export function WorkbenchPage({ token, shops, activeShopId, onShopChange, refres
       </section>
 
       <section className="chat-panel panel-surface" aria-label="聊天与消息">
-        {!activeConversation ? <EmptyState title="选择一个会话开始" detail="从左侧收件箱选择买家，消息与 AI 状态会在此展示。" /> : <>
+        {!activeConversation ? <ShopOverview learningJob={learningJob} onOpenProducts={() => navigate('/admin/products')} products={products} shop={activeShop} /> : <>
           <header className="chat-heading">
             <div className="chat-person"><Avatar label={buyerName(activeBuyer)} tone="mint" /><div><h2>{buyerName(activeBuyer)}</h2><p><span className="online-mark" />来自 {activeShop?.name ?? '当前店铺'} · {activeConversation.externalConversationId ?? shortId(activeConversation.id)}</p></div></div>
             <div className="chat-heading-actions"><span className={`mode-chip mode-${String(effectiveMode).toLowerCase()}`} title="会话配置上限">上限 · {statusLabel(effectiveMode)}</span><label className="mode-select"><span className="sr-only">会话策略</span><select aria-label="会话策略" value={selectedMode} onChange={(event) => void changeConversationMode(event.currentTarget.value as WorkbenchConversationMode)} disabled={conversationAction !== ''}>{(['AUTO', 'ASSIST', 'MANUAL', 'HOLD'] as const).map((mode) => <option value={mode} key={mode} disabled={!isConversationModeAllowed(mode, activeShop?.aiMode)}>{conversationModeOptionLabel(mode, activeShop?.aiMode)}</option>)}</select></label>{!isConversationModeAllowed('AUTO', activeShop?.aiMode) && <button className="mode-unlock-button" type="button" onClick={() => setPendingAutoEnable(true)} disabled={conversationAction !== ''}>{conversationAction === 'enable-auto' ? '开启中…' : '一键开启 AUTO'}</button>}</div>
           </header>
-           <div className="conversation-context-strip"><span>当前会话策略 · {statusLabel(selectedMode)}；会话配置上限 · {statusLabel(effectiveMode)}</span>{activeConversation.humanActive && <span className="risk-tag">人工接管中</span>}{activeConversation.syncState === 'DEGRADED' && <span className="risk-tag">连接降级 · 仅人工发送</span>}{activeConversation.needsReplan && <span className="risk-tag">消息已更新 · 正在重新规划</span>}</div>
+           <div className="conversation-context-strip"><span>当前会话策略 · {statusLabel(selectedMode)}；会话配置上限 · {statusLabel(effectiveMode)}</span><div className="chat-context-actions"><button onClick={() => setContextDrawer('order')} type="button">订单</button><button onClick={() => setContextDrawer('memory')} type="button">客户记忆</button><button onClick={() => setContextDrawer('advanced')} type="button">高级策略</button><button onClick={onTraceOpen} type="button">开发详情</button></div>{activeConversation.humanActive && <span className="risk-tag">人工接管中</span>}{activeConversation.syncState === 'DEGRADED' && <span className="risk-tag">连接降级 · 仅人工发送</span>}{activeConversation.needsReplan && <span className="risk-tag">消息已更新 · 正在重新规划</span>}</div>
+           <div className={`compact-ai-state is-${conversationAiState(activeConversation) === '生成中' ? 'generating' : conversationAiState(activeConversation) === '已自动发送' ? 'sent' : conversationAiState(activeConversation) === '已停止' ? 'stopped' : 'human'}`}><span><Bot size={16} /></span><strong>{conversationAiState(activeConversation)}</strong><small>{conversationAiState(activeConversation) === '生成中' ? 'AI 正在生成回复' : conversationAiState(activeConversation) === '已自动发送' ? '回复已进入发送链路' : conversationAiState(activeConversation) === '已停止' ? '当前会话由人工处理' : '请检查草稿或安全策略'}</small></div>
            <div className="conversation-control-bar"><div className="control-summary"><span className={`control-dot ${activeConversation.humanActive || effectiveMode === 'MANUAL' ? 'is-human' : 'is-ai'}`} /><span>{activeConversation.humanActive ? '人工正在处理当前会话' : effectiveMode === 'MANUAL' ? 'MANUAL_ONLY · 需人工回复' : `当前策略 · ${statusLabel(effectiveMode)}`}</span></div><div className="control-actions">{activeConversation.humanActive ? <button type="button" className="outline-button compact-button" onClick={() => void resumeAi()} disabled={conversationAction !== ''}>{conversationAction === 'resume' ? '恢复中…' : '恢复 AI'}</button> : <button type="button" className="outline-button compact-button" onClick={() => void takeover()} disabled={conversationAction !== '' || activeConversation.state === 'CLOSED'}>{conversationAction === 'takeover' ? '接管中…' : '人工接管'}</button>}{effectiveMode !== 'ASSIST' && <button type="button" className="text-button" onClick={() => void changeConversationMode('ASSIST')} disabled={conversationAction !== ''}>设为 ASSIST</button>}</div></div>
           <div className="chat-stream">
             {messages.length === 0 ? <EmptyState title="等待消息" detail="Buyer Simulator 发来文本、商品卡或订单卡后会实时出现在这里。" /> : messages.map((message) => <MessageBubble actions={canSoftRemoveMessage(message) ? <button aria-label={`从会话隐藏消息 ${messageText(message) || messageKindLabel(message.kind)}`} className="message-remove-button" disabled={messageAction !== ''} onClick={() => setPendingMessageRemoval(message)} type="button">隐藏</button> : undefined} message={message} key={message.id} />)}
           </div>
           <section className={`draft-card ${draft?.status ? `draft-${draft.status.toLowerCase()}` : 'draft-empty'}`} aria-label="AI Draft 与 Human Final"><div className="draft-card-heading"><div className="draft-icon">✦</div><div><strong>AI 回复草稿</strong><span>{draft ? draftStatusLabel(draft.status) : activeConversation.humanActive ? '人工接管中，草稿暂停' : '等待生成回复草稿'}</span></div><span className={`draft-state ${draft?.status === 'STALE' || draft?.status === 'EXPIRED' ? 'is-danger' : ''}`}>{draft?.status ?? 'NONE'}</span>{draft?.expiresAt && draftCanEdit && <span className="draft-ttl">{draftRemainingLabel(draftRemaining)}</span>}</div>{draft ? <><textarea className="draft-editor" value={draftText} onChange={(event) => setDraftText(event.currentTarget.value)} disabled={!draftCanEdit} aria-label="Human Final 编辑区" rows={2} /><div className="draft-card-footer"><span>{draft.editType ? `差异 · ${draft.editType}` : draftCanEdit ? '草稿可编辑，发送前会重新校验会话状态' : draft.staleReason ?? '当前草稿不可发送'}</span><div className="draft-actions"><label className="draft-edit-type"><span>编辑类型</span><select value={draftEditType} onChange={(event) => setDraftEditType(event.currentTarget.value as NonNullable<ReplyDraft['editType']>)} disabled={!draftCanEdit} aria-label="Human Final 编辑类型"><option value="STYLE_EDIT">风格调整</option><option value="FACTUAL_CORRECTION">事实修正</option><option value="KNOWLEDGE_ENRICHMENT">知识补充</option></select></label><button type="button" className="text-button" onClick={applyDraftToComposer} disabled={!draftText.trim() || !draftCanEdit}>应用到回复</button>{draftCanEdit && <button type="button" className="outline-button compact-button" onClick={() => void sendDraft()} disabled={!draftText.trim() || isSending || activeConversation.humanActive}>{isSending ? '发送中…' : '发送人工定稿'}</button>}{(draft.status === 'STALE' || draft.status === 'EXPIRED' || draft.status === 'FAILED') && <button type="button" className="text-button" onClick={() => void regenerate()} disabled={draftAction !== '' || activeConversation.humanActive}>{draftAction === 'regenerate' ? '请求中…' : '重新生成'}</button>}</div></div></> : <div className="draft-empty-copy">买家发来新消息后，回复草稿会显示在这里。</div>}</section>
-          {actionNotice && <p className="inline-notice is-success" role="status">{actionNotice}</p>}
           {sendError && <p className="inline-error" role="alert">{sendError}</p>}
           <div className="chat-composer"><textarea value={composer} onChange={(event) => setComposer(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendHumanMessage(); } }} placeholder="以客服身份回复…" rows={2} /><div className="composer-footer"><span>Enter 发送 · Shift + Enter 换行</span><button className="send-button" type="button" onClick={() => void sendHumanMessage()} disabled={!composer.trim() || !selectedConversationId || isSending}>{isSending ? '发送中…' : '发送回复'}</button></div></div>
         </>}
       </section>
 
       <aside className="context-panel panel-surface" aria-label="业务上下文">
-        <div className="context-heading"><div><span className="overline">CONTEXT</span><h2>业务上下文</h2></div></div>
-        <div aria-label="业务上下文视图" className="context-tabs" role="tablist"><button aria-selected={contextTab === 'assistant'} role="tab" type="button" className={contextTab === 'assistant' ? 'is-active' : ''} onClick={() => setContextTab('assistant')}>助手</button><button aria-selected={contextTab === 'product'} role="tab" type="button" className={contextTab === 'product' ? 'is-active' : ''} onClick={() => setContextTab('product')}>商品</button><button aria-selected={contextTab === 'order'} role="tab" type="button" className={contextTab === 'order' ? 'is-active' : ''} onClick={() => setContextTab('order')}>订单</button><button aria-selected={contextTab === 'memory'} role="tab" type="button" className={contextTab === 'memory' ? 'is-active' : ''} onClick={() => setContextTab('memory')}>记忆</button></div>
-        {contextTab === 'assistant' ? <div className="assistant-context"><div className="assistant-status-card"><span className="assistant-orb">✦</span><div><strong>{activeConversation?.humanActive ? '人工接管已开启' : 'AI 辅助准备就绪'}</strong><p>{activeShop ? `${activeShop.name} · ${modeLabel(activeShop.aiMode)}` : '选择店铺后加载策略'}</p></div></div><div className="context-section"><div className="section-label-row"><span>当前主题</span></div><strong>{activeConversation?.activeTopic ?? '尚未识别主题'}</strong><p className="muted-copy">商品、订单与售后事实会优先于知识库。</p>{activeConversation?.taskBundle && <div className="task-bundle"><div className="section-label-row"><span>处理任务 · {activeConversation.taskBundle.tasks.length}/4</span><span className="status-badge is-waiting">{taskStatusLabel(activeConversation.taskBundle.status)}</span></div>{activeConversation.taskBundle.tasks.map((task) => <div className="task-row" key={task.id}><span>{task.intent}</span><small>{taskStatusLabel(task.status)}</small></div>)}</div>}</div><div className="context-section"><div className="section-label-row"><span>快捷短语</span></div><div className="quick-phrases"><button type="button" onClick={() => setComposer('您好，我来帮您核对一下订单信息。')}>核对订单</button><button type="button" onClick={() => setComposer('我先为您确认库存和发货时效。')}>确认库存</button><button type="button" onClick={() => setComposer('请稍等，我为您转接人工客服。')}>转人工</button></div></div></div> : contextTab === 'product' ? <div className="context-scroll"><div className="context-intro"><span>当前商品与推荐候选</span><small>{contextProductList.length} 个结果</small></div>{contextProductList.length === 0 ? <ContextProduct /> : contextProductList.map((product) => <ContextProduct product={product} key={product.id} />)}</div> : contextTab === 'order' ? <div className="context-scroll"><div className="context-intro"><span>当前买家订单</span><small>{orders.length} 个结果</small></div>{activeOrder ? <ContextOrder order={activeOrder} /> : orders.length > 0 ? orders.map((order) => <ContextOrder order={order} key={order.id} />) : <ContextOrder />}</div> : <div className="context-scroll memory-context"><div className="context-intro"><span>人工 CustomerMemory</span><small>仅当前店铺 / 买家</small></div><div className="memory-form"><select value={memoryForm.type} onChange={(event) => setMemoryForm((current) => ({ ...current, type: event.currentTarget.value as CustomerMemoryInputDto['type'] }))} aria-label="记忆类型"><option value="PREFERENCE">偏好</option><option value="PRODUCT_PREFERENCE">商品偏好</option><option value="ONGOING_CASE">进行中事项</option></select><input value={memoryForm.key} onChange={(event) => setMemoryForm((current) => ({ ...current, key: event.currentTarget.value }))} placeholder="记忆键，例如 size" aria-label="记忆键" /><input value={memoryForm.value} onChange={(event) => setMemoryForm((current) => ({ ...current, value: event.currentTarget.value }))} placeholder="人工维护的事实" aria-label="记忆内容" /><div className="memory-form-actions"><button type="button" className="primary-button compact-button" onClick={() => void saveMemory()} disabled={!activeBuyer || !memoryForm.key.trim() || !memoryForm.value.trim() || memoryAction !== ''}>{memoryAction.startsWith('edit') ? '保存修改' : '新增记忆'}</button>{editingMemoryId && <button type="button" className="text-button" onClick={() => { setEditingMemoryId(''); setMemoryForm({ type: 'PREFERENCE', key: '', value: '' }); }}>取消编辑</button>}</div></div>{memories.length === 0 ? <EmptyState title="暂无人工记忆" detail="只有人工主动保存的偏好、商品偏好或进行中事项会进入这里。" /> : memories.map((memory) => <article className={`memory-card memory-${memory.status.toLowerCase()}`} key={memory.id}><div><strong>{memory.key}</strong><p>{typeof memory.value.text === 'string' ? memory.value.text : JSON.stringify(memory.value)}</p><small>{memory.type} · {memory.status}{memory.expiresAt ? ` · ${readableDate(memory.expiresAt)} 到期` : ''}</small></div><div className="memory-card-actions"><button type="button" className="text-button" onClick={() => { setEditingMemoryId(memory.id); setMemoryForm({ type: memory.type, key: memory.key, value: typeof memory.value.text === 'string' ? memory.value.text : JSON.stringify(memory.value) }); }}>编辑</button>{memory.status === 'ACTIVE' && <button type="button" className="text-button" onClick={() => void disableMemory(memory)} disabled={memoryAction !== ''}>停用</button>}<button type="button" className="text-button danger-button" onClick={() => setPendingMemoryDelete(memory)} disabled={memoryAction !== ''}>删除</button></div></article>)}</div>}
+        <div className="context-heading"><div><span className="overline">PRODUCT CONTEXT</span><h2>商品信息</h2></div><span className={`product-readiness is-${String(projectedShopAiReadiness(activeShop, learningJob)).toLowerCase()}`}><i />{projectedShopAiReadiness(activeShop, learningJob) === 'READY' ? '已学习' : projectedShopAiReadiness(activeShop, learningJob) === 'FAILED' ? '学习失败' : projectedShopAiReadiness(activeShop, learningJob) === 'DEGRADED' ? '部分学习' : projectedShopAiReadiness(activeShop, learningJob) === 'OFF' ? '已停止' : '学习中'}</span></div>
+        <div className="workbench-product-picker" aria-label="切换商品">{products.length === 0 ? <p>当前店铺暂无商品。</p> : products.map((product) => <button className={product.id === selectedProduct?.id ? 'is-selected' : ''} key={product.id} onClick={() => setSelectedProductId(product.id)} type="button"><span className="mini-art">✦</span><span><strong>{productName(product)}</strong><small>{productPrice(product)} · 库存 {productInventory(product)}</small></span><ChevronRight size={15} /></button>)}</div>
+        <div className="workbench-selected-product"><ContextProduct product={selectedProduct} /></div>
       </aside>
+      <Drawer open={contextDrawer === 'order'} onClose={() => setContextDrawer(null)} title="订单信息"><div className="context-scroll drawer-context"><div className="context-intro"><span>当前买家订单</span><small>{orders.length} 个结果</small></div>{activeOrder ? <ContextOrder order={activeOrder} /> : orders.length > 0 ? orders.map((order) => <ContextOrder order={order} key={order.id} />) : <ContextOrder />}</div></Drawer>
+      <Drawer open={contextDrawer === 'memory'} onClose={() => setContextDrawer(null)} title="客户记忆"><div className="context-scroll memory-context drawer-context"><div className="context-intro"><span>人工 CustomerMemory</span><small>仅当前店铺 / 买家</small></div><div className="memory-form"><select value={memoryForm.type} onChange={(event) => setMemoryForm((current) => ({ ...current, type: event.currentTarget.value as CustomerMemoryInputDto['type'] }))} aria-label="记忆类型"><option value="PREFERENCE">偏好</option><option value="PRODUCT_PREFERENCE">商品偏好</option><option value="ONGOING_CASE">进行中事项</option></select><input value={memoryForm.key} onChange={(event) => setMemoryForm((current) => ({ ...current, key: event.currentTarget.value }))} placeholder="记忆键，例如 size" aria-label="记忆键" /><input value={memoryForm.value} onChange={(event) => setMemoryForm((current) => ({ ...current, value: event.currentTarget.value }))} placeholder="人工维护的事实" aria-label="记忆内容" /><button type="button" className="primary-button compact-button" onClick={() => void saveMemory()} disabled={!activeBuyer || !memoryForm.key.trim() || !memoryForm.value.trim() || memoryAction !== ''}>{memoryAction.startsWith('edit') ? '保存修改' : '新增记忆'}</button></div>{memories.length === 0 ? <EmptyState title="暂无人工记忆" detail="人工保存的偏好和进行中事项会显示在这里。" /> : memories.map((memory) => <article className={`memory-card memory-${memory.status.toLowerCase()}`} key={memory.id}><div><strong>{memory.key}</strong><p>{typeof memory.value.text === 'string' ? memory.value.text : JSON.stringify(memory.value)}</p><small>{memory.type} · {memory.status}</small></div><div className="memory-card-actions"><button type="button" className="text-button" onClick={() => { setEditingMemoryId(memory.id); setMemoryForm({ type: memory.type, key: memory.key, value: typeof memory.value.text === 'string' ? memory.value.text : JSON.stringify(memory.value) }); }}>编辑</button>{memory.status === 'ACTIVE' && <button type="button" className="text-button" onClick={() => void disableMemory(memory)} disabled={memoryAction !== ''}>停用</button>}<button type="button" className="text-button danger-button" onClick={() => setPendingMemoryDelete(memory)} disabled={memoryAction !== ''}>删除</button></div></article>)}</div></Drawer>
+      <Drawer open={contextDrawer === 'advanced'} onClose={() => setContextDrawer(null)} title="高级会话策略"><div className="advanced-policy-drawer"><p>这里调整单个会话的策略。店铺 AI 开关仍是最高上限，风险规则可以继续降级。</p><label><span>会话策略</span><select aria-label="高级会话策略" value={selectedMode} onChange={(event) => void changeConversationMode(event.currentTarget.value as WorkbenchConversationMode)} disabled={conversationAction !== ''}>{(['AUTO', 'ASSIST', 'MANUAL', 'HOLD'] as const).map((mode) => <option value={mode} key={mode} disabled={!isConversationModeAllowed(mode, activeShop?.aiMode)}>{conversationModeOptionLabel(mode, activeShop?.aiMode)}</option>)}</select></label>{!isConversationModeAllowed('AUTO', activeShop?.aiMode) && <button className="primary-button" onClick={() => setPendingAutoEnable(true)} type="button">开启整店 AUTO</button>}</div></Drawer>
       <DeveloperTracePanel open={traceOpen} onClose={onTraceClose} loading={developerTraceLoading} error={developerTraceError} trace={developerTrace} conversationId={selectedConversationId} />
     </div>
   );

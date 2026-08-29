@@ -138,6 +138,13 @@ export function metricSampleDetail(snapshot: AdminMetricSnapshot, available: str
   return snapshot.value === null ? unavailable : `${available} · 样本 ${snapshot.sampleSize}`;
 }
 
+export type ShopAiSwitchMode = Extract<ShopSummary['aiMode'], 'AUTO_ALLOWED' | 'MANUAL_ONLY'>;
+
+/** The shop-level control is intentionally binary; ASSIST is a conversation-level downgrade. */
+export function shopAiSwitchMode(enabled: boolean): ShopAiSwitchMode {
+  return enabled ? 'AUTO_ALLOWED' : 'MANUAL_ONLY';
+}
+
 export function DashboardPage({ token, shops, refreshKey }: Pick<SharedViewProps, 'token' | 'shops' | 'refreshKey'>) {
   const navigate = useNavigate();
   const [shopFilter, setShopFilter] = useState('ALL');
@@ -226,13 +233,15 @@ export function ShopsAdminPage({ token, shops, activeShopId, onShopChange, onFou
       const shop = await createShop(token, {
         platform: 'DOUYIN_DEMO',
         templateKey,
+        aiMode: 'AUTO_ALLOWED',
         ...(shopName.trim() ? { name: shopName.trim() } : {}),
       });
       onShopChange(shop.id);
       await onFoundationRefresh?.();
       setCreateOpen(false);
       setShopName('');
-      setNotice(`已添加“${shop.name}”并自动选中，可继续设置回复方式或进入工作台。`);
+      setNotice(`已添加“${shop.name}”，商品学习会自动开始。`);
+      navigate(`/workbench/shops/${encodeURIComponent(shop.id)}`);
     } catch (error) {
       setNotice(`添加失败：${errorMessage(error)}`);
     } finally {
@@ -240,7 +249,7 @@ export function ShopsAdminPage({ token, shops, activeShopId, onShopChange, onFou
     }
   };
 
-  const changeShopMode = async (shopId: string, mode: ShopSummary['aiMode']) => {
+  const changeShopMode = async (shopId: string, mode: ShopAiSwitchMode) => {
     setShopAction(`mode-${shopId}`);
     setNotice('');
     try {
@@ -248,7 +257,7 @@ export function ShopsAdminPage({ token, shops, activeShopId, onShopChange, onFou
       await onFoundationRefresh?.();
       setNotice(mode === 'AUTO_ALLOWED'
         ? `“${updated.name}”已允许低风险消息自动回复；设置只影响后续新任务。`
-        : `“${updated.name}”已切换为${mode === 'ASSIST_ONLY' ? '辅助回复' : '仅人工'}。`);
+        : `“${updated.name}”的会话 AI 已停止；后续任务需要人工处理。`);
     } catch (error) {
       setNotice(`模式更新失败：${errorMessage(error)}`);
     } finally {
@@ -258,7 +267,7 @@ export function ShopsAdminPage({ token, shops, activeShopId, onShopChange, onFou
 
   return <div className="admin-page phase05-page shops-admin-page"><AdminTabs active="shops" /><section className="admin-page-header panel-surface"><div><span className="overline">SHOP CONTROL</span><h2>店铺配置</h2><p>添加模拟店铺、设置 AI 回复上限，然后直接进入对应工作台。</p></div><button className="primary-button shop-create-trigger" type="button" onClick={() => setCreateOpen(true)}>＋ 添加店铺</button></section>
     {notice && <div className={`inline-notice ${notice.includes('失败') ? '' : 'is-success'}`} role="status">{notice}</div>}
-    {shops.length === 0 ? <EmptyState title="暂无店铺" detail="点击“添加店铺”，使用演示模板立即创建。" /> : <section className="shops-admin-grid" aria-label="店铺列表">{shops.map((shop) => { const selected = shop.id === selectedShopId; return <article className={`shop-admin-card panel-surface ${selected ? 'is-selected' : ''}`} key={shop.id}><div className="shop-admin-card-heading"><div className="shop-admin-identity"><span className="shop-admin-mark">{shop.name.slice(0, 1).toUpperCase()}</span><div><span className="overline">{shop.platform === 'DOUYIN_DEMO' ? '模拟抖音店铺' : shop.platform}</span><h3>{shop.name}</h3><small>{shop.externalShopId ? `店铺编号 · ${shortId(shop.externalShopId)}` : '暂无外部店铺编号'}</small></div></div><span className={`status-badge ${phase05StatusClass(shop.connectionState)}`}><i className={`shop-status-dot is-${shop.connectionState.toLowerCase()}`} />{connectionStateLabel(shop.connectionState)}</span></div><div className="shop-admin-facts"><div className="shop-ai-mode-fact"><label htmlFor={`shop-mode-${shop.id}`}>AI 回复方式</label><select id={`shop-mode-${shop.id}`} aria-label={`${shop.name} AI 回复方式`} value={shop.aiMode} onChange={(event) => void changeShopMode(shop.id, event.currentTarget.value as ShopSummary['aiMode'])} disabled={shopAction !== ''}><option value="AUTO_ALLOWED">自动回复（仅低风险）</option><option value="ASSIST_ONLY">辅助回复（人工发送）</option><option value="MANUAL_ONLY">仅人工</option></select><small>{shop.aiMode === 'AUTO_ALLOWED' ? '低风险新任务可自动发送' : shop.aiMode === 'ASSIST_ONLY' ? 'AI 生成草稿，由人工确认发送' : 'AI 不自动生成或发送回复'}</small></div><div><span>商品同步</span><strong>{shop.syncComplete ? '已完成' : '待同步'}</strong></div><div><span>平台</span><strong>模拟抖音</strong></div></div><div className="shop-admin-actions"><button className="primary-button" type="button" onClick={() => openForShop(shop.id, '/workbench')}>打开工作台</button><button className="outline-button" type="button" onClick={() => openForShop(shop.id, '/admin/products')}>商品同步 / 学习</button><button className="outline-button" type="button" onClick={() => openForShop(shop.id, '/admin/knowledge')}>知识运营</button></div></article>; })}</section>}
+    {shops.length === 0 ? <EmptyState title="暂无店铺" detail="点击“添加店铺”，使用演示模板立即创建。" /> : <section className="shops-admin-grid" aria-label="店铺列表">{shops.map((shop) => { const selected = shop.id === selectedShopId; const aiEnabled = shop.aiMode === 'AUTO_ALLOWED'; return <article className={`shop-admin-card panel-surface ${selected ? 'is-selected' : ''}`} key={shop.id}><div className="shop-admin-card-heading"><div className="shop-admin-identity"><span className="shop-admin-mark">{shop.name.slice(0, 1).toUpperCase()}</span><div><span className="overline">{shop.platform === 'DOUYIN_DEMO' ? '模拟抖音店铺' : shop.platform}</span><h3>{shop.name}</h3><small>{shop.externalShopId ? `店铺编号 · ${shortId(shop.externalShopId)}` : '暂无外部店铺编号'}</small></div></div><span className={`status-badge ${phase05StatusClass(shop.connectionState)}`}><i className={`shop-status-dot is-${shop.connectionState.toLowerCase()}`} />{connectionStateLabel(shop.connectionState)}</span></div><div className="shop-admin-facts"><div className="shop-ai-mode-fact"><span className="shop-ai-control-label">AI 回复开关</span><label className="store-ai-switch admin-store-ai-switch" title={aiEnabled ? '关闭会话 AI' : '开启会话 AI'}><span className="sr-only">{shop.name} AI 开关</span><input aria-label={`${shop.name} AI 开关`} checked={aiEnabled} onChange={(event) => void changeShopMode(shop.id, shopAiSwitchMode(event.currentTarget.checked))} disabled={shopAction !== ''} type="checkbox" /><i /><b>{aiEnabled ? 'ON' : 'OFF'}</b></label><small>{aiEnabled ? '低风险新任务可自动发送；高风险会降级人工。' : shop.aiMode === 'ASSIST_ONLY' ? '当前为内部辅助策略；店铺开关关闭后不自动发送。' : '店铺 AI 已关闭，后续任务需要人工处理。'}</small></div><div><span>商品同步</span><strong>{shop.syncComplete ? '已完成' : '待同步'}</strong></div><div><span>平台</span><strong>模拟抖音</strong></div></div><div className="shop-admin-actions"><button className="primary-button" type="button" onClick={() => openForShop(shop.id, `/workbench/shops/${encodeURIComponent(shop.id)}`)}>打开工作台</button><button className="outline-button" type="button" onClick={() => openForShop(shop.id, '/admin/products')}>商品同步 / 学习</button><button className="outline-button" type="button" onClick={() => openForShop(shop.id, '/admin/knowledge')}>知识运营</button></div></article>; })}</section>}
     <Drawer open={createOpen} onClose={() => { if (shopAction !== 'create') setCreateOpen(false); }} title="添加店铺"><div className="shop-create-form"><p>模板会复制合成演示商品、订单与知识，并复用当前 Workspace 的合成买家；不会连接真实抖音。</p><label className="compact-field"><span>店铺名称（可选）</span><input aria-label="店铺名称" value={shopName} onChange={(event) => setShopName(event.currentTarget.value)} placeholder="例如：我的演示店" maxLength={40} /></label><label className="compact-field"><span>演示模板</span><select aria-label="演示模板" value={templateKey} onChange={(event) => setTemplateKey(event.currentTarget.value)}><option value="FASHION_DEMO">服饰店基础设置</option><option value="TECH_DEMO">数码店基础设置</option></select></label><div className="shop-create-summary"><span>平台</span><strong>MockDouyin（本地演示）</strong><small>不会连接、创建或修改真实抖音店铺。</small></div><div className="shop-create-actions"><button className="outline-button" type="button" onClick={() => setCreateOpen(false)} disabled={shopAction === 'create'}>取消</button><button className="primary-button" type="button" onClick={() => void addShop()} disabled={shopAction === 'create'}>{shopAction === 'create' ? '添加中…' : '添加并选中'}</button></div></div></Drawer>
   </div>;
 }

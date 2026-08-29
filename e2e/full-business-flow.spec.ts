@@ -1,48 +1,79 @@
 import { expect, test } from '@playwright/test';
+import {
+  captureConsoleDiagnostics,
+  createOperationalShop,
+  expectConnected,
+  expectNoDiagnostics,
+  expectNoGlobalOverflow,
+} from './rearchitecture-helpers';
 
-test('real buyer-to-human-final flow stays visible across Buyer Simulator and Workbench', async ({ page }) => {
-  test.setTimeout(90_000);
-  test.skip(process.env.RUN_REAL_INFRA_E2E !== '1', 'requires the migrated PostgreSQL/Redis/MinIO stack and running API/Web');
-
-  const buyerMessages = ['你好', '什么时候发货？', '我是新疆的'];
-  const humanFinal = '您好，偏远地区发货时效以实际物流信息为准，我来继续为您处理。';
+test('a real buyer event reaches workbench and live-test on the same shop', async ({ page }) => {
+  test.setTimeout(150_000);
+  test.skip(
+    process.env.RUN_REAL_INFRA_E2E !== '1',
+    'requires the migrated PostgreSQL/Redis/MinIO stack and running API/Web',
+  );
+  const diagnostics = captureConsoleDiagnostics(page);
+  const activeWorkspaceSockets = new Set<object>();
+  const isWorkspaceSocket = (url: string) => {
+    try { return new URL(url).pathname.startsWith('/ws'); } catch { return url.includes('/ws'); }
+  };
+  // A full document navigation creates a new Application/socket while the
+  // browser may report the old WebSocket close a few ticks later. Keep only
+  // sockets belonging to the current document; SPA route changes retain the
+  // set and therefore prove LiveTest reuses the active connection.
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) activeWorkspaceSockets.clear();
+  });
+  page.on('websocket', (websocket) => {
+    if (!isWorkspaceSocket(websocket.url())) return;
+    const socket = websocket as unknown as object;
+    activeWorkspaceSockets.add(socket);
+    websocket.on('close', () => activeWorkspaceSockets.delete(socket));
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { shopId, name } = await createOperationalShop(page, `Luna-flow-${Date.now()}`);
 
   await page.goto('/buyer-simulator');
-  await expect(page.getByLabel(/服务状态：实时已连接/)).toBeVisible();
+  await expectConnected(page);
+  await expect(page.getByRole('heading', { level: 2, name: '买家模拟器' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('combobox', { name: '买家' })).not.toHaveValue('', { timeout: 30_000 });
+  const message = `Luna 实时链路 ${Date.now()}`;
+  await page.getByPlaceholder('输入咨询内容…').fill(message);
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await expect(page.getByText(message, { exact: true })).toBeVisible({ timeout: 30_000 });
 
-  // This isolated browser context owns a newly created synthetic Workspace.
-  // Reset proves the durable seed/reset path without touching another test.
-  const reset = page.getByRole('button', { name: '重置演示' });
-  await reset.click();
-  await expect(reset).toHaveText('重置演示', { timeout: 30_000 });
-  await expect(page.getByRole('combobox', { name: '买家' })).not.toHaveValue('');
+  await page.getByRole('link', { name: '工作台', exact: true }).click();
+  await expect(page).toHaveURL(/\/workbench$/);
+  const conversation = page.getByRole('button', { name: new RegExp(message) });
+  await expect(conversation).toBeVisible({ timeout: 45_000 });
+  await conversation.click();
+  await expect(page.getByRole('region', { name: '聊天与消息' }).getByText(message, { exact: true })).toBeVisible({ timeout: 30_000 });
 
-  const composer = page.getByPlaceholder('输入咨询内容…');
-  const send = page.getByRole('button', { name: '发送', exact: true });
-  for (const message of buyerMessages) {
-    await composer.fill(message);
-    await expect(send).toBeEnabled();
-    await send.click();
-    await expect(page.getByText(message, { exact: true })).toBeVisible();
-    await expect(composer).toHaveValue('', { timeout: 30_000 });
-  }
+  // LiveTestPage receives Application's realtime event/status props and must
+  // not establish a second socket for the same operational session.
+  await expect.poll(() => activeWorkspaceSockets.size, { timeout: 30_000 }).toBe(1);
+  await page.getByRole('button', { name: `${name} 更多操作` }).click();
+  await page.getByRole('menu', { name: '店铺操作' }).getByRole('menuitem', { name: '打开实时联调' }).click();
+  await expect(page).toHaveURL(`/live-test/${encodeURIComponent(shopId)}`);
+  await expect(page.getByRole('heading', { level: 1, name: '实时联调' }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel('实时连接：已连接')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('combobox', { name: '选择模拟买家' })).not.toHaveValue('', { timeout: 30_000 });
+  await expect(page.getByRole('region', { name: '买家端' }).getByText(message, { exact: true })).toBeVisible({ timeout: 45_000 });
+  // The same operational socket may reconnect while the worker is busy; the
+  // invariant is that LiveTest has one active workspace socket and did not
+  // open a second connection for its own state.
+  expect(activeWorkspaceSockets.size).toBe(1);
 
-  await page.reload();
-  for (const message of buyerMessages) await expect(page.getByText(message, { exact: true })).toBeVisible();
+  const storeTab = page.getByRole('tab', { name: '店铺端' });
+  if (await storeTab.isVisible()) await storeTab.click();
+  await expect(page.getByRole('region', { name: '店铺端' })).toBeVisible();
+  const takeover = page.getByRole('button', { name: '人工接管', exact: true });
+  await expect(takeover).toBeVisible({ timeout: 30_000 });
+  await takeover.click();
+  await expect(page.getByRole('status')).toContainText('人工接管已开启', { timeout: 30_000 });
+  await expect(page.getByRole('button', { name: '交还 AI', exact: true })).toBeVisible({ timeout: 30_000 });
 
-  await page.getByRole('link', { name: /工作台/ }).click();
-  await expect(page.getByRole('button', { name: /小林.*我是新疆的/ })).toBeVisible({ timeout: 20_000 });
-  const chat = page.getByRole('region', { name: '聊天与消息' });
-  for (const message of buyerMessages) await expect(chat.getByText(message, { exact: true })).toBeVisible();
-  await expect(chat.getByRole('textbox', { name: 'Human Final 编辑区' })).toHaveValue(/.+/, { timeout: 20_000 });
-
-  await chat.getByRole('button', { name: '人工接管', exact: true }).click();
-  await expect(chat.getByText('人工接管中', { exact: true })).toBeVisible();
-  await chat.getByPlaceholder('以客服身份回复…').fill(humanFinal);
-  await chat.getByRole('button', { name: '发送回复', exact: true }).click();
-  await expect(chat.getByText(/Human Final 已接受/)).toBeVisible({ timeout: 20_000 });
-  await expect(chat.getByText(humanFinal, { exact: true })).toBeVisible();
-
-  await page.getByRole('link', { name: /买家模拟器/ }).click();
-  await expect(page.locator('.phone-messages').getByText(humanFinal, { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expectNoGlobalOverflow(page);
+  await expectNoDiagnostics(diagnostics);
 });

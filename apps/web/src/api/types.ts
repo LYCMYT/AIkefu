@@ -54,6 +54,26 @@ export interface WorkspaceResetResult {
   counts?: SeedCounts;
 }
 
+export interface ForbiddenTermRule {
+  term: string;
+  replacement: string;
+}
+
+export interface ShopSettings {
+  shopId?: string;
+  tone: string;
+  logisticsPolicy: string;
+  shippingPolicy: string;
+  afterSalesPolicy: string;
+  welcomeMessage: string;
+  closingMessages: Record<string, string>;
+  transferKeywords: string[];
+  forbiddenTerms: ForbiddenTermRule[];
+  updatedAt?: string;
+}
+
+export type ShopSettingsInput = Omit<ShopSettings, 'shopId' | 'updatedAt'>;
+
 export interface Buyer {
   id: string;
   displayName?: string;

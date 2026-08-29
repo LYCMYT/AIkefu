@@ -10,4 +10,5 @@ export {
   removeWorkflowNode, updateWorkflowNodeConfig, updateWorkflowSettings, workflowGraphEquals,
 } from './features/workflows/WorkflowPage';
 export { incidentCanAddRegression, incidentCanCorrect, incidentCanResolve, incidentCanSetRootCause } from './features/incidents/IncidentPage';
+export { shopAiSwitchMode } from './features/dashboard/DashboardPage';
 export { default } from './app/Application';
