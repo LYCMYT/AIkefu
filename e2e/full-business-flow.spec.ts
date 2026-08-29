@@ -45,7 +45,10 @@ test('a real buyer event reaches workbench and live-test on the same shop', asyn
 
   await page.getByRole('link', { name: '工作台', exact: true }).click();
   await expect(page).toHaveURL(/\/workbench$/);
-  const conversation = page.getByRole('button', { name: new RegExp(message) });
+  // The scheduled welcome or a fast AI receipt may replace the buyer text in
+  // the conversation preview between visibility and click. Select the sole
+  // durable conversation, then prove the buyer turn exists in its transcript.
+  const conversation = page.getByRole('region', { name: '会话列表' }).locator('.conversation-row').first();
   await expect(conversation).toBeVisible({ timeout: 45_000 });
   await conversation.click();
   await expect(page.getByRole('region', { name: '聊天与消息' }).getByText(message, { exact: true })).toBeVisible({ timeout: 30_000 });
