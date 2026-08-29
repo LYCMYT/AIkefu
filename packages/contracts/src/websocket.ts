@@ -2,7 +2,8 @@ import type { IsoDateTime } from './workspace';
 import type { Conversation, TurnBuffer, UserTurn } from './conversation';
 import type { Message } from './message';
 import type { AiUsageEntry } from './ai';
-import type { KnowledgeIndexStatus, KnowledgeItem, ProductLearningStatus } from './knowledge';
+import type { KnowledgeIndexStatus, KnowledgeItem, ProductLearningJob, ProductLearningStatus } from './knowledge';
+import type { ShopAiReadiness } from './workspace';
 import type {
   ReplyDraft,
   ReplyJob,
@@ -46,6 +47,7 @@ export type WorkspaceEventType =
   | 'PRODUCT_UPDATED'
   | 'ORDER_UPDATED'
   | 'KNOWLEDGE_UPDATED'
+  | 'PRODUCT_LEARNING_UPDATED'
   | 'QUALITY_REVIEW_UPDATED'
   | 'REPLY_INCIDENT_UPDATED'
   | 'SHOP_CONNECTION_CHANGED'
@@ -65,6 +67,7 @@ export type WorkspaceEventEntityType =
   | 'PRODUCT'
   | 'ORDER'
   | 'KNOWLEDGE'
+  | 'PRODUCT_LEARNING_JOB'
   | 'QUALITY_REVIEW'
   | 'REPLY_INCIDENT'
   | 'SHOP'
@@ -183,6 +186,12 @@ export interface ProductUpdatedPayload {
   learningStatus?: ProductLearningStatus;
 }
 
+export interface ProductLearningUpdatedPayload {
+  shopId: string;
+  job: ProductLearningJob;
+  readiness: ShopAiReadiness;
+}
+
 export interface KnowledgeUpdatedPayload {
   shopId: string;
   knowledgeId: string;
@@ -251,6 +260,7 @@ export interface WorkspaceEventPayloadMap {
   PRODUCT_UPDATED: ProductUpdatedPayload;
   ORDER_UPDATED: OrderUpdatedPayload;
   KNOWLEDGE_UPDATED: KnowledgeUpdatedPayload;
+  PRODUCT_LEARNING_UPDATED: ProductLearningUpdatedPayload;
   USAGE_UPDATED: UsageUpdatedPayload;
   WORKFLOW_RUN_UPDATED: WorkflowRunUpdatedPayload;
   WORKFLOW_NODE_UPDATED: WorkflowNodeUpdatedPayload;

@@ -6,6 +6,13 @@ import type { ReplyJobScope } from './reply-job.service';
 import { ConversationTransportMutex, localConversationTransportMutex, transportMutexKey, transportShopMutexKey } from './conversation-transport-mutex.service';
 import { TraceService } from '../trace/trace.service';
 import { ReplyIncidentPublisher } from '../incidents/reply-incident.publisher';
+import { autoReplyReady } from '../shops/shop-ai-readiness';
+
+type AutoShopSnapshot = {
+  aiMode: string;
+  seedKey: string;
+  productLearningJobs: Array<{ status: string }>;
+};
 
 export interface EnqueueSendOutboxInput {
   replyJobId?: string;
@@ -171,7 +178,7 @@ export class SendOutboxService {
    */
   async claim(scope: ReplyJobScope, sendOutboxId: string, forbiddenTermBlocked = false): Promise<SendClaim> {
     return this.prisma.$transaction(async (tx) => {
-      const shopRepository = tx as unknown as { shop?: { findFirst(input: unknown): Promise<{ aiMode: string } | null> } };
+      const shopRepository = tx as unknown as { shop?: { findFirst(input: unknown): Promise<AutoShopSnapshot | null> } };
       const outbox = await tx.sendOutbox.findFirst({
         where: { id: sendOutboxId, ...scope },
       });
@@ -193,12 +200,19 @@ export class SendOutboxService {
         tx.message.findFirst({
           where: { ...scope, conversationId: outbox.conversationId, status: { not: 'RECALLED' } },
           orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }],
-          select: { id: true },
+          select: { id: true, externalMessageId: true, role: true },
         }),
-        shopRepository.shop?.findFirst({ where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId }, select: { aiMode: true } }) ?? Promise.resolve({ aiMode: 'AUTO_ALLOWED' }),
+        shopRepository.shop?.findFirst({
+          where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+          select: {
+            aiMode: true,
+            seedKey: true,
+            productLearningJobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
+          },
+        }) ?? Promise.resolve(null),
       ]);
       if (!conversation) return this.rejectClaim(tx, scope, outbox.id, 'CONTEXT_STALE');
-      if (!isHumanPayload(outbox.payloadJson) && !autoSendAllowed(shop?.aiMode, conversation.overrideMode)) {
+      if (!isHumanPayload(outbox.payloadJson) && !autoSendAllowed(shop, conversation.overrideMode)) {
         return this.rejectClaim(tx, scope, outbox.id, 'CONTEXT_STALE');
       }
       if (!isHumanPayload(outbox.payloadJson) && outbox.replyJobId) {
@@ -208,6 +222,7 @@ export class SendOutboxService {
         });
         if (!job) return this.rejectClaim(tx, scope, outbox.id, 'CONTEXT_STALE');
       }
+      const welcomeTail = await this.isConfirmedWelcomeTail(tx, scope, outbox, conversation, lastMessage);
       const guard = evaluateSendGuard({
         lastMessageId: lastMessage?.id ?? null,
         lastSequence: conversation.lastCommittedSequence,
@@ -215,8 +230,8 @@ export class SendOutboxService {
         humanActive: isHumanPayload(outbox.payloadJson) ? false : conversation.humanActive,
         conversationState: conversation.state,
         idempotencyKey: outbox.idempotencyKey,
-        expectedLastMessageId: outbox.expectedLastMessageId,
-        expectedSequence: outbox.expectedSequence,
+        expectedLastMessageId: welcomeTail ? lastMessage!.id : outbox.expectedLastMessageId,
+        expectedSequence: welcomeTail ? conversation.lastCommittedSequence : outbox.expectedSequence,
         expectedContextVersion: outbox.expectedContextVersion,
         forbiddenTermBlocked,
       });
@@ -233,7 +248,7 @@ export class SendOutboxService {
   /** Final fence immediately before transport; takeover can cancel an AI row after its initial claim. */
   async fenceBeforeTransport(scope: ReplyJobScope, sendOutboxId: string, forbiddenTermBlocked = false): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
-      const shopRepository = tx as unknown as { shop?: { findFirst(input: unknown): Promise<{ aiMode: string } | null> } };
+      const shopRepository = tx as unknown as { shop?: { findFirst(input: unknown): Promise<AutoShopSnapshot | null> } };
       const outbox = await tx.sendOutbox.findFirst({ where: { id: sendOutboxId, ...scope, status: 'SENDING' } });
       if (!outbox) return false;
       await tx.$queryRaw(Prisma.sql`
@@ -243,8 +258,15 @@ export class SendOutboxService {
       `);
       const [conversation, lastMessage, shop] = await Promise.all([
         tx.conversation.findFirst({ where: { id: outbox.conversationId, ...scope }, select: { humanActive: true, overrideMode: true, state: true, lastCommittedSequence: true, contextVersion: true } }),
-        tx.message.findFirst({ where: { ...scope, conversationId: outbox.conversationId, status: { not: 'RECALLED' } }, orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }], select: { id: true } }),
-        shopRepository.shop?.findFirst({ where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId }, select: { aiMode: true } }) ?? Promise.resolve({ aiMode: 'AUTO_ALLOWED' }),
+        tx.message.findFirst({ where: { ...scope, conversationId: outbox.conversationId, status: { not: 'RECALLED' } }, orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }], select: { id: true, externalMessageId: true, role: true } }),
+        shopRepository.shop?.findFirst({
+          where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+          select: {
+            aiMode: true,
+            seedKey: true,
+            productLearningJobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
+          },
+        }) ?? Promise.resolve(null),
       ]);
       const job = !isHumanPayload(outbox.payloadJson) && outbox.replyJobId
         ? await tx.replyJob.findFirst({
@@ -252,13 +274,15 @@ export class SendOutboxService {
             select: { id: true },
           })
         : { id: 'human-or-unlinked' };
+      const welcomeTail = await this.isConfirmedWelcomeTail(tx, scope, outbox, conversation, lastMessage);
       const guard = conversation && evaluateSendGuard({
         lastMessageId: lastMessage?.id ?? null, lastSequence: conversation.lastCommittedSequence, contextVersion: conversation.contextVersion,
         humanActive: isHumanPayload(outbox.payloadJson) ? false : conversation.humanActive, conversationState: conversation.state,
-        idempotencyKey: outbox.idempotencyKey, expectedLastMessageId: outbox.expectedLastMessageId,
-        expectedSequence: outbox.expectedSequence, expectedContextVersion: outbox.expectedContextVersion, forbiddenTermBlocked,
+        idempotencyKey: outbox.idempotencyKey, expectedLastMessageId: welcomeTail ? lastMessage!.id : outbox.expectedLastMessageId,
+        expectedSequence: welcomeTail ? conversation.lastCommittedSequence : outbox.expectedSequence,
+        expectedContextVersion: outbox.expectedContextVersion, forbiddenTermBlocked,
       });
-      if (!job || !guard || !guard.allowed || (!isHumanPayload(outbox.payloadJson) && !autoSendAllowed(shop?.aiMode, conversation?.overrideMode))) {
+      if (!job || !guard || !guard.allowed || (!isHumanPayload(outbox.payloadJson) && !autoSendAllowed(shop, conversation?.overrideMode))) {
         const failureCode: SendGuardFailureCode = guard && !guard.allowed ? guard.failureCode : 'CONTEXT_STALE';
         await tx.sendOutbox.updateMany({
           where: { id: outbox.id, ...scope, status: 'SENDING' },
@@ -346,6 +370,58 @@ export class SendOutboxService {
     return updated.count === 1;
   }
 
+  /**
+   * A first-turn welcome has no buyer-context effect, but it may be projected
+   * after the ReplyJob captured its source cursor and before that answer reaches
+   * the send guard.  Permit exactly that one known tail advance; all other
+   * cursor changes remain fail-closed.
+   */
+  private async isConfirmedWelcomeTail(
+    tx: Prisma.TransactionClient,
+    scope: ReplyJobScope,
+    outbox: SendOutbox,
+    conversation: { lastCommittedSequence: number; contextVersion: number } | null,
+    lastMessage: { id: string; externalMessageId: string; role: string } | null,
+  ): Promise<boolean> {
+    const expectedSequence = outbox.expectedSequence;
+    const expectedContextVersion = outbox.expectedContextVersion;
+    if (
+      isHumanPayload(outbox.payloadJson)
+      || !outbox.replyJobId
+      || !conversation
+      || !lastMessage
+      || lastMessage.role !== 'ASSISTANT'
+      || typeof outbox.expectedLastMessageId !== 'string'
+      || typeof expectedSequence !== 'number'
+      || !Number.isSafeInteger(expectedSequence)
+      || typeof expectedContextVersion !== 'number'
+      || !Number.isSafeInteger(expectedContextVersion)
+      || conversation.contextVersion !== expectedContextVersion
+      || conversation.lastCommittedSequence !== expectedSequence + 1
+    ) return false;
+    const welcome = await tx.sendOutbox.findFirst({
+      where: {
+        id: lastMessage.externalMessageId,
+        ...scope,
+        conversationId: outbox.conversationId,
+        replyJobId: null,
+        status: 'SENT',
+        idempotencyKey: { startsWith: 'scheduled-send:scheduled:welcome:' },
+      },
+      select: {
+        expectedLastMessageId: true,
+        expectedSequence: true,
+        expectedContextVersion: true,
+      },
+    });
+    return Boolean(
+      welcome
+      && welcome.expectedLastMessageId === outbox.expectedLastMessageId
+      && welcome.expectedSequence === outbox.expectedSequence
+      && welcome.expectedContextVersion === outbox.expectedContextVersion,
+    );
+  }
+
   private async rejectClaim(
     tx: Prisma.TransactionClient,
     scope: ReplyJobScope,
@@ -382,7 +458,11 @@ function senderRolePayload(value: unknown): 'AI' | 'HUMAN' {
   return isHumanPayload(value) ? 'HUMAN' : 'AI';
 }
 
-function autoSendAllowed(shopMode: unknown, overrideMode: unknown): boolean {
+function autoSendAllowed(shop: AutoShopSnapshot | null, overrideMode: unknown): boolean {
   if (overrideMode === 'ASSIST' || overrideMode === 'MANUAL' || overrideMode === 'HOLD') return false;
-  return shopMode === 'AUTO_ALLOWED';
+  return Boolean(shop && autoReplyReady({
+    aiMode: shop.aiMode,
+    seedKey: shop.seedKey,
+    learningStatus: shop.productLearningJobs[0]?.status,
+  }));
 }

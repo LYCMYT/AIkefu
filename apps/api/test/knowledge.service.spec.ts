@@ -559,6 +559,7 @@ describe('KnowledgeService hard scope boundaries', () => {
       startedAt: null, completedAt: null, createdAt: now, updatedAt: new Date(now.getTime() - 1), items: [],
     };
     const prisma = {
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop-a' }) },
       productLearningJob: {
         findFirst: jest.fn().mockImplementation(async () => ({ ...pending, items: [] })),
         updateMany: jest.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
@@ -570,7 +571,8 @@ describe('KnowledgeService hard scope boundaries', () => {
       },
       productLearningJobItem: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    const service = new KnowledgeService(prisma as never, { load: jest.fn() } as never);
+    const gateway = { publish: jest.fn() };
+    const service = new KnowledgeService(prisma as never, { load: jest.fn() } as never, gateway as never);
     jest.spyOn(service as unknown as { now: () => Date }, 'now').mockReturnValue(now);
 
     await expect((service as unknown as { runProductLearningJob: (workspace: typeof scope, jobId: string, shopId: string) => Promise<unknown> })
@@ -583,6 +585,19 @@ describe('KnowledgeService hard scope boundaries', () => {
       where: expect.objectContaining({ id: 'job-pending', workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', status: 'RUNNING', updatedAt: expect.any(Date) }),
       data: expect.objectContaining({ status: 'SUCCEEDED' }),
     }));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(gateway.publish).toHaveBeenLastCalledWith(expect.objectContaining({
+      eventType: 'PRODUCT_LEARNING_UPDATED',
+      workspaceId: 'workspace-a',
+      entityType: 'PRODUCT_LEARNING_JOB',
+      entityId: 'job-pending',
+      payload: expect.objectContaining({
+        shopId: 'shop-a', readiness: 'READY', job: expect.objectContaining({ status: 'SUCCEEDED' }),
+      }),
+    }));
+    const finalCommitOrder = prisma.productLearningJob.updateMany.mock.invocationCallOrder[1]!;
+    const finalPublishOrder = gateway.publish.mock.invocationCallOrder.at(-1)!;
+    expect(finalPublishOrder).toBeGreaterThan(finalCommitOrder);
   });
 
   it('rejects a model FAQ that lies about PII instead of creating a candidate', async () => {

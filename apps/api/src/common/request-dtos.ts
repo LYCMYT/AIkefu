@@ -21,6 +21,7 @@ import {
   ValidatorConstraintInterface,
 } from 'class-validator';
 import type { WorkflowEdge, WorkflowGraph, WorkflowNode, WorkflowSettings } from '@ai-customer-service/contracts';
+import type { ShopSettingsInput } from '@ai-customer-service/contracts';
 import { isWorkflowGraph } from '@ai-customer-service/contracts';
 
 const ID_MAX = 160;
@@ -36,6 +37,28 @@ class BoundedJsonConstraint implements ValidatorConstraintInterface {
 
   defaultMessage(): string {
     return 'JSON value exceeds the allowed size or depth';
+  }
+}
+
+@ValidatorConstraint({ name: 'closingMessages', async: false })
+class ClosingMessagesConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+      && exactObject(value, Object.keys(value as object))
+      && Object.entries(value).length <= 20
+      && Object.entries(value).every(([key, entry]) => boundedString(key, 80) && typeof entry === 'string' && entry.length <= TEXT_MAX);
+  }
+}
+
+@ValidatorConstraint({ name: 'forbiddenTerms', async: false })
+class ForbiddenTermsConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return Array.isArray(value)
+      && value.length <= 100
+      && value.every((entry) => exactObject(entry, ['term', 'replacement'])
+        && boundedString(entry.term, 160)
+        && typeof entry.replacement === 'string'
+        && entry.replacement.length <= 160);
   }
 }
 
@@ -89,6 +112,11 @@ export class ShopScopeDto {
   shopId!: string;
 }
 
+export class DemoWorkspaceProfileDto {
+  @IsOptional() @IsIn(['EMPTY', 'SEEDED'])
+  profile?: 'EMPTY' | 'SEEDED';
+}
+
 export class ShopCreateDto {
   @IsIn(['DOUYIN_DEMO'])
   platform!: 'DOUYIN_DEMO';
@@ -109,6 +137,32 @@ export class ShopCreateDto {
 export class ShopAiModeDto {
   @IsIn(['AUTO_ALLOWED', 'ASSIST_ONLY', 'MANUAL_ONLY'])
   mode!: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY';
+}
+
+export class ShopSettingsDto implements ShopSettingsInput {
+  @IsString() @MaxLength(500)
+  tone!: string;
+
+  @IsString() @MaxLength(TEXT_MAX)
+  logisticsPolicy!: string;
+
+  @IsString() @MaxLength(TEXT_MAX)
+  shippingPolicy!: string;
+
+  @IsString() @MaxLength(TEXT_MAX)
+  afterSalesPolicy!: string;
+
+  @IsString() @MaxLength(TEXT_MAX)
+  welcomeMessage!: string;
+
+  @IsObject() @Validate(ClosingMessagesConstraint)
+  closingMessages!: Record<string, string>;
+
+  @IsArray() @ArrayMaxSize(100) @IsString({ each: true }) @MaxLength(160, { each: true })
+  transferKeywords!: string[];
+
+  @IsArray() @ArrayMaxSize(100) @Validate(ForbiddenTermsConstraint)
+  forbiddenTerms!: Array<{ term: string; replacement: string }>;
 }
 
 export class BuyerMessageDto extends ShopScopeDto {

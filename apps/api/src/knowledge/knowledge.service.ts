@@ -17,7 +17,7 @@ import {
   type ProductLearningJobStatus,
   type KnowledgeVersion,
 } from '@prisma/client';
-import type { KnowledgeRetrievalResult, ReplyEvidenceSnapshot } from '@ai-customer-service/contracts';
+import type { KnowledgeRetrievalResult, ProductLearningJob as ProductLearningJobView, ReplyEvidenceSnapshot } from '@ai-customer-service/contracts';
 import { sanitizeContext } from '@ai-customer-service/core';
 import { PrismaService } from '../database/prisma.service';
 import { SeedCatalog } from '../seed/seed-catalog';
@@ -45,6 +45,7 @@ import {
   type KnowledgeEmbeddingProvider,
 } from './knowledge.vector';
 import { WorkspaceGateway } from '../websocket/workspace.gateway';
+import { projectShopAiReadiness } from '../shops/shop-ai-readiness';
 
 const MAX_CSV_BYTES = 1024 * 1024;
 const MAX_CSV_ROWS = 5_000;
@@ -1329,6 +1330,7 @@ export class KnowledgeService {
       return this.currentProductLearningJobView(scope, jobId, shopId);
     }
     const lease: ProductLearningLease = { updatedAt: claimUpdatedAt };
+    void this.publishProductLearning(scope, shopId, await this.currentProductLearningJobView(scope, jobId, shopId));
 
     let succeeded = 0;
     let created = 0;
@@ -1357,6 +1359,7 @@ export class KnowledgeService {
       } else {
         failed += 1;
       }
+      void this.publishProductLearning(scope, shopId, await this.currentProductLearningJobView(scope, jobId, shopId));
     }
     const allItems = await this.prisma.productLearningJobItem.findMany({
       where: { jobId, ...this.scope(scope), shopId },
@@ -1384,6 +1387,7 @@ export class KnowledgeService {
     if (finalized.count !== 1) return this.currentProductLearningJobView(scope, jobId, shopId);
     const view = await this.currentProductLearningJobView(scope, jobId, shopId);
     view.items.forEach((item) => this.publishProduct(scope, shopId, item.productId, item.status));
+    void this.publishProductLearning(scope, shopId, view);
     return view;
   }
 
@@ -2223,11 +2227,11 @@ export class KnowledgeService {
     skippedProducts: number;
     failedProducts: number;
     items: Array<{ productId: string; status: string; reason: string | null }>;
-  }) {
+  }): ProductLearningJobView {
     return {
       id: job.id,
       shopId: job.shopId,
-      status: job.status,
+      status: job.status as ProductLearningJobView['status'],
       totals: {
         total: job.totalProducts,
         created: job.createdProducts,
@@ -2235,7 +2239,11 @@ export class KnowledgeService {
         skipped: job.skippedProducts,
         failed: job.failedProducts,
       },
-      items: job.items.map((item) => ({ productId: item.productId, status: item.status, reason: item.reason })),
+      items: job.items.map((item) => ({
+        productId: item.productId,
+        status: item.status as ProductLearningJobView['items'][number]['status'],
+        reason: item.reason,
+      })),
     };
   }
 
@@ -2547,6 +2555,36 @@ export class KnowledgeService {
       });
     } catch {
       // Advisory push failure cannot roll back a committed product mutation.
+    }
+  }
+
+  private async publishProductLearning(
+    scope: WorkspaceScope,
+    shopId: string,
+    job: ProductLearningJobView,
+  ): Promise<void> {
+    try {
+      const shop = await this.prisma.shop.findFirst({
+        where: { id: shopId, ...this.scope(scope) },
+        select: { aiMode: true, seedKey: true },
+      });
+      if (!shop) return;
+      this.gateway?.publish({
+        eventId: randomUUID(),
+        eventType: 'PRODUCT_LEARNING_UPDATED',
+        workspaceId: scope.workspaceId,
+        entityType: 'PRODUCT_LEARNING_JOB',
+        entityId: job.id,
+        entityVersion: Date.now(),
+        occurredAt: new Date().toISOString(),
+        payload: {
+          shopId,
+          job,
+          readiness: projectShopAiReadiness({ aiMode: shop.aiMode, seedKey: shop.seedKey, learningStatus: job.status }),
+        },
+      });
+    } catch {
+      // The committed job is canonical; reconnecting clients refresh via REST.
     }
   }
 

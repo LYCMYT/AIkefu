@@ -3,6 +3,7 @@ import {
   BuyerMessageDto,
   CustomerMemoryDto,
   KnowledgeSearchDto,
+  ShopSettingsDto,
   WorkflowGraphDto,
 } from '../src/common/request-dtos';
 import { createRequestValidationPipe } from '../src/common/request-validation.pipe';
@@ -56,6 +57,21 @@ describe('HTTP runtime boundaries', () => {
       key: 'oversized',
       value: { text: 'x'.repeat(8_193) },
     }, metadata(CustomerMemoryDto))).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('treats ShopSettings PUT as a full replacement and rejects malformed rule objects', async () => {
+    const valid = {
+      tone: '亲切', logisticsPolicy: '物流', shippingPolicy: '发货', afterSalesPolicy: '售后',
+      welcomeMessage: '欢迎', closingMessages: { NO_ORDER: '再见' }, transferKeywords: ['人工'],
+      forbiddenTerms: [{ term: '绝对', replacement: '尽量' }],
+    };
+    await expect(pipe.transform(valid, metadata(ShopSettingsDto))).resolves.toMatchObject(valid);
+    const { welcomeMessage: _omitted, ...missing } = valid;
+    await expect(pipe.transform(missing, metadata(ShopSettingsDto))).rejects.toMatchObject({ status: 400 });
+    await expect(pipe.transform({
+      ...valid,
+      forbiddenTerms: [{ term: '绝对', replacement: '尽量', injected: true }],
+    }, metadata(ShopSettingsDto))).rejects.toMatchObject({ status: 400 });
   });
 
   it('fails closed on malformed environment values and accepts the bounded offline demo configuration', () => {

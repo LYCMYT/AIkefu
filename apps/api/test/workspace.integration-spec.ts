@@ -60,6 +60,37 @@ describe('Phase 01 workspace integration', () => {
       .expect(404);
   });
 
+  it('creates and resets an explicitly EMPTY operational workspace without changing the seeded default', async () => {
+    const empty = (await request(app.getHttpServer())
+      .post('/api/demo/workspaces')
+      .send({ profile: 'EMPTY' })
+      .expect(201)).body;
+    const emptyHeader = { 'X-Demo-Workspace-Token': empty.token };
+
+    const emptyBootstrap = await request(app.getHttpServer()).get('/api/bootstrap').set(emptyHeader).expect(200);
+    expect(emptyBootstrap.body.shops).toEqual([]);
+    expect(emptyBootstrap.body.seed.counts).toMatchObject({ shops: 0, buyers: 0, products: 0, orders: 0, knowledge: 0, workflows: 0 });
+
+    const seeded = (await request(app.getHttpServer()).post('/api/demo/workspaces').expect(201)).body;
+    const seededBootstrap = await request(app.getHttpServer())
+      .get('/api/bootstrap')
+      .set('X-Demo-Workspace-Token', seeded.token)
+      .expect(200);
+    expect(seededBootstrap.body.shops).toHaveLength(2);
+
+    await request(app.getHttpServer())
+      .post('/api/shops').set(emptyHeader)
+      .send({ platform: 'DOUYIN_DEMO', templateKey: 'TECH_DEMO', name: '空间新店' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/api/demo/workspaces/current/reset')
+      .set(emptyHeader)
+      .send({ profile: 'EMPTY' })
+      .expect(202);
+    const reset = await request(app.getHttpServer()).get('/api/bootstrap').set(emptyHeader).expect(200);
+    expect(reset.body.shops).toEqual([]);
+  });
+
   it('requires an allowlisted shop template, creates it in scope, and changes its explicit AI ceiling', async () => {
     const session = (await request(app.getHttpServer()).post('/api/demo/workspaces').expect(201)).body;
     const header = { 'X-Demo-Workspace-Token': session.token };
@@ -74,7 +105,9 @@ describe('Phase 01 workspace integration', () => {
       .post('/api/shops').set(header)
       .send({ platform: 'DOUYIN_DEMO', templateKey: 'FASHION_DEMO', name: '验收店铺' })
       .expect(201);
-    expect(created.body).toMatchObject({ name: '验收店铺', platform: 'DOUYIN_DEMO', aiMode: 'ASSIST_ONLY' });
+    expect(created.body).toMatchObject({
+      name: '验收店铺', platform: 'DOUYIN_DEMO', aiMode: 'AUTO_ALLOWED', aiReadiness: 'PREPARING',
+    });
 
     const raised = await request(app.getHttpServer())
       .patch(`/api/shops/${created.body.id}/ai-mode`).set(header)

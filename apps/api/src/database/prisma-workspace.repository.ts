@@ -2,7 +2,9 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import type { SeedData } from '../seed/seed-catalog';
+import type { DemoWorkspaceProfile, ShopSettings, ShopSettingsInput } from '@ai-customer-service/contracts';
 import { PrismaService } from './prisma.service';
+import { projectShopAiReadiness } from '../shops/shop-ai-readiness';
 import type {
   AuthenticatedWorkspace,
   BootstrapView,
@@ -25,6 +27,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
     now: Date;
     expiresAt: Date;
     seed: SeedData;
+    profile?: DemoWorkspaceProfile;
   }): Promise<AuthenticatedWorkspace> {
     return this.prisma.$transaction(async (transaction) => {
       const workspace = await transaction.workspace.create({
@@ -37,7 +40,9 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       const tenant = await transaction.tenant.create({
         data: { workspaceId: workspace.id, name: 'Anonymous Demo Tenant' },
       });
-      await this.seedScope(transaction, { workspaceId: workspace.id, tenantId: tenant.id }, input.seed);
+      if ((input.profile ?? 'SEEDED') === 'SEEDED') {
+        await this.seedScope(transaction, { workspaceId: workspace.id, tenantId: tenant.id }, input.seed);
+      }
       return {
         workspaceId: workspace.id,
         tenantId: tenant.id,
@@ -69,7 +74,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
     };
   }
 
-  async reset(scope: WorkspaceScope, seed: SeedData): Promise<SeedCounts> {
+  async reset(scope: WorkspaceScope, seed: SeedData, profile: DemoWorkspaceProfile = 'SEEDED'): Promise<SeedCounts> {
     // Auth middleware supplies an AuthenticatedWorkspace, which structurally
     // contains WorkspaceScope plus nested workspace/tenant views. Never spread
     // those extra properties into Prisma create inputs during reseeding.
@@ -79,7 +84,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       await transaction.workflow.deleteMany({ where: normalizedScope });
       await transaction.shop.deleteMany({ where: normalizedScope });
       await transaction.buyer.deleteMany({ where: normalizedScope });
-      await this.seedScope(transaction, normalizedScope, seed);
+      if (profile === 'SEEDED') await this.seedScope(transaction, normalizedScope, seed);
       return this.seedCounts(transaction, normalizedScope);
     });
   }
@@ -92,7 +97,10 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
     if (!workspace?.tenant) return null;
     const shops = await this.prisma.shop.findMany({
       where: this.scope(scope),
-      include: { settings: true },
+      include: {
+        settings: true,
+        productLearningJobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
+      },
       orderBy: { externalShopId: 'asc' },
     });
     return {
@@ -125,6 +133,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
   async listShops(scope: WorkspaceScope): Promise<ShopView[]> {
     const shops = await this.prisma.shop.findMany({
       where: this.scope(scope),
+      include: { productLearningJobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } },
       orderBy: { externalShopId: 'asc' },
     });
     return shops.map((shop) => this.shopView(shop));
@@ -133,6 +142,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
   async getShop(scope: WorkspaceScope, shopId: string): Promise<ShopView | null> {
     const shop = await this.prisma.shop.findFirst({
       where: { id: shopId, ...this.scope(scope) },
+      include: { productLearningJobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } },
     });
     return shop ? this.shopView(shop) : null;
   }
@@ -201,12 +211,33 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
 
         const orderSources = input.catalog.orders.filter((source) => source.shopKey === input.template.key);
         const buyerKeys = [...new Set(orderSources.map((source) => source.buyerKey))];
-        const buyers = buyerKeys.length
-          ? await transaction.buyer.findMany({
-              where: { ...normalizedScope, seedKey: { in: buyerKeys } }, select: { id: true, seedKey: true },
-            })
-          : [];
-        const buyerIds = new Map(buyers.map((buyer) => [buyer.seedKey, buyer.id]));
+        const buyerIds = new Map<string, string>();
+        for (const buyerKey of buyerKeys) {
+          const source = input.catalog.buyers.find((buyer) => buyer.key === buyerKey);
+          if (!source) throw new Error(`SHOP_TEMPLATE_CATALOG_INVALID:buyer:${buyerKey}`);
+          const buyer = await transaction.buyer.upsert({
+            where: {
+              workspaceId_tenantId_externalBuyerId: {
+                ...normalizedScope,
+                externalBuyerId: source.externalBuyerId,
+              },
+            },
+            create: {
+              ...normalizedScope,
+              seedKey: source.key,
+              externalBuyerId: source.externalBuyerId,
+              displayName: source.displayName,
+              avatar: source.avatar,
+              tagsJson: source.tags,
+            },
+            update: {
+              displayName: source.displayName,
+              avatar: source.avatar,
+              tagsJson: source.tags,
+            },
+          });
+          buyerIds.set(buyerKey, buyer.id);
+        }
         for (const source of orderSources) {
           const buyerId = buyerIds.get(source.buyerKey);
           const productId = productIds.get(source.productKey);
@@ -226,7 +257,12 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
           });
         }
 
-        const knowledgeSources = input.catalog.knowledge.filter((source) => source.shopKey === input.template.key);
+        // Product-derived AUTO_LEARNED entries are intentionally regenerated
+        // by the durable learning request below. Copying them here would make
+        // the first learning pass create duplicate product knowledge.
+        const knowledgeSources = input.catalog.knowledge.filter(
+          (source) => source.shopKey === input.template.key && source.sourceType !== 'AUTO_LEARNED',
+        );
         for (const source of knowledgeSources) {
           const item = await transaction.knowledgeItem.create({
             data: {
@@ -264,7 +300,20 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
             },
           },
         });
-        return this.shopView(shop);
+        await transaction.processingOutbox.upsert({
+          where: { eventId: `product-learning:shop-created:${shop.id}` },
+          update: {},
+          create: {
+            ...normalizedScope,
+            shopId: shop.id,
+            eventId: `product-learning:shop-created:${shop.id}`,
+            aggregateType: 'SHOP',
+            aggregateId: shop.id,
+            eventType: 'PRODUCT_LEARNING_REQUESTED',
+            payloadJson: { shopId: shop.id, productIds: [...productIds.values()], reason: 'SHOP_CREATED' },
+          },
+        });
+        return this.shopView({ ...shop, productLearningJobs: [{ status: 'PENDING' }] });
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -274,6 +323,51 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
     }
   }
 
+  async getShopSettings(scope: WorkspaceScope, shopId: string): Promise<ShopSettings | null> {
+    const settings = await this.prisma.shopSettings.findFirst({
+      where: { shopId, ...this.scope(scope), shop: { id: shopId, ...this.scope(scope) } },
+    });
+    return settings ? this.shopSettingsView(settings) : null;
+  }
+
+  async updateShopSettings(
+    scope: WorkspaceScope,
+    shopId: string,
+    input: ShopSettingsInput,
+  ): Promise<ShopSettings | null> {
+    return this.prisma.$transaction(async (transaction) => {
+      const normalizedScope = this.scope(scope);
+      const shop = await transaction.shop.findFirst({ where: { id: shopId, ...normalizedScope }, select: { id: true } });
+      if (!shop) return null;
+      const updated = await transaction.shopSettings.updateMany({
+        where: { shopId, ...normalizedScope },
+        data: {
+          tone: input.tone,
+          logisticsPolicy: input.logisticsPolicy,
+          shippingPolicy: input.shippingPolicy,
+          afterSalesPolicy: input.afterSalesPolicy,
+          welcomeMessage: input.welcomeMessage,
+          closingMessagesJson: input.closingMessages,
+          transferKeywordsJson: input.transferKeywords,
+          forbiddenTermsJson: this.json(input.forbiddenTerms),
+        },
+      });
+      if (updated.count !== 1) return null;
+      const settings = await transaction.shopSettings.findFirst({ where: { shopId, ...normalizedScope } });
+      if (!settings) return null;
+      await transaction.auditLog.create({
+        data: {
+          ...normalizedScope,
+          action: 'SHOP_SETTINGS_UPDATED',
+          entityType: 'SHOP',
+          entityId: shopId,
+          metadataJson: { fields: Object.keys(input).sort() },
+        },
+      });
+      return this.shopSettingsView(settings);
+    });
+  }
+
   async setShopAiMode(
     scope: WorkspaceScope,
     shopId: string,
@@ -281,9 +375,24 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
   ): Promise<ShopView | null> {
     return this.prisma.$transaction(async (transaction) => {
       const normalizedScope = this.scope(scope);
+      // Serialize the master switch with welcome/closing planning and their
+      // final dispatch conversion. Whichever transaction commits first leaves
+      // the other one an authoritative state to observe or revoke.
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT 1 FROM "Shop"
+        WHERE "id" = ${shopId}
+          AND "workspaceId" = ${normalizedScope.workspaceId}
+          AND "tenantId" = ${normalizedScope.tenantId}
+        FOR UPDATE
+      `);
       const current = await transaction.shop.findFirst({ where: { id: shopId, ...normalizedScope } });
       if (!current) return null;
-      if (current.aiMode === mode) return this.shopView(current);
+      if (current.aiMode === mode) {
+        const latest = await transaction.productLearningJob.findFirst({
+          where: { ...normalizedScope, shopId }, orderBy: { createdAt: 'desc' }, select: { status: true },
+        });
+        return this.shopView({ ...current, productLearningJobs: latest ? [latest] : [] });
+      }
 
       const rank = { AUTO_ALLOWED: 0, ASSIST_ONLY: 1, MANUAL_ONLY: 2 } as const;
       const isDowngrade = rank[mode] > rank[current.aiMode];
@@ -308,7 +417,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
           });
         }
         const sendWhere = {
-          ...normalizedScope, shopId, replyJobId: { in: jobIds },
+          ...normalizedScope, shopId,
           payloadJson: { path: ['senderRole'], equals: 'AI' } as const,
         };
         await transaction.sendOutbox.updateMany({
@@ -335,18 +444,18 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
         await transaction.processingOutbox.updateMany({
           where: {
             ...normalizedScope, shopId, aggregateType: 'CONVERSATION',
-            eventType: { in: ['SCHEDULED_WELCOME', 'SCHEDULED_CLOSING'] }, status: 'PENDING',
+            eventType: { in: ['SCHEDULED_WELCOME', 'SCHEDULED_CLOSING'] },
+            status: { in: ['PENDING', 'DISPATCHING'] },
           },
           data: { status: 'FAILED' },
         });
-        await transaction.conversation.updateMany({
-          where: mode === 'ASSIST_ONLY'
-            ? { ...normalizedScope, shopId, OR: [{ mode: 'AUTO' }, { overrideMode: 'AUTO' }] }
-            : { ...normalizedScope, shopId },
-          data: mode === 'ASSIST_ONLY'
-            ? { mode: 'ASSIST', overrideMode: 'ASSIST', needsReplan: true }
-            : { mode: 'MANUAL', overrideMode: 'MANUAL', humanActive: true, needsReplan: true },
-        });
+        // This is a Shop-level safety ceiling, not an operator takeover. The
+        // effective-mode projection and runtime/send fences read the live Shop
+        // mode, while the cancellations above revoke already-authorized work.
+        // Persisting MANUAL/HOLD on every conversation would make an OFF -> ON
+        // cycle permanently override normal conversations and could overwrite
+        // a genuine per-conversation human takeover with indistinguishable
+        // synthetic state.
       }
 
       const updated = await transaction.shop.update({ where: { id: current.id }, data: { aiMode: mode } });
@@ -357,7 +466,10 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
           metadataJson: { previousMode: current.aiMode, mode, killSwitchApplied: isDowngrade },
         },
       });
-      return this.shopView(updated);
+      const latest = await transaction.productLearningJob.findFirst({
+        where: { ...normalizedScope, shopId }, orderBy: { createdAt: 'desc' }, select: { status: true },
+      });
+      return this.shopView({ ...updated, productLearningJobs: latest ? [latest] : [] });
     });
   }
 
@@ -600,6 +712,63 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       });
     }
 
+    // Frozen SEEDED workspaces already contain the reviewed AUTO_LEARNED
+    // knowledge versions above. Represent that fact with the same durable,
+    // scoped learning projection used by runtime shops; readiness must never
+    // be inferred merely from a seed key.
+    for (const source of seed.shops) {
+      const shopId = this.required(shops, source.key, 'shop');
+      const learnedProducts = seed.products
+        .filter((product) => product.shopKey === source.key)
+        .map((product) => ({
+          id: this.required(products, product.key, 'product'),
+          contentHash: createHash('sha256').update(product.description).digest('hex'),
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id));
+      const sourceFingerprint = createHash('sha256')
+        .update(learnedProducts.map((product) => `${product.id}:${product.contentHash}`).join('|'))
+        .digest('hex');
+      const completedAt = new Date();
+      await transaction.productLearningJob.upsert({
+        where: {
+          workspaceId_tenantId_shopId_sourceFingerprint: {
+            ...scope,
+            shopId,
+            sourceFingerprint,
+          },
+        },
+        create: {
+          ...scope,
+          shopId,
+          sourceFingerprint,
+          status: 'SUCCEEDED',
+          totalProducts: learnedProducts.length,
+          skippedProducts: learnedProducts.length,
+          startedAt: completedAt,
+          completedAt,
+          items: {
+            create: learnedProducts.map((product) => ({
+              ...scope,
+              shopId,
+              productId: product.id,
+              status: 'SUCCEEDED',
+              reason: 'SEEDED_READY',
+            })),
+          },
+        },
+        update: {
+          status: 'SUCCEEDED',
+          totalProducts: learnedProducts.length,
+          createdProducts: 0,
+          updatedProducts: 0,
+          skippedProducts: learnedProducts.length,
+          failedProducts: 0,
+          startedAt: completedAt,
+          completedAt,
+        },
+      });
+    }
+
     for (const source of seed.workflows) {
       const workflow = await transaction.workflow.upsert({
         where: {
@@ -702,6 +871,8 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
     aiMode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY';
     connectionState: 'CONNECTED' | 'RECONNECTING' | 'RECONCILING' | 'DEGRADED' | 'DISCONNECTED';
     syncComplete: boolean;
+    seedKey?: string;
+    productLearningJobs?: Array<{ status: string }>;
   }): ShopView {
     return {
       id: shop.id,
@@ -711,8 +882,57 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       externalShopId: shop.externalShopId,
       name: shop.name,
       aiMode: shop.aiMode,
+      aiReadiness: projectShopAiReadiness({
+        aiMode: shop.aiMode,
+        seedKey: shop.seedKey,
+        learningStatus: shop.productLearningJobs?.[0]?.status,
+      }),
       connectionState: shop.connectionState,
       syncComplete: shop.syncComplete,
     };
+  }
+
+  private shopSettingsView(settings: {
+    shopId: string;
+    tone: string;
+    logisticsPolicy: string;
+    shippingPolicy: string;
+    afterSalesPolicy: string;
+    welcomeMessage: string;
+    closingMessagesJson: unknown;
+    transferKeywordsJson: unknown;
+    forbiddenTermsJson: unknown;
+  }): ShopSettings {
+    return {
+      shopId: settings.shopId,
+      tone: settings.tone,
+      logisticsPolicy: settings.logisticsPolicy,
+      shippingPolicy: settings.shippingPolicy,
+      afterSalesPolicy: settings.afterSalesPolicy,
+      welcomeMessage: settings.welcomeMessage,
+      closingMessages: this.stringRecord(settings.closingMessagesJson),
+      transferKeywords: this.stringArray(settings.transferKeywordsJson),
+      forbiddenTerms: this.forbiddenTerms(settings.forbiddenTermsJson),
+    };
+  }
+
+  private stringRecord(value: unknown): Record<string, string> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+  }
+
+  private stringArray(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+  }
+
+  private forbiddenTerms(value: unknown): Array<{ term: string; replacement: string }> {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+      const record = entry as Record<string, unknown>;
+      return typeof record.term === 'string'
+        ? [{ term: record.term, replacement: typeof record.replacement === 'string' ? record.replacement : '' }]
+        : [];
+    });
   }
 }

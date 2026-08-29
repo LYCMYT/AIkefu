@@ -121,7 +121,7 @@ describe('ReplyRuntimeService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       replyEvidence: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: { 赔偿: '售后处理' } }) },
       task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
@@ -170,7 +170,7 @@ describe('ReplyRuntimeService', () => {
         }]),
       },
       processingOutbox: { create: jest.fn().mockResolvedValue({ id: 'route-a' }) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
     const runtime = { runStructured: jest.fn()
@@ -209,6 +209,7 @@ describe('ReplyRuntimeService', () => {
     const tx = {
       $queryRaw: jest.fn(),
       conversation: { findFirst: jest.fn().mockResolvedValue({ contextVersion: 5, humanActive: false, state: 'ACTIVE' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       replyJob: { updateMany: jest.fn(async ({ data }) => { status = data.status; return { count: 1 }; }) },
     };
     const prisma = {
@@ -226,6 +227,71 @@ describe('ReplyRuntimeService', () => {
     }, '自动答复')).rejects.toThrow('simulated crash');
     expect(status).toBe('GENERATING');
     expect(outboxes.enqueueInTransaction).toHaveBeenCalledWith(tx, scope, expect.objectContaining({ idempotencyKey: 'reply-send:reply-atomic' }));
+  });
+
+  it('rechecks live scoped readiness at the final AUTO commit barrier and never writes an intent after learning regresses', async () => {
+    const job = {
+      id: 'reply-readiness-barrier', status: 'PENDING', mode: 'AUTO', conversationId: 'conversation-a', userTurnId: 'turn-a',
+      sourceLastMessageId: 'message-8', sourceSequence: 8, sourceContextVersion: 5, evidences: [],
+      conversation: { id: 'conversation-a', contextVersion: 5, humanActive: false, state: 'ACTIVE', syncState: 'CONNECTED', overrideMode: null },
+      userTurn: { normalizedText: '多久发货？' },
+    };
+    const tx = {
+      $queryRaw: jest.fn(),
+      conversation: { findFirst: jest.fn().mockResolvedValue({ contextVersion: 5, humanActive: false, state: 'ACTIVE' }) },
+      // The policy read before generation was READY; this is the authoritative
+      // post-generation read after learning has finished PARTIAL_SUCCESS.
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'PARTIAL_SUCCESS' }],
+      }) },
+      replyJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const prisma = {
+      replyJob: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce(job)
+          .mockResolvedValueOnce({ ...job, status: 'GENERATING' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      replyEvidence: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      // Initial policy read: AUTO is admissible while the job is generated.
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'SUCCEEDED' }],
+      }) },
+      shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
+      $transaction: jest.fn((work: Function) => work(tx)),
+    };
+    const runtime = { runStructured: jest.fn()
+      .mockResolvedValueOnce({ output: { tasks: [{ intent: 'SHIPPING_POLICY', riskLevel: 'LOW', requiredContext: [], requiredTools: [] }] } })
+      .mockResolvedValueOnce({ output: { riskLevel: 'LOW', recommendedMode: 'AUTO', reasons: [] } }),
+    };
+    const outboxes = { enqueue: jest.fn(), enqueueInTransaction: jest.fn() };
+    const service = new ReplyRuntimeService(
+      prisma as never,
+      { search: jest.fn().mockResolvedValue({ status: 'EVIDENCE', conflictItemIds: [], evidence: [{
+        itemId: 'knowledge-a', versionId: 'version-a', version: 1, source: 'MANUAL', scope: 'STORE', productId: null,
+        contentSnapshot: { question: '多久发货？', answer: '现货通常 48 小时内发货。' }, retrievalScore: 0.98,
+      }] }) } as never,
+      runtime as never,
+      { createWaitingHuman: jest.fn() } as never,
+      outboxes as never,
+    );
+
+    await expect(service.process(scope, 'reply-readiness-barrier')).resolves.toEqual({
+      status: 'STALE', reason: 'SHOP_AI_NOT_READY',
+    });
+    expect(tx.shop.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'shop-a', workspaceId: 'workspace-a', tenantId: 'tenant-a' },
+      select: expect.objectContaining({ productLearningJobs: expect.objectContaining({
+        where: scope, orderBy: { createdAt: 'desc' }, take: 1,
+      }) }),
+    }));
+    expect(tx.replyJob.updateMany).toHaveBeenCalledWith({
+      where: { id: 'reply-readiness-barrier', ...scope, status: 'GENERATING', sourceContextVersion: 5 },
+      data: { status: 'STALE', staleReason: 'SHOP_AI_NOT_READY' },
+    });
+    expect(outboxes.enqueueInTransaction).not.toHaveBeenCalled();
   });
 
   it('does not compose or enqueue when the conversation became human-active after planning', async () => {
@@ -266,7 +332,7 @@ describe('ReplyRuntimeService', () => {
         }), updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       replyEvidence: { createMany: jest.fn() },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
       task: { createMany: jest.fn() },
     };
@@ -295,7 +361,7 @@ describe('ReplyRuntimeService', () => {
         }), updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       replyEvidence: { createMany: jest.fn() },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: ['投诉', '平台介入'] }) },
       task: { createMany: jest.fn() },
     };
@@ -338,7 +404,7 @@ describe('ReplyRuntimeService', () => {
         id: 'reply-high', status: 'PENDING', mode: 'AUTO', conversationId: 'conversation-a', userTurnId: 'turn-a', sourceLastMessageId: 'message-8', sourceSequence: 8, sourceContextVersion: 5, evidences: [],
         conversation: { contextVersion: 5, humanActive: false, state: 'ACTIVE', syncState: 'CONNECTED', overrideMode: null }, userTurn: { normalizedText: '我要退款' },
       }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      replyEvidence: { createMany: jest.fn() }, task: { createMany: jest.fn() }, shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) }, shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
+      replyEvidence: { createMany: jest.fn() }, task: { createMany: jest.fn() }, shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) }, shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
     const runtime = { runStructured: jest.fn()
       .mockResolvedValueOnce({ output: { tasks: [{ intent: 'REFUND', riskLevel: 'HIGH', requiredContext: [], requiredTools: [] }] } })
@@ -368,7 +434,7 @@ describe('ReplyRuntimeService', () => {
       conversation: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       message: { findMany: jest.fn().mockResolvedValue([{ id: 'card-order', kind: 'ORDER_CARD', contentJson: { orderId: 'order-2' } }]) },
       order: { findMany: jest.fn().mockResolvedValue([{ id: 'order-1', externalOrderId: 'one' }, { id: 'order-2', externalOrderId: 'two' }]) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
     const runtime = { runStructured: jest.fn()
@@ -406,7 +472,7 @@ describe('ReplyRuntimeService', () => {
           { id: 'order-b', externalOrderId: 'B', status: 'SHIPPED', logisticsSnapshotJson: {}, version: 2 },
         ]),
       },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
     const runtime = { runStructured: jest.fn()
@@ -441,7 +507,7 @@ describe('ReplyRuntimeService', () => {
         { id: 'sku-black-xl', productId: 'product-a', externalSkuId: 'black-xl', inventory: 3, price: 99, attributesJson: { color: '黑色', size: 'XL' } },
         { id: 'sku-white-xl', productId: 'product-a', externalSkuId: 'white-xl', inventory: 7, price: 99, attributesJson: { color: '白色', size: 'XL' } },
       ]) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
     const runtime = { runStructured: jest.fn()
@@ -480,7 +546,7 @@ describe('ReplyRuntimeService', () => {
           .mockResolvedValueOnce([{ id: 'sku-other', productId: 'product-other', externalSkuId: 'other', inventory: 9, price: 99, attributesJson: { color: '白色' } }])
           .mockResolvedValueOnce([{ id: 'sku-current', productId: 'product-a', externalSkuId: 'current', inventory: 3, price: 99, attributesJson: { color: '黑色' } }]),
       },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
     const runtime = { runStructured: jest.fn()
@@ -511,7 +577,7 @@ describe('ReplyRuntimeService', () => {
       conversation: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       replyEvidence: { createMany: jest.fn() }, task: { createMany: jest.fn() },
       productSku: { findMany: jest.fn().mockResolvedValue([{ id: 'sku-black-xl', productId: 'product-a', externalSkuId: 'black-xl', inventory: 3, price: 99, attributesJson: { color: '黑色', size: 'XL' } }]) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) }, shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) }, shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
     const runtime = { runStructured: jest.fn()
       .mockResolvedValueOnce({ output: { tasks: [
@@ -537,16 +603,20 @@ describe('ReplyRuntimeService', () => {
       conversation: { id: 'conversation-a', contextVersion: 5, humanActive: false, state: 'ACTIVE', syncState: 'CONNECTED', overrideMode: null, buyerId: 'buyer-a', clarificationRoundsJson: rounds },
       userTurn: { normalizedText: '我的订单什么时候到？', sourceMessageIdsJson: [] },
     });
-    const make = (rounds: unknown) => {
+    const make = (rounds: unknown, shop = {
+      aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }],
+    }) => {
       const tx = {
         conversation: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        shop: { findFirst: jest.fn().mockResolvedValue(shop) },
         replyJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
       };
       const prisma = {
         replyJob: { findFirst: jest.fn().mockResolvedValue(baseJob(rounds)), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         replyEvidence: { createMany: jest.fn() }, task: { createMany: jest.fn() },
         order: { findMany: jest.fn().mockResolvedValue([{ id: 'order-a', externalOrderId: 'A', status: 'SHIPPED', logisticsSnapshotJson: null, version: 1 }, { id: 'order-b', externalOrderId: 'B', status: 'SHIPPED', logisticsSnapshotJson: null, version: 1 }]) },
-        shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) }, shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
+        shop: { findFirst: jest.fn().mockResolvedValue(shop) }, shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
         $transaction: jest.fn((work: Function) => work(tx)),
       };
       const runtime = { runStructured: jest.fn()
@@ -563,9 +633,85 @@ describe('ReplyRuntimeService', () => {
     expect(first.outboxes.enqueueInTransaction).toHaveBeenCalledWith(first.tx, scope, expect.objectContaining({ text: expect.stringContaining('哪笔订单'), idempotencyKey: expect.stringContaining('clarification:reply-clarify:') }));
     expect(first.runtime.runStructured).toHaveBeenCalledTimes(2);
 
+    const preparing = make({}, {
+      aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'PENDING' }],
+    });
+    await expect(preparing.service.process(scope, 'reply-clarify')).resolves.toMatchObject({
+      status: 'WAITING_HUMAN', reason: 'SHOP_AI_NOT_READY',
+    });
+    expect(preparing.tx.task.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.arrayContaining([expect.objectContaining({ intent: 'CLARIFICATION', status: 'AMBIGUOUS' })]),
+    }));
+    expect(preparing.drafts.createWaitingHuman).toHaveBeenCalledWith(scope, expect.objectContaining({
+      replyJobId: 'reply-clarify', aiDraft: expect.stringContaining('哪笔订单'),
+    }));
+    expect(preparing.outboxes.enqueueInTransaction).not.toHaveBeenCalled();
+
     const exhausted = make({ ORDER: 2 });
     await expect(exhausted.service.process(scope, 'reply-clarify')).resolves.toMatchObject({ status: 'WAITING_HUMAN', reason: expect.stringContaining('CONTEXT_MANUAL_REQUIRED') });
     expect(exhausted.outboxes.enqueueInTransaction).not.toHaveBeenCalled();
     expect(exhausted.drafts.createWaitingHuman).toHaveBeenCalled();
+  });
+
+  it('rechecks live scoped readiness at the final clarification commit barrier', async () => {
+    const job = {
+      id: 'reply-clarification-barrier', status: 'PENDING', mode: 'AUTO', conversationId: 'conversation-a', userTurnId: 'turn-a',
+      sourceLastMessageId: 'message-8', sourceSequence: 8, sourceContextVersion: 5, evidences: [],
+      conversation: {
+        id: 'conversation-a', contextVersion: 5, humanActive: false, state: 'ACTIVE', syncState: 'CONNECTED',
+        overrideMode: null, buyerId: 'buyer-a', clarificationRoundsJson: {},
+      },
+      userTurn: { normalizedText: '我的订单什么时候到？', sourceMessageIdsJson: [] },
+    };
+    const tx = {
+      conversation: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      // Planning saw READY, but learning regressed before this durable commit.
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'PARTIAL_SUCCESS' }],
+      }) },
+      replyJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const prisma = {
+      replyJob: { findFirst: jest.fn().mockResolvedValue(job), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      replyEvidence: { createMany: jest.fn() },
+      task: { createMany: jest.fn() },
+      order: { findMany: jest.fn().mockResolvedValue([
+        { id: 'order-a', externalOrderId: 'A', status: 'SHIPPED', logisticsSnapshotJson: null, version: 1 },
+        { id: 'order-b', externalOrderId: 'B', status: 'SHIPPED', logisticsSnapshotJson: null, version: 1 },
+      ]) },
+      // Initial policy read still permits AUTO.
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'SUCCEEDED' }],
+      }) },
+      $transaction: jest.fn((work: Function) => work(tx)),
+    };
+    const runtime = { runStructured: jest.fn()
+      .mockResolvedValueOnce({ output: { tasks: [{ intent: 'ORDER_LOGISTICS', riskLevel: 'LOW', requiredContext: ['ORDER'], requiredTools: [] }] } })
+      .mockResolvedValueOnce({ output: { riskLevel: 'LOW', recommendedMode: 'AUTO', reasons: [] } }),
+    };
+    const outboxes = { enqueueInTransaction: jest.fn(), enqueue: jest.fn() };
+    const service = new ReplyRuntimeService(
+      prisma as never,
+      { search: jest.fn().mockResolvedValue({ status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] }) } as never,
+      runtime as never,
+      { createWaitingHuman: jest.fn() } as never,
+      outboxes as never,
+    );
+
+    await expect(service.process(scope, job.id)).resolves.toEqual({
+      status: 'STALE', reason: 'SHOP_AI_NOT_READY',
+    });
+    expect(tx.shop.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+      select: expect.objectContaining({ productLearningJobs: expect.objectContaining({
+        where: scope, orderBy: { createdAt: 'desc' }, take: 1,
+      }) }),
+    }));
+    expect(tx.replyJob.updateMany).toHaveBeenCalledWith({
+      where: { id: job.id, ...scope, status: 'GENERATING', sourceContextVersion: job.sourceContextVersion },
+      data: { status: 'STALE', staleReason: 'SHOP_AI_NOT_READY' },
+    });
+    expect(outboxes.enqueueInTransaction).not.toHaveBeenCalled();
   });
 });

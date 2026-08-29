@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { CreateShopInput } from '@ai-customer-service/contracts';
+import type { CreateShopInput, DemoWorkspaceProfile, ShopSettingsInput } from '@ai-customer-service/contracts';
 import {
   ConversationTransportMutex,
   localConversationTransportMutex,
@@ -31,7 +31,7 @@ export class WorkspaceService {
     private readonly transportMutex: ConversationTransportMutex = localConversationTransportMutex,
   ) {}
 
-  async create() {
+  async create(profile: DemoWorkspaceProfile = 'SEEDED') {
     const token = createWorkspaceToken();
     const now = new Date();
     const created = await this.repository.createWithSeed({
@@ -39,6 +39,7 @@ export class WorkspaceService {
       now,
       expiresAt: this.expiryFrom(now),
       seed: await this.seeds.load(),
+      profile,
     });
     return { workspace: created.workspace, tenant: created.tenant, token };
   }
@@ -67,8 +68,8 @@ export class WorkspaceService {
     return context.workspace;
   }
 
-  async reset(scope: WorkspaceScope) {
-    const counts = await this.repository.reset(scope, await this.seeds.load());
+  async reset(scope: WorkspaceScope, profile: DemoWorkspaceProfile = 'SEEDED') {
+    const counts = await this.repository.reset(scope, await this.seeds.load(), profile);
     return { status: 'READY', counts };
   }
 
@@ -112,8 +113,20 @@ export class WorkspaceService {
       catalog: seed,
       name,
       externalShopId,
-      aiMode: input.aiMode ?? 'ASSIST_ONLY',
+      aiMode: input.aiMode ?? 'AUTO_ALLOWED',
     });
+  }
+
+  async getShopSettings(scope: WorkspaceScope, shopId: string) {
+    const settings = await this.repository.getShopSettings(scope, shopId);
+    if (!settings) this.notFound('Shop settings');
+    return settings;
+  }
+
+  async updateShopSettings(scope: WorkspaceScope, shopId: string, input: ShopSettingsInput) {
+    const settings = await this.repository.updateShopSettings(scope, shopId, input);
+    if (!settings) this.notFound('Shop settings');
+    return settings;
   }
 
   async setShopAiMode(scope: WorkspaceScope, shopId: string, mode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY') {

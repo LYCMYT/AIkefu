@@ -1,5 +1,6 @@
 import type { SeedData } from '../seed/seed-catalog';
 import type { SeedShop } from '../seed/seed-catalog';
+import type { DemoWorkspaceProfile, ShopSettings, ShopSettingsInput } from '@ai-customer-service/contracts';
 
 export const WORKSPACE_REPOSITORY = Symbol('WORKSPACE_REPOSITORY');
 
@@ -35,6 +36,7 @@ export type ShopView = {
   externalShopId: string;
   name: string;
   aiMode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY';
+  aiReadiness: 'OFF' | 'PREPARING' | 'READY' | 'DEGRADED' | 'FAILED';
   connectionState: 'CONNECTED' | 'RECONNECTING' | 'RECONCILING' | 'DEGRADED' | 'DISCONNECTED';
   syncComplete: boolean;
 };
@@ -69,13 +71,15 @@ export type BootstrapView = {
 };
 
 export interface WorkspaceRepository {
-  createWithSeed(input: { tokenHash: string; now: Date; expiresAt: Date; seed: SeedData }): Promise<AuthenticatedWorkspace>;
+  createWithSeed(input: { tokenHash: string; now: Date; expiresAt: Date; seed: SeedData; profile?: DemoWorkspaceProfile }): Promise<AuthenticatedWorkspace>;
   authenticateAndTouch(tokenHash: string, now: Date, expiresAt: Date): Promise<AuthenticatedWorkspace | null>;
-  reset(scope: WorkspaceScope, seed: SeedData): Promise<SeedCounts>;
+  reset(scope: WorkspaceScope, seed: SeedData, profile?: DemoWorkspaceProfile): Promise<SeedCounts>;
   getBootstrap(scope: WorkspaceScope): Promise<BootstrapView | null>;
   listShops(scope: WorkspaceScope): Promise<ShopView[]>;
   getShop(scope: WorkspaceScope, shopId: string): Promise<ShopView | null>;
   createShop(scope: WorkspaceScope, input: CreateShopRepositoryInput): Promise<ShopView>;
+  getShopSettings(scope: WorkspaceScope, shopId: string): Promise<ShopSettings | null>;
+  updateShopSettings(scope: WorkspaceScope, shopId: string, input: ShopSettingsInput): Promise<ShopSettings | null>;
   setShopAiMode(scope: WorkspaceScope, shopId: string, mode: ShopView['aiMode']): Promise<ShopView | null>;
   deleteExpired(now: Date): Promise<number>;
 }

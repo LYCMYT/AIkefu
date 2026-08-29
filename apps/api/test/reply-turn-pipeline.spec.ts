@@ -73,6 +73,7 @@ describe('durable UserTurn → ReplyJob pipeline', () => {
       processingOutbox: { findUnique: jest.fn().mockResolvedValue(outbox) },
       conversation: { findFirst: jest.fn().mockResolvedValue({ lastCommittedSequence: 8, contextVersion: 5 }) },
       message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-8', sequence: 8 }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
     };
     const prisma = { $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)) };
     const replyJobs = { createInTransaction: jest.fn().mockResolvedValue({ id: 'reply-a', status: 'PENDING' }) };
@@ -111,6 +112,7 @@ describe('durable UserTurn → ReplyJob pipeline', () => {
       processingOutbox: { findUnique: jest.fn().mockResolvedValue(outbox) },
       conversation: { findFirst: jest.fn().mockResolvedValue({ lastCommittedSequence: 8, contextVersion: 5 }) },
       message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-8', sequence: 8 }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
     };
     const prisma = { $transaction: jest.fn(async (work: (client: typeof tx) => Promise<unknown>) => {
       const result = await work(tx); committed = true; return result;

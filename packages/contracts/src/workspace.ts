@@ -3,6 +3,18 @@ export type IsoDateTime = string;
 
 export type WorkspaceStatus = 'ACTIVE' | 'EXPIRED' | 'DELETED';
 
+/** EMPTY is used by the operational first-run experience; SEEDED remains the
+ * backwards-compatible default for scenario and API callers. */
+export type DemoWorkspaceProfile = 'EMPTY' | 'SEEDED';
+
+export interface CreateWorkspaceInput {
+  profile?: DemoWorkspaceProfile;
+}
+
+export interface ResetWorkspaceInput {
+  profile?: DemoWorkspaceProfile;
+}
+
 export type ImplementationPhase =
   | 'PHASE_01_FOUNDATION'
   | 'PHASE_02_MESSAGE_WORKBENCH'
@@ -37,6 +49,10 @@ export interface WorkspaceSession {
 
 export type ShopAIMode = 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY';
 
+/** Readiness is independent from the configured AI ceiling. AUTO is allowed
+ * to send only while this projection is READY. */
+export type ShopAiReadiness = 'OFF' | 'PREPARING' | 'READY' | 'DEGRADED' | 'FAILED';
+
 export type ShopConnectionState =
   | 'CONNECTED'
   | 'RECONNECTING'
@@ -53,6 +69,7 @@ export interface Shop {
   platform: 'DOUYIN_DEMO' | (string & {});
   externalShopId?: string;
   aiMode: ShopAIMode;
+  aiReadiness: ShopAiReadiness;
   connectionState: ShopConnectionState;
   syncComplete: boolean;
 }
@@ -65,12 +82,32 @@ export interface CreateShopInput {
   templateKey: DemoShopTemplateKey;
   name?: string;
   externalShopId?: string;
-  /** Omitted values start at the safer ASSIST_ONLY ceiling. */
+  /** Omitted values enable AUTO, which remains fail-closed until learning is READY. */
   aiMode?: ShopAIMode;
 }
 
 export interface UpdateShopAiModeInput {
   mode: ShopAIMode;
+}
+
+export interface ShopForbiddenTerm {
+  term: string;
+  replacement: string;
+}
+
+export interface ShopSettingsInput {
+  tone: string;
+  logisticsPolicy: string;
+  shippingPolicy: string;
+  afterSalesPolicy: string;
+  welcomeMessage: string;
+  closingMessages: Record<string, string>;
+  transferKeywords: string[];
+  forbiddenTerms: ShopForbiddenTerm[];
+}
+
+export interface ShopSettings extends ShopSettingsInput {
+  shopId: string;
 }
 
 export interface SeedCounts {

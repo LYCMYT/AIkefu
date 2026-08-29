@@ -198,10 +198,14 @@ describeRealInfra('Scenario Lab real PostgreSQL boundary', () => {
       const snapshot = entry.retrievedContentSnapshotJson as { answer?: unknown };
       return typeof snapshot.answer === 'string' ? snapshot.answer : '';
     };
-    expect(drafts.every((draft) => {
-      const row = evidence.find((entry) => entry.replyJobId === draft.replyJobId);
-      return Boolean(row && answerFor(row) && draft.aiDraft.includes(answerFor(row)));
-    })).toBe(true);
+    // Retrieval is TopK and the database query intentionally has no ordering
+    // contract.  A grounded reply may therefore use any frozen Evidence row
+    // for its ReplyJob, rather than whichever row PostgreSQL returns first.
+    expect(drafts.every((draft) => evidence
+      .filter((entry) => entry.replyJobId === draft.replyJobId)
+      .map(answerFor)
+      .filter(Boolean)
+      .some((answer) => draft.aiDraft.includes(answer)))).toBe(true);
 
     const traces = await prisma.traceEvent.findMany({
       where: { workspaceId, tenantId, stage: 'SCENARIO_CASE07_EVIDENCE', replyJobId: { in: replyJobIds } },

@@ -18,7 +18,7 @@ describeRealInfra('Phase 03 real PostgreSQL/pgvector/MinIO acceptance', () => {
   let prisma: PrismaService;
   let token: string;
   let workspaceId: string;
-  let shops: Array<{ id: string }>;
+  let shops: Array<{ id: string; name: string }>;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -34,7 +34,7 @@ describeRealInfra('Phase 03 real PostgreSQL/pgvector/MinIO acceptance', () => {
       .get('/api/shops')
       .set('X-Demo-Workspace-Token', token)
       .expect(200)).body;
-  });
+  }, 30_000);
 
   afterAll(async () => {
     if (workspaceId) await prisma.workspace.deleteMany({ where: { id: workspaceId } });
@@ -79,6 +79,22 @@ describeRealInfra('Phase 03 real PostgreSQL/pgvector/MinIO acceptance', () => {
 
     expect(own.evidence).toEqual(expect.arrayContaining([expect.objectContaining({ itemId: createdId })]));
     expect(other.evidence ?? []).not.toEqual(expect.arrayContaining([expect.objectContaining({ itemId: createdId })]));
+  });
+
+  it('lists only buyers related to the selected shop while preserving buyers shared by both shops', async () => {
+    const header = { 'X-Demo-Workspace-Token': token };
+    const miaShop = shops.find((shop) => shop.name === 'MIA Fashion')!;
+    const pixelShop = shops.find((shop) => shop.name === 'Pixel Tech')!;
+    const all = (await request(app.getHttpServer()).get('/api/buyers').set(header).expect(200)).body;
+    const mia = (await request(app.getHttpServer()).get(`/api/buyers?shopId=${miaShop.id}`).set(header).expect(200)).body;
+    const pixel = (await request(app.getHttpServer()).get(`/api/buyers?shopId=${pixelShop.id}`).set(header).expect(200)).body;
+
+    expect(all.map((buyer: { displayName: string }) => buyer.displayName)).toEqual(['小林', 'Mia', '张先生', '阿青']);
+    expect(mia.map((buyer: { displayName: string }) => buyer.displayName)).toEqual(['小林', 'Mia', '阿青']);
+    expect(pixel.map((buyer: { displayName: string }) => buyer.displayName)).toEqual(['小林', 'Mia', '张先生', '阿青']);
+    expect(mia.map((buyer: { id: string }) => buyer.id)).toEqual(expect.arrayContaining(
+      pixel.map((buyer: { id: string; displayName: string }) => buyer).filter((buyer: { displayName: string }) => ['小林', 'Mia', '阿青'].includes(buyer.displayName)).map((buyer: { id: string }) => buyer.id),
+    ));
   });
 
   it('round-trips an attachment through configured MinIO using only a short-lived signed URL', async () => {

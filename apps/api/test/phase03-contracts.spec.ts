@@ -13,6 +13,7 @@ describe('Phase 03 shared contracts', () => {
     ]));
     expect(bindings).toMatchObject({
       PRODUCT_UPDATED: '#/$defs/ProductUpdatedPayload',
+      PRODUCT_LEARNING_UPDATED: '#/$defs/ProductLearningUpdatedPayload',
       KNOWLEDGE_UPDATED: '#/$defs/KnowledgeUpdatedPayload',
       USAGE_UPDATED: '#/$defs/UsageUpdatedPayload',
     });
@@ -39,5 +40,19 @@ describe('Phase 03 shared contracts', () => {
 
     expect(conflictDetailPath).toBeDefined();
     expect(conflictDetailPath).toMatch(/^    get:/m);
+  });
+
+  it('keeps ShopSettings PUT a strict full-replacement contract', () => {
+    const openapi = readFileSync(resolve(__dirname, '../../../specs/openapi.yaml'), 'utf8');
+    const schema = openapi.match(/    ShopSettingsInput:[\s\S]*?(?=\n    ShopSettings:)/)?.[0];
+
+    expect(schema).toBeDefined();
+    for (const field of [
+      'tone', 'logisticsPolicy', 'shippingPolicy', 'afterSalesPolicy',
+      'welcomeMessage', 'closingMessages', 'transferKeywords', 'forbiddenTerms',
+    ]) {
+      expect(schema).toMatch(new RegExp(`^        - ${field}$`, 'm'));
+    }
+    expect(schema).toMatch(/forbiddenTerms:[\s\S]*?items:[\s\S]*?additionalProperties: false[\s\S]*?required: \[term, replacement\]/);
   });
 });

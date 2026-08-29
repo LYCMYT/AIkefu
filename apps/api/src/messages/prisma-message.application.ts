@@ -157,8 +157,17 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
 
   async listBuyers(scope: WorkspaceScope, shopId?: string): Promise<BuyerView[]> {
     if (shopId) await this.assertShop(scope, shopId);
+    const normalizedScope = this.scope(scope);
     const buyers = await this.prisma.buyer.findMany({
-      where: this.scope(scope),
+      where: {
+        ...normalizedScope,
+        ...(shopId ? {
+          OR: [
+            { orders: { some: { ...normalizedScope, shopId } } },
+            { conversations: { some: { ...normalizedScope, shopId } } },
+          ],
+        } : {}),
+      },
       orderBy: { createdAt: 'asc' },
     });
     return buyers.map((buyer) => ({
@@ -1036,6 +1045,31 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
             data: {
               workspaceId: outbox.workspaceId, tenantId: outbox.tenantId,
               shopId: outbox.shopId, eventId,
+            },
+          });
+          return null;
+        }
+        const replyShop = await tx.shop.findFirst({
+          where: {
+            id: outbox.shopId,
+            workspaceId: outbox.workspaceId,
+            tenantId: outbox.tenantId,
+          },
+          select: { aiMode: true },
+        });
+        if (!replyShop) throw new Error(`Reply shop missing for ${eventId}`);
+        // MANUAL_ONLY is the Shop master OFF switch, not a request to create a
+        // synthetic AI-shaped manual job. The committed buyer turn remains in
+        // the conversation for the human inbox, while this durable receipt
+        // ensures enabling AI later cannot resurrect work for an OFF-period
+        // message. A genuinely future turn may create fresh AUTO work.
+        if (replyShop.aiMode === 'MANUAL_ONLY') {
+          await tx.processingReceipt.create({
+            data: {
+              workspaceId: outbox.workspaceId,
+              tenantId: outbox.tenantId,
+              shopId: outbox.shopId,
+              eventId,
             },
           });
           return null;

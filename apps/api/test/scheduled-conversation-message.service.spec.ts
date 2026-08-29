@@ -4,7 +4,13 @@ describe('Scheduled conversation messages', () => {
   const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' };
 
   it('durably plans exactly one welcome per conversation with a SendGuard cursor', async () => {
-    const tx = { processingOutbox: { upsert: jest.fn().mockResolvedValue({ id: 'scheduled-a', status: 'PENDING' }) } };
+    const tx = {
+      $queryRaw: jest.fn(),
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'SUCCEEDED' }],
+      }) },
+      processingOutbox: { upsert: jest.fn().mockResolvedValue({ id: 'scheduled-a', status: 'PENDING' }) },
+    };
     const service = new ScheduledConversationMessageService({} as never);
     const now = new Date('2026-08-29T00:00:00.000Z');
 
@@ -30,21 +36,32 @@ describe('Scheduled conversation messages', () => {
       eventType: 'SCHEDULED_CLOSING', aggregateId: 'conversation-a', status: 'PENDING',
       payloadJson: { conversationId: 'conversation-a', text: '还有问题随时联系我。', expectedLastMessageId: 'message-8', expectedSequence: 8, expectedContextVersion: 5 },
     };
-    const prisma = {
-      processingOutbox: { findMany: jest.fn().mockResolvedValue([row]), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    const tx = {
+      $queryRaw: jest.fn(),
+      processingOutbox: {
+        findFirst: jest.fn().mockResolvedValue({ ...row, status: 'DISPATCHING' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       conversation: { findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', state: 'ACTIVE', humanActive: false, contextVersion: 5, lastCommittedSequence: 8 }) },
       message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-8' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'SUCCEEDED' }],
+      }) },
     };
-    const sendOutboxes = { enqueue: jest.fn().mockResolvedValue({ id: 'send-a', status: 'PENDING' }) };
+    const prisma = {
+      $transaction: jest.fn((work: Function) => work(tx)),
+      processingOutbox: { findMany: jest.fn().mockResolvedValue([row]), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const sendOutboxes = { enqueueInTransaction: jest.fn().mockResolvedValue({ id: 'send-a', status: 'PENDING' }) };
     const worker = new ScheduledConversationMessageWorker(prisma as never, sendOutboxes as never);
 
     await expect(worker.dispatchOnce()).resolves.toEqual({ dispatched: 1, cancelled: 0 });
-    expect(sendOutboxes.enqueue).toHaveBeenCalledWith(scope, {
+    expect(sendOutboxes.enqueueInTransaction).toHaveBeenCalledWith(tx, scope, {
       conversationId: 'conversation-a', text: '还有问题随时联系我。', idempotencyKey: 'scheduled-send:scheduled:closing:conversation-a:5',
       expectedLastMessageId: 'message-8', expectedSequence: 8, expectedContextVersion: 5,
     });
-    expect(prisma.processingOutbox.updateMany).toHaveBeenLastCalledWith({
-      where: { id: 'scheduled-a', status: 'DISPATCHING' }, data: { status: 'DISPATCHED', dispatchedAt: expect.any(Date) },
+    expect(tx.processingOutbox.updateMany).toHaveBeenLastCalledWith({
+      where: { id: 'scheduled-a', ...scope, status: 'DISPATCHING' }, data: { status: 'DISPATCHED', dispatchedAt: expect.any(Date) },
     });
   });
 
@@ -54,18 +71,29 @@ describe('Scheduled conversation messages', () => {
       eventType: 'SCHEDULED_WELCOME', aggregateId: 'conversation-a', status: 'PENDING',
       payloadJson: { conversationId: 'conversation-a', text: '您好', expectedLastMessageId: 'message-8', expectedSequence: 8, expectedContextVersion: 5 },
     };
-    const prisma = {
-      processingOutbox: { findMany: jest.fn().mockResolvedValue([row]), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    const tx = {
+      $queryRaw: jest.fn(),
+      processingOutbox: {
+        findFirst: jest.fn().mockResolvedValue({ ...row, status: 'DISPATCHING' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       conversation: { findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', state: 'ACTIVE', humanActive: true, contextVersion: 5, lastCommittedSequence: 8 }) },
       message: { findFirst: jest.fn() },
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'SUCCEEDED' }],
+      }) },
     };
-    const sendOutboxes = { enqueue: jest.fn() };
+    const prisma = {
+      $transaction: jest.fn((work: Function) => work(tx)),
+      processingOutbox: { findMany: jest.fn().mockResolvedValue([row]), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const sendOutboxes = { enqueueInTransaction: jest.fn() };
     const worker = new ScheduledConversationMessageWorker(prisma as never, sendOutboxes as never);
 
     await expect(worker.dispatchOnce()).resolves.toEqual({ dispatched: 0, cancelled: 1 });
-    expect(sendOutboxes.enqueue).not.toHaveBeenCalled();
-    expect(prisma.processingOutbox.updateMany).toHaveBeenLastCalledWith({
-      where: { id: 'scheduled-a', status: 'DISPATCHING' }, data: { status: 'FAILED' },
+    expect(sendOutboxes.enqueueInTransaction).not.toHaveBeenCalled();
+    expect(tx.processingOutbox.updateMany).toHaveBeenLastCalledWith({
+      where: { id: 'scheduled-a', ...scope, status: 'DISPATCHING' }, data: { status: 'FAILED' },
     });
   });
 
@@ -101,6 +129,76 @@ describe('Scheduled conversation messages', () => {
 
     await worker.dispatchOnce(new Date());
     expect(schedules.planClosing).toHaveBeenCalledWith(scope, expect.objectContaining({ currentOrderId: 'order-a', currentOrderStatus: 'SHIPPED' }), '已发货', expect.any(Date));
+  });
+
+  it('does not plan welcome or closing AI messages until the scoped shop is AUTO and READY', async () => {
+    const tx = {
+      $queryRaw: jest.fn(),
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: 'PENDING' }],
+      }) },
+      processingOutbox: { upsert: jest.fn() },
+    };
+    const prisma = { $transaction: jest.fn((work: Function) => work(tx)) };
+    const service = new ScheduledConversationMessageService(prisma as never);
+    const conversation = { id: 'conversation-a', contextVersion: 5, lastCommittedSequence: 8, lastMessageId: 'message-8' };
+
+    await expect(service.planWelcomeInTransaction(
+      tx as never, scope, conversation, '您好，有什么可以帮您？', new Date(),
+    )).resolves.toBeNull();
+    await expect(service.planClosing(
+      scope, conversation, '还有问题随时联系我。', new Date(),
+    )).resolves.toBeNull();
+    expect(tx.shop.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+      select: expect.objectContaining({ productLearningJobs: expect.objectContaining({
+        where: scope, orderBy: { createdAt: 'desc' }, take: 1,
+      }) }),
+    }));
+    expect(tx.processingOutbox.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rechecks scoped readiness after claiming a due schedule and never creates an AI outbox after readiness regresses', async () => {
+    const row = {
+      id: 'scheduled-race', eventId: 'scheduled:welcome:conversation-a', ...scope,
+      eventType: 'SCHEDULED_WELCOME', aggregateId: 'conversation-a', status: 'PENDING',
+      payloadJson: { conversationId: 'conversation-a', text: '您好', expectedLastMessageId: 'message-8', expectedSequence: 8, expectedContextVersion: 5 },
+    };
+    let learningStatus = 'SUCCEEDED';
+    const tx = {
+      $queryRaw: jest.fn(),
+      processingOutbox: {
+        findFirst: jest.fn().mockResolvedValue({ ...row, status: 'DISPATCHING' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      conversation: { findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', state: 'ACTIVE', humanActive: false, contextVersion: 5, lastCommittedSequence: 8 }) },
+      message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-8' }) },
+      shop: { findFirst: jest.fn().mockImplementation(async () => ({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'runtime:shop', productLearningJobs: [{ status: learningStatus }],
+      })) },
+    };
+    const prisma = {
+      $transaction: jest.fn((work: Function) => work(tx)),
+      processingOutbox: {
+        findMany: jest.fn().mockResolvedValue([row]),
+        updateMany: jest.fn().mockImplementation(async ({ where }: { where: { id?: string; status?: string } }) => {
+          if (where.id === row.id && where.status === 'PENDING') learningStatus = 'PARTIAL_SUCCESS';
+          return { count: 1 };
+        }),
+      },
+      conversation: tx.conversation,
+      message: tx.message,
+    };
+    const sendOutboxes = { enqueue: jest.fn(), enqueueInTransaction: jest.fn() };
+    const worker = new ScheduledConversationMessageWorker(prisma as never, sendOutboxes as never);
+
+    await expect(worker.dispatchOnce()).resolves.toEqual({ dispatched: 0, cancelled: 1 });
+    expect(tx.shop.findFirst).toHaveBeenCalled();
+    expect(sendOutboxes.enqueue).not.toHaveBeenCalled();
+    expect(sendOutboxes.enqueueInTransaction).not.toHaveBeenCalled();
+    expect(tx.processingOutbox.updateMany).toHaveBeenLastCalledWith({
+      where: { id: row.id, ...scope, status: 'DISPATCHING' }, data: { status: 'FAILED' },
+    });
   });
 
   it('periodically reclaims only stale scheduled DISPATCHING rows for its own consumer', async () => {

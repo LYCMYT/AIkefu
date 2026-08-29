@@ -32,6 +32,12 @@ paths:
       tags: [Workspace]
       security: []
       summary: Create an anonymous demo workspace
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DemoWorkspaceProfileInput"
       responses:
         "201":
           description: Workspace created
@@ -56,6 +62,12 @@ paths:
     post:
       tags: [Workspace]
       summary: Reset current workspace to seed state
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DemoWorkspaceProfileInput"
       responses:
         "202":
           description: Reset accepted
@@ -131,28 +143,6 @@ paths:
       responses:
         "200":
           description: Shop
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Shop"
-    patch:
-      tags: [Shops]
-      summary: Update mutable shop fields
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              properties:
-                name:
-                  type: string
-                enabled:
-                  type: boolean
-      responses:
-        "200":
-          description: Updated shop
           content:
             application/json:
               schema:
@@ -1916,19 +1906,33 @@ components:
       type: string
       enum: [AUTO_ALLOWED, ASSIST_ONLY, MANUAL_ONLY]
 
+    ShopAiReadiness:
+      type: string
+      enum: [OFF, PREPARING, READY, DEGRADED, FAILED]
+
+    DemoWorkspaceProfileInput:
+      type: object
+      additionalProperties: false
+      properties:
+        profile:
+          type: string
+          enum: [EMPTY, SEEDED]
+
     ConversationMode:
       type: string
       enum: [AUTO, ASSIST, MANUAL, HOLD]
 
     Shop:
       type: object
-      required: [id, name, platform, aiMode, connectionState]
+      required: [id, name, platform, aiMode, aiReadiness, connectionState]
       properties:
         id: { type: string }
         name: { type: string }
         platform: { type: string, enum: [DOUYIN_DEMO] }
         aiMode:
           $ref: "#/components/schemas/ShopAIMode"
+        aiReadiness:
+          $ref: "#/components/schemas/ShopAiReadiness"
         connectionState:
           type: string
           enum: [CONNECTED, RECONNECTING, RECONCILING, DEGRADED, DISCONNECTED]
@@ -1938,6 +1942,15 @@ components:
     ShopSettingsInput:
       type: object
       additionalProperties: false
+      required:
+        - tone
+        - logisticsPolicy
+        - shippingPolicy
+        - afterSalesPolicy
+        - welcomeMessage
+        - closingMessages
+        - transferKeywords
+        - forbiddenTerms
       properties:
         tone: { type: string }
         logisticsPolicy: { type: string }
@@ -1955,7 +1968,8 @@ components:
           type: array
           items:
             type: object
-            required: [term]
+            additionalProperties: false
+            required: [term, replacement]
             properties:
               term: { type: string }
               replacement: { type: string }

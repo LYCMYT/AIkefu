@@ -66,6 +66,13 @@ describe('Phase 04 production-service integration', () => {
         create: jest.fn().mockImplementation(async () => { state.receipt = true; return { eventId: event.eventId }; }),
       },
       processingOutbox: { findUnique: jest.fn().mockResolvedValue(event) },
+      shop: {
+        findFirst: jest.fn().mockResolvedValue({
+          aiMode: 'AUTO_ALLOWED',
+          seedKey: 'shop_mia_fashion',
+          productLearningJobs: [{ status: 'SUCCEEDED' }],
+        }),
+      },
       conversation: {
         findFirst: jest.fn().mockImplementation(async ({ where }: { where: Record<string, unknown> }) =>
           where.id === 'conversation-a' && where.shopId === scope.shopId ? { id: 'conversation-a', contextVersion: 4, lastCommittedSequence: 3 } : null),
@@ -97,6 +104,72 @@ describe('Phase 04 production-service integration', () => {
     expect(state.receipt).toBe(true);
   });
 
+  it('records an OFF turn without AI work and creates AUTO work only for a future turn after it is enabled', async () => {
+    const events = new Map([
+      ['turn-off', {
+        eventId: 'turn-off', eventType: 'USER_TURN_READY', ...scope,
+        payloadJson: { conversationId: 'conversation-a', userTurnId: 'user-turn-off', sourceLastMessageId: 'message-off', sourceSequence: 1, sourceContextVersion: 1 },
+      }],
+      ['turn-on', {
+        eventId: 'turn-on', eventType: 'USER_TURN_READY', ...scope,
+        payloadJson: { conversationId: 'conversation-a', userTurnId: 'user-turn-on', sourceLastMessageId: 'message-on', sourceSequence: 2, sourceContextVersion: 2 },
+      }],
+    ]);
+    const receipts = new Set<string>();
+    const jobs: Array<Record<string, unknown>> = [];
+    let activeEvent = events.get('turn-off')!;
+    let shopMode: 'MANUAL_ONLY' | 'AUTO_ALLOWED' = 'MANUAL_ONLY';
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(0),
+      processingReceipt: {
+        findUnique: jest.fn(async ({ where }: { where: { eventId: string } }) => receipts.has(where.eventId) ? { eventId: where.eventId } : null),
+        create: jest.fn(async ({ data }: { data: { eventId: string } }) => { receipts.add(data.eventId); return data; }),
+      },
+      processingOutbox: {
+        findUnique: jest.fn(async ({ where }: { where: { eventId: string } }) => {
+          activeEvent = events.get(where.eventId)!;
+          return activeEvent;
+        }),
+      },
+      conversation: {
+        findFirst: jest.fn(async () => ({
+          id: 'conversation-a',
+          lastCommittedSequence: activeEvent.payloadJson.sourceSequence,
+          contextVersion: activeEvent.payloadJson.sourceContextVersion,
+        })),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      message: { findFirst: jest.fn(async () => ({ id: activeEvent.payloadJson.sourceLastMessageId, sequence: activeEvent.payloadJson.sourceSequence })) },
+      userTurn: { findFirst: jest.fn(async () => ({ id: activeEvent.payloadJson.userTurnId })) },
+      shop: { findFirst: jest.fn(async () => ({ aiMode: shopMode })) },
+      replyJob: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
+          const job = { id: `job-${jobs.length + 1}`, status: 'PENDING', ...data };
+          jobs.push(job);
+          return job;
+        }),
+      },
+      replyDraft: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      replyEvidence: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    };
+    const prisma = { $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)) };
+    const application = new PrismaMessageApplication(
+      prisma as never, {} as never, {} as never, {} as never, {} as never, new ReplyJobService(prisma as never),
+    );
+
+    await (application as unknown as { consumeOutbox(id: string): Promise<void> }).consumeOutbox('turn-off');
+    shopMode = 'AUTO_ALLOWED';
+    await (application as unknown as { consumeOutbox(id: string): Promise<void> }).consumeOutbox('turn-on');
+
+    expect(jobs).toEqual([
+      expect.objectContaining({ idempotencyKey: 'turn-on', mode: 'AUTO', userTurnId: 'user-turn-on' }),
+    ]);
+    expect(receipts).toEqual(new Set(['turn-off', 'turn-on']));
+  });
+
   it('Case 05: a post-flush newer USER_TURN_READY stales the old generating job and creates exactly one fresh job without touching transport', async () => {
     let event: Record<string, unknown> | undefined;
     const state = {
@@ -111,6 +184,13 @@ describe('Phase 04 production-service integration', () => {
       processingOutbox: {
         findUnique: jest.fn().mockImplementation(async () => event),
         upsert: jest.fn().mockImplementation(async ({ create }: { create: Record<string, unknown> }) => { event = create; return create; }),
+      },
+      shop: {
+        findFirst: jest.fn().mockResolvedValue({
+          aiMode: 'AUTO_ALLOWED',
+          seedKey: 'shop_mia_fashion',
+          productLearningJobs: [{ status: 'SUCCEEDED' }],
+        }),
       },
       conversationTurnBuffer: { findUnique: jest.fn().mockResolvedValue(buffer), update: jest.fn().mockResolvedValue(buffer) },
       conversation: { findUnique: jest.fn().mockResolvedValue(conversation), findFirst: jest.fn().mockResolvedValue(conversation), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
@@ -163,11 +243,22 @@ describe('Phase 04 production-service integration', () => {
       conversation: { ...conversation, humanActive: false, state: 'ACTIVE', syncState: 'CONNECTED', overrideMode: null, clarificationRoundsJson: {} },
       userTurn: { id: 'turn-new', normalizedText: '什么时候发货？\n我是新疆的', sourceMessageIdsJson: ['message-question', 'message-new'] },
     };
-    const runtimeTx = { $queryRaw: jest.fn(), conversation: { findFirst: jest.fn().mockResolvedValue({ contextVersion: 5, humanActive: false, state: 'ACTIVE' }) }, replyJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } };
+    const runtimeTx = {
+      $queryRaw: jest.fn(),
+      conversation: { findFirst: jest.fn().mockResolvedValue({ contextVersion: 5, humanActive: false, state: 'ACTIVE' }) },
+      shop: {
+        findFirst: jest.fn().mockResolvedValue({
+          aiMode: 'AUTO_ALLOWED',
+          seedKey: 'shop_mia_fashion',
+          productLearningJobs: [{ status: 'SUCCEEDED' }],
+        }),
+      },
+      replyJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
     const runtimePrisma = {
       $transaction: jest.fn((work: (client: typeof runtimeTx) => unknown) => work(runtimeTx)),
       replyJob: { findFirst: jest.fn().mockResolvedValue(runtimeJob), updateMany: jest.fn().mockResolvedValue({ count: 1 }) }, replyEvidence: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) }, shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) }, shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
     const knowledge = { search: jest.fn().mockResolvedValue({ status: 'EVIDENCE', conflictItemIds: [], evidence: [{ itemId: 'knowledge-remote', versionId: 'version-remote', version: 1, source: 'MANUAL', scope: 'STORE', productId: null, contentSnapshot: { question: '偏远地区发货', answer: '偏远地区通常 72 小时内发货。' }, retrievalScore: 0.99 }] }) };
     const newSends = { enqueueInTransaction: jest.fn().mockResolvedValue({ id: 'send-fresh' }) };
@@ -238,6 +329,9 @@ describe('Phase 04 production-service integration', () => {
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'clarification-send', ...data })),
       },
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }],
+      }) },
       task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     const prisma = {
@@ -252,7 +346,7 @@ describe('Phase 04 production-service integration', () => {
           { id: 'order-b', externalOrderId: 'B200', status: 'PROCESSING', logisticsSnapshotJson: {}, version: 1 },
         ]),
       },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
     };
     const runtimePort = {
       runStructured: jest.fn()
@@ -302,13 +396,14 @@ describe('Phase 04 production-service integration', () => {
     };
     const tx = {
       conversation: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }, replyJob: { findFirst: jest.fn().mockResolvedValue(job), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       sendOutbox: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: 'send-round-two' }) }, task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     const prisma = {
       $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)), replyJob: tx.replyJob, conversation: tx.conversation, replyEvidence: { createMany: jest.fn() },
       message: { findMany: jest.fn().mockResolvedValue([]) }, order: { findMany: jest.fn().mockResolvedValue([
         { id: 'order-a', externalOrderId: 'A100', status: 'SHIPPED', logisticsSnapshotJson: {}, version: 1 }, { id: 'order-b', externalOrderId: 'B200', status: 'PROCESSING', logisticsSnapshotJson: {}, version: 1 },
-      ]) }, shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      ]) }, shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
     };
     const model = { runStructured: jest.fn().mockResolvedValueOnce({ output: { tasks: [{ intent: 'ORDER_LOGISTICS', riskLevel: 'LOW', requiredContext: ['ORDER'], requiredTools: [] }] } }).mockResolvedValueOnce({ output: { riskLevel: 'LOW', reasons: [], recommendedMode: 'AUTO' } }) };
     const runtime = new ReplyRuntimeService(prisma as never, { search: jest.fn().mockResolvedValue({ status: 'NOT_FOUND', evidence: [], conflictItemIds: [] }) } as never, model as never, {} as never, new SendOutboxService(prisma as never));
@@ -335,7 +430,7 @@ describe('Phase 04 production-service integration', () => {
         { id: 'order-a', externalOrderId: 'A100', status: 'SHIPPED', logisticsSnapshotJson: {}, version: 1 },
         { id: 'order-b', externalOrderId: 'B200', status: 'PROCESSING', logisticsSnapshotJson: {}, version: 1 },
       ]) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
     const model = {
@@ -364,7 +459,7 @@ describe('Phase 04 production-service integration', () => {
       sendOutbox: { findFirst: jest.fn().mockResolvedValue(pending), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       conversation: { findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', state: 'ACTIVE', humanActive: true, overrideMode: 'MANUAL', lastCommittedSequence: 3, contextVersion: 4 }) },
       message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-a' }) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       replyJob: { findFirst: jest.fn().mockResolvedValue({ id: 'reply-a' }) },
     };
     const outboxes = new SendOutboxService({ $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)) } as never);
@@ -407,7 +502,7 @@ describe('Phase 04 production-service integration', () => {
       conversation: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'conversation-a', contextVersion: 4, lastCommittedSequence: 3,
-          shopId: scope.shopId, shop: { aiMode: 'AUTO_ALLOWED' },
+          shopId: scope.shopId, shop: { aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] },
         }),
         updateMany: jest.fn().mockImplementation(async ({ where, data }: { where: { humanActive?: boolean }; data: { humanActive?: boolean } }) => {
           if (where.humanActive !== undefined && where.humanActive !== state.humanActive) return { count: 0 };
@@ -475,7 +570,7 @@ describe('Phase 04 production-service integration', () => {
         findFirst: jest.fn().mockImplementation(async ({ where }: { where: Record<string, unknown> }) => where.externalMessageId ? null : { id: 'message-a' }),
         create: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => { state.projected.push(data); return data; }),
       },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       replyJob: {
         findFirst: jest.fn().mockResolvedValue(state.job),
         updateMany: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => { Object.assign(state.job, data); return { count: 1 }; }),

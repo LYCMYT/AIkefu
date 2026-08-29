@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { SeedData } from '../src/seed/seed-catalog';
+import type { DemoWorkspaceProfile, ShopSettings, ShopSettingsInput } from '@ai-customer-service/contracts';
 import type {
   AuthenticatedWorkspace,
   BootstrapView,
@@ -15,6 +16,7 @@ type RecordState = AuthenticatedWorkspace & {
   shops: ShopView[];
   seedCounts: SeedCounts;
   runtimeConversations: number;
+  settings: Map<string, ShopSettings>;
 };
 
 export class InMemoryWorkspaceRepository implements WorkspaceRepository {
@@ -25,6 +27,7 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
     now: Date;
     expiresAt: Date;
     seed: SeedData;
+    profile?: DemoWorkspaceProfile;
   }): Promise<AuthenticatedWorkspace> {
     const workspaceId = `ws_${randomUUID()}`;
     const tenantId = `tenant_${randomUUID()}`;
@@ -40,9 +43,10 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
         createdAt: input.now.toISOString(),
       },
       tenant: { id: tenantId, workspaceId, name: 'Anonymous Demo Tenant' },
-      shops: this.seedShops(workspaceId, tenantId, input.seed),
-      seedCounts: this.counts(input.seed),
+      shops: (input.profile ?? 'SEEDED') === 'SEEDED' ? this.seedShops(workspaceId, tenantId, input.seed) : [],
+      seedCounts: (input.profile ?? 'SEEDED') === 'SEEDED' ? this.counts(input.seed) : this.emptyCounts(),
       runtimeConversations: 0,
+      settings: new Map(),
     };
     this.records.set(workspaceId, record);
     return this.authView(record);
@@ -62,12 +66,13 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
     return this.authView(record);
   }
 
-  async reset(scope: WorkspaceScope, seed: SeedData): Promise<SeedCounts> {
+  async reset(scope: WorkspaceScope, seed: SeedData, profile: DemoWorkspaceProfile = 'SEEDED'): Promise<SeedCounts> {
     const record = this.records.get(scope.workspaceId);
     if (!record || record.tenantId !== scope.tenantId) throw new Error('workspace not found');
-    record.shops = this.seedShops(scope.workspaceId, scope.tenantId, seed);
-    record.seedCounts = this.counts(seed);
+    record.shops = profile === 'SEEDED' ? this.seedShops(scope.workspaceId, scope.tenantId, seed) : [];
+    record.seedCounts = profile === 'SEEDED' ? this.counts(seed) : this.emptyCounts();
     record.runtimeConversations = 0;
+    record.settings.clear();
     return { ...record.seedCounts };
   }
 
@@ -77,7 +82,7 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
     return {
       workspace: { ...record.workspace },
       tenant: { ...record.tenant },
-      shops: record.shops.map((shop) => ({ ...shop, settings: {} })),
+      shops: record.shops.map((shop) => ({ ...shop, settings: record.settings.get(shop.id) ?? {} })),
       seed: { status: 'READY', counts: { ...record.seedCounts } },
       featureFlags: {
         mockDouyinOnly: true,
@@ -103,11 +108,46 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
     const shop: ShopView = {
       id: `shop_${randomUUID()}`, ...scope, platform: 'DOUYIN_DEMO',
       externalShopId: input.externalShopId, name: input.name, aiMode: input.aiMode,
+      aiReadiness: input.aiMode === 'MANUAL_ONLY' ? 'OFF' : 'PREPARING',
       connectionState: 'CONNECTED', syncComplete: true,
     };
     record.shops.push(shop);
     record.seedCounts.shops = record.shops.length;
+    record.seedCounts.buyers += new Set(input.catalog.orders.filter((order) => order.shopKey === input.template.key).map((order) => order.buyerKey)).size;
+    record.seedCounts.products += input.catalog.products.filter((product) => product.shopKey === input.template.key).length;
+    record.seedCounts.orders += input.catalog.orders.filter((order) => order.shopKey === input.template.key).length;
+    record.seedCounts.knowledge += input.catalog.knowledge.filter((entry) => entry.shopKey === input.template.key && entry.sourceType !== 'AUTO_LEARNED').length;
+    record.settings.set(shop.id, {
+      shopId: shop.id,
+      tone: input.template.settings.tone,
+      logisticsPolicy: input.template.settings.logisticsPolicy,
+      shippingPolicy: input.template.settings.shippingPolicy,
+      afterSalesPolicy: input.template.settings.afterSalesPolicy,
+      welcomeMessage: input.template.settings.welcomeMessage,
+      closingMessages: { ...input.template.settings.closingMessages },
+      transferKeywords: [...input.template.settings.transferKeywords],
+      forbiddenTerms: input.template.settings.forbiddenTerms.map((entry) => ({ ...entry })),
+    });
     return { ...shop };
+  }
+
+  async getShopSettings(scope: WorkspaceScope, shopId: string): Promise<ShopSettings | null> {
+    const record = this.scoped(scope);
+    if (!record?.shops.some((shop) => shop.id === shopId)) return null;
+    return record.settings.get(shopId) ?? null;
+  }
+
+  async updateShopSettings(scope: WorkspaceScope, shopId: string, input: ShopSettingsInput): Promise<ShopSettings | null> {
+    const record = this.scoped(scope);
+    if (!record?.shops.some((shop) => shop.id === shopId)) return null;
+    const settings: ShopSettings = {
+      shopId, ...input,
+      closingMessages: { ...input.closingMessages },
+      transferKeywords: [...input.transferKeywords],
+      forbiddenTerms: input.forbiddenTerms.map((entry) => ({ ...entry })),
+    };
+    record.settings.set(shopId, settings);
+    return settings;
   }
 
   async setShopAiMode(scope: WorkspaceScope, shopId: string, mode: ShopView['aiMode']): Promise<ShopView | null> {
@@ -157,6 +197,7 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
       externalShopId: source.externalShopId,
       name: source.name,
       aiMode: source.aiMode,
+      aiReadiness: source.aiMode === 'MANUAL_ONLY' ? 'OFF' : 'READY',
       connectionState: source.connectionState,
       syncComplete: true,
     }));
@@ -171,6 +212,10 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
       knowledge: seed.knowledge.length,
       workflows: seed.workflows.length,
     };
+  }
+
+  private emptyCounts(): SeedCounts {
+    return { shops: 0, buyers: 0, products: 0, orders: 0, knowledge: 0, workflows: 0 };
   }
 
   private authView(record: RecordState): AuthenticatedWorkspace {

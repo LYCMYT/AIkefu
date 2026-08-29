@@ -106,6 +106,9 @@ describe('SendOutboxService', () => {
         findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', state: 'ACTIVE', humanActive: false, lastCommittedSequence: 8, contextVersion: 5 }),
       },
       message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-8' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({
+        aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }],
+      }) },
     };
     const prisma = { $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)) };
     const service = new SendOutboxService(prisma as never);
@@ -121,6 +124,50 @@ describe('SendOutboxService', () => {
     expect(tx.sendOutbox.updateMany).toHaveBeenLastCalledWith({
       where: { id: 'send-a', workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', status: 'PENDING' },
       data: { status: 'FAILED', failureCode: 'CONTEXT_STALE', failureReason: 'SEND_GUARD_REJECTED' },
+    });
+  });
+
+  it('allows a reply to follow the confirmed welcome that advanced only its matching cursor', async () => {
+    const reply = {
+      id: 'reply-send', status: 'PENDING', replyJobId: 'reply-a', conversationId: 'conversation-a', idempotencyKey: 'reply-send:reply-a',
+      payloadJson: { text: '这款有现货。', senderRole: 'AI' },
+      expectedLastMessageId: 'buyer-message', expectedSequence: 8, expectedContextVersion: 5,
+    };
+    const welcome = {
+      id: 'welcome-send', status: 'SENT', replyJobId: null, conversationId: 'conversation-a',
+      idempotencyKey: 'scheduled-send:scheduled:welcome:conversation-a',
+      expectedLastMessageId: 'buyer-message', expectedSequence: 8, expectedContextVersion: 5,
+    };
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      sendOutbox: {
+        findFirst: jest.fn().mockImplementation(async ({ where }: { where: { id?: string; status?: string } }) => {
+          if (where.id === reply.id) return where.status === 'SENDING' ? { ...reply, status: 'SENDING' } : reply;
+          if (where.id === welcome.id) return welcome;
+          return null;
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', state: 'ACTIVE', humanActive: false, lastCommittedSequence: 9, contextVersion: 5 }),
+      },
+      message: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'welcome-message', externalMessageId: welcome.id, role: 'ASSISTANT' }),
+      },
+      shop: {
+        findFirst: jest.fn().mockResolvedValue({
+          aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }],
+        }),
+      },
+      replyJob: { findFirst: jest.fn().mockResolvedValue({ id: 'reply-a' }) },
+    };
+    const service = new SendOutboxService({ $transaction: jest.fn((work: Function) => work(tx)) } as never);
+
+    await expect(service.claim(scope, reply.id)).resolves.toMatchObject({ claimed: true, sendOutbox: { id: reply.id } });
+    await expect(service.fenceBeforeTransport(scope, reply.id)).resolves.toBe(true);
+    expect(tx.sendOutbox.findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({ id: welcome.id, status: 'SENT', idempotencyKey: { startsWith: 'scheduled-send:scheduled:welcome:' } }),
+      select: expect.any(Object),
     });
   });
 
@@ -159,7 +206,7 @@ describe('SendOutboxService', () => {
       $queryRaw: jest.fn(), sendOutbox: { findFirst: jest.fn().mockResolvedValue(pending), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       conversation: { findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', state: 'ACTIVE', humanActive: false, overrideMode: 'ASSIST', lastCommittedSequence: 8, contextVersion: 5 }) },
       message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-8' }) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       replyJob: { findFirst: jest.fn().mockResolvedValue({ id: 'reply-mode' }) },
     };
     const service = new SendOutboxService({ $transaction: jest.fn((work: Function) => work(tx)) } as never);

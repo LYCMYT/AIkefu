@@ -36,6 +36,7 @@ import {
   ProductLearningJobsController,
 } from './knowledge/knowledge.controller';
 import { KnowledgeService } from './knowledge/knowledge.service';
+import { ProductLearningRequestWorker } from './knowledge/product-learning-request.worker';
 import { createKnowledgeEmbeddingProvider, KNOWLEDGE_EMBEDDING_PROVIDER } from './knowledge/knowledge.vector';
 import { ConversationMemoryService } from './ai/conversation-memory.service';
 import { AI_INVOCATION_REPOSITORY, PrismaAIInvocationRepository } from './ai/ai-invocation.repository';
@@ -115,6 +116,7 @@ import { WorkflowRealtimePublisher } from './workflow/workflow-realtime.publishe
     DataRetentionWorker,
     CustomerDataDeletionService,
     KnowledgeService,
+    ProductLearningRequestWorker,
     ConversationMemoryService,
     ConversationMemoryRebuildWorker,
     CoalescingConversationMemoryRebuildScheduler,

@@ -122,7 +122,16 @@ export class InMemoryMessageApplication implements MessageApplication {
 
   async listBuyers(scope: WorkspaceScope, shopId?: string): Promise<BuyerView[]> {
     if (shopId) await this.assertShop(scope, shopId);
-    return this.state(scope).buyers.map((buyer) => ({ ...buyer, tags: [...buyer.tags] }));
+    const state = this.state(scope);
+    const relatedBuyerIds = shopId
+      ? new Set([
+          ...(state.ordersByShop.get(shopId) ?? []).map((order) => order.buyerId),
+          ...[...state.conversations.values()].filter((conversation) => conversation.shopId === shopId).map((conversation) => conversation.buyerId),
+        ])
+      : undefined;
+    return state.buyers
+      .filter((buyer) => !relatedBuyerIds || relatedBuyerIds.has(buyer.id))
+      .map((buyer) => ({ ...buyer, tags: [...buyer.tags] }));
   }
 
   async listProducts(scope: WorkspaceScope, shopId: string): Promise<ProductView[]> {

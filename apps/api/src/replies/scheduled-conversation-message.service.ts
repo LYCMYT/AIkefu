@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Prisma, ProcessingOutboxStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { autoReplyReady } from '../shops/shop-ai-readiness';
 import type { ReplyJobScope } from './reply-job.service';
 import { SendOutboxService } from './send-outbox.service';
 
@@ -35,6 +36,7 @@ export class ScheduledConversationMessageService {
     text: string,
     availableAt = new Date(),
   ) {
+    if (!(await scopedShopAutoReady(tx, scope, true))) return null;
     return tx.processingOutbox.upsert({
       where: { eventId: `scheduled:welcome:${conversation.id}` },
       update: {},
@@ -52,19 +54,22 @@ export class ScheduledConversationMessageService {
   }
 
   async planClosing(scope: ReplyJobScope, conversation: ScheduledConversationCursor, text: string, availableAt: Date) {
-    return this.prisma.processingOutbox.upsert({
-      where: { eventId: `scheduled:closing:${conversation.id}:${conversation.contextVersion}` },
-      update: {},
-      create: {
-        ...scope,
-        eventId: `scheduled:closing:${conversation.id}:${conversation.contextVersion}`,
-        aggregateType: 'CONVERSATION',
-        aggregateId: conversation.id,
-        eventType: 'SCHEDULED_CLOSING',
-        payloadJson: payload(conversation, text),
-        status: ProcessingOutboxStatus.PENDING,
-        availableAt,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await scopedShopAutoReady(tx, scope, true))) return null;
+      return tx.processingOutbox.upsert({
+        where: { eventId: `scheduled:closing:${conversation.id}:${conversation.contextVersion}` },
+        update: {},
+        create: {
+          ...scope,
+          eventId: `scheduled:closing:${conversation.id}:${conversation.contextVersion}`,
+          aggregateType: 'CONVERSATION',
+          aggregateId: conversation.id,
+          eventType: 'SCHEDULED_CLOSING',
+          payloadJson: payload(conversation, text),
+          status: ProcessingOutboxStatus.PENDING,
+          availableAt,
+        },
+      });
     });
   }
 }
@@ -127,38 +132,64 @@ export class ScheduledConversationMessageWorker implements OnModuleInit, OnModul
     let cancelled = 0;
     for (const row of rows) {
       const claimed = await this.prisma.processingOutbox.updateMany({
-        where: { id: row.id, status: ProcessingOutboxStatus.PENDING },
+        where: {
+          id: row.id,
+          workspaceId: row.workspaceId,
+          tenantId: row.tenantId,
+          shopId: row.shopId,
+          status: ProcessingOutboxStatus.PENDING,
+        },
         data: { status: ProcessingOutboxStatus.DISPATCHING, attempts: { increment: 1 } },
       });
       if (!claimed.count) continue;
       const scope = { workspaceId: row.workspaceId, tenantId: row.tenantId, shopId: row.shopId };
-      const scheduled = parsePayload(row.payloadJson);
-      if (!scheduled || !(await this.stillValid(scope, scheduled))) {
-        await this.prisma.processingOutbox.updateMany({
-          where: { id: row.id, status: ProcessingOutboxStatus.DISPATCHING }, data: { status: ProcessingOutboxStatus.FAILED },
-        });
-        cancelled += 1;
-        continue;
-      }
       try {
-        await this.sendOutboxes.enqueue(scope, {
-          conversationId: scheduled.conversationId,
-          text: scheduled.text,
-          idempotencyKey: `scheduled-send:${row.eventId}`,
-          expectedLastMessageId: scheduled.expectedLastMessageId,
-          expectedSequence: scheduled.expectedSequence,
-          expectedContextVersion: scheduled.expectedContextVersion,
+        const outcome = await this.prisma.$transaction(async (tx) => {
+          // Serialize the final readiness decision with the Shop kill switch.
+          // Lock the schedule too, so reclaim cannot race an atomic conversion.
+          await lockScopedShop(tx, scope);
+          await tx.$queryRaw(Prisma.sql`
+            SELECT 1 FROM "ProcessingOutbox"
+            WHERE "id" = ${row.id}
+              AND "workspaceId" = ${scope.workspaceId}
+              AND "tenantId" = ${scope.tenantId}
+              AND "shopId" = ${scope.shopId}
+            FOR UPDATE
+          `);
+          const current = await tx.processingOutbox.findFirst({
+            where: { id: row.id, ...scope, status: ProcessingOutboxStatus.DISPATCHING },
+          });
+          if (!current) return 'SKIPPED' as const;
+          const scheduled = parsePayload(current.payloadJson);
+          if (!scheduled || !(await this.stillValid(tx, scope, scheduled))) {
+            await tx.processingOutbox.updateMany({
+              where: { id: row.id, ...scope, status: ProcessingOutboxStatus.DISPATCHING },
+              data: { status: ProcessingOutboxStatus.FAILED },
+            });
+            return 'CANCELLED' as const;
+          }
+          await this.sendOutboxes.enqueueInTransaction(tx, scope, {
+            conversationId: scheduled.conversationId,
+            text: scheduled.text,
+            idempotencyKey: `scheduled-send:${row.eventId}`,
+            expectedLastMessageId: scheduled.expectedLastMessageId,
+            expectedSequence: scheduled.expectedSequence,
+            expectedContextVersion: scheduled.expectedContextVersion,
+          });
+          const completed = await tx.processingOutbox.updateMany({
+            where: { id: row.id, ...scope, status: ProcessingOutboxStatus.DISPATCHING },
+            data: { status: ProcessingOutboxStatus.DISPATCHED, dispatchedAt: new Date() },
+          });
+          if (!completed.count) throw new Error('SCHEDULED_MESSAGE_CLAIM_LOST');
+          return 'DISPATCHED' as const;
         });
-        await this.prisma.processingOutbox.updateMany({
-          where: { id: row.id, status: ProcessingOutboxStatus.DISPATCHING },
-          data: { status: ProcessingOutboxStatus.DISPATCHED, dispatchedAt: new Date() },
-        });
-        dispatched += 1;
+        if (outcome === 'DISPATCHED') dispatched += 1;
+        if (outcome === 'CANCELLED') cancelled += 1;
       } catch {
         // A durable SendOutbox may already exist after a crash. Move back to
         // PENDING and retry its idempotent enqueue rather than dropping it.
         await this.prisma.processingOutbox.updateMany({
-          where: { id: row.id, status: ProcessingOutboxStatus.DISPATCHING },
+          where: { id: row.id, ...scope, status: ProcessingOutboxStatus.DISPATCHING },
           data: { status: ProcessingOutboxStatus.PENDING, availableAt: new Date(now.getTime() + 1_000) },
         });
       }
@@ -197,20 +228,22 @@ export class ScheduledConversationMessageWorker implements OnModuleInit, OnModul
     }
   }
 
-  private async stillValid(scope: ReplyJobScope, scheduled: ScheduledPayload): Promise<boolean> {
-    const [conversation, lastMessage] = await Promise.all([
-      this.prisma.conversation.findFirst({
+  private async stillValid(tx: Prisma.TransactionClient, scope: ReplyJobScope, scheduled: ScheduledPayload): Promise<boolean> {
+    const [conversation, lastMessage, ready] = await Promise.all([
+      tx.conversation.findFirst({
         where: { id: scheduled.conversationId, ...scope },
         select: { id: true, state: true, humanActive: true, contextVersion: true, lastCommittedSequence: true, currentOrderId: true },
       }),
-      this.prisma.message.findFirst({
+      tx.message.findFirst({
         where: { ...scope, conversationId: scheduled.conversationId, status: { not: 'RECALLED' } },
         orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }], select: { id: true },
       }),
+      scopedShopAutoReady(tx, scope, false),
     ]);
+    if (!ready) return false;
     if (scheduled.expectedOrderId) {
       if (conversation?.currentOrderId !== scheduled.expectedOrderId) return false;
-      const order = await this.prisma.order.findFirst({ where: { ...scope, id: scheduled.expectedOrderId }, select: { status: true } });
+      const order = await tx.order.findFirst({ where: { ...scope, id: scheduled.expectedOrderId }, select: { status: true } });
       if (!order || order.status !== scheduled.expectedOrderStatus) return false;
     }
     return Boolean(
@@ -222,6 +255,42 @@ export class ScheduledConversationMessageWorker implements OnModuleInit, OnModul
       && (scheduled.expectedLastMessageId ?? null) === (lastMessage?.id ?? null),
     );
   }
+}
+
+async function lockScopedShop(tx: Prisma.TransactionClient, scope: ReplyJobScope): Promise<void> {
+  await tx.$queryRaw(Prisma.sql`
+    SELECT 1 FROM "Shop"
+    WHERE "id" = ${scope.shopId}
+      AND "workspaceId" = ${scope.workspaceId}
+      AND "tenantId" = ${scope.tenantId}
+    FOR UPDATE
+  `);
+}
+
+async function scopedShopAutoReady(
+  tx: Prisma.TransactionClient,
+  scope: ReplyJobScope,
+  lock: boolean,
+): Promise<boolean> {
+  if (lock) await lockScopedShop(tx, scope);
+  const shop = await tx.shop.findFirst({
+    where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+    select: {
+      aiMode: true,
+      seedKey: true,
+      productLearningJobs: {
+        where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { status: true },
+      },
+    },
+  });
+  return autoReplyReady({
+    aiMode: shop?.aiMode,
+    seedKey: shop?.seedKey,
+    learningStatus: shop?.productLearningJobs[0]?.status,
+  });
 }
 
 function payload(conversation: ScheduledConversationCursor, text: string): ScheduledPayload {

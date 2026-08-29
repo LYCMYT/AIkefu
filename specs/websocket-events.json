@@ -35,6 +35,7 @@
         "WORKFLOW_NODE_UPDATED",
         "ACTION_PROPOSAL_UPDATED",
         "PRODUCT_UPDATED",
+        "PRODUCT_LEARNING_UPDATED",
         "ORDER_UPDATED",
         "KNOWLEDGE_UPDATED",
         "QUALITY_REVIEW_UPDATED",
@@ -73,6 +74,10 @@
     {
       "if": { "properties": { "eventType": { "const": "PRODUCT_UPDATED" } }, "required": ["eventType"] },
       "then": { "properties": { "payload": { "$ref": "#/$defs/ProductUpdatedPayload" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "PRODUCT_LEARNING_UPDATED" } }, "required": ["eventType"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/ProductLearningUpdatedPayload" } } }
     },
     {
       "if": { "properties": { "eventType": { "const": "KNOWLEDGE_UPDATED" } }, "required": ["eventType"] },
@@ -463,6 +468,50 @@
         "product": { "type": "object" },
         "learningStatus": {
           "enum": ["PENDING", "PROCESSING", "SUCCEEDED", "FAILED", "OUTDATED"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProductLearningUpdatedPayload": {
+      "type": "object",
+      "required": ["shopId", "job", "readiness"],
+      "properties": {
+        "shopId": { "type": "string" },
+        "readiness": { "enum": ["OFF", "PREPARING", "READY", "DEGRADED", "FAILED"] },
+        "job": {
+          "type": "object",
+          "required": ["id", "shopId", "status", "totals", "items"],
+          "properties": {
+            "id": { "type": "string" },
+            "shopId": { "type": "string" },
+            "status": { "enum": ["PENDING", "RUNNING", "PARTIAL_SUCCESS", "SUCCEEDED", "FAILED"] },
+            "totals": {
+              "type": "object",
+              "required": ["total", "created", "updated", "skipped", "failed"],
+              "properties": {
+                "total": { "type": "integer", "minimum": 0 },
+                "created": { "type": "integer", "minimum": 0 },
+                "updated": { "type": "integer", "minimum": 0 },
+                "skipped": { "type": "integer", "minimum": 0 },
+                "failed": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["productId", "status", "reason"],
+                "properties": {
+                  "productId": { "type": "string" },
+                  "status": { "enum": ["PENDING", "PROCESSING", "SUCCEEDED", "FAILED", "OUTDATED"] },
+                  "reason": { "type": ["string", "null"] }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

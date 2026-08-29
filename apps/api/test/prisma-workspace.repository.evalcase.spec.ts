@@ -15,6 +15,7 @@ describe('PrismaWorkspaceRepository frozen EvalCase seeding', () => {
       order: { upsert: jest.fn().mockResolvedValue({}) },
       knowledgeItem: { upsert: jest.fn(async ({ create }: { create: { seedKey: string } }) => ({ id: `knowledge:${create.seedKey}` })), update: jest.fn().mockResolvedValue({}) },
       knowledgeVersion: { upsert: jest.fn(async ({ create }: { create: { knowledgeItemId: string } }) => ({ id: `version:${create.knowledgeItemId}` })) },
+      productLearningJob: { upsert: jest.fn().mockResolvedValue({}) },
       workflow: { upsert: jest.fn(async ({ create }: { create: { seedKey: string } }) => ({ id: `workflow:${create.seedKey}` })), update: jest.fn().mockResolvedValue({}) },
       workflowVersion: { upsert: jest.fn(async ({ create }: { create: { workflowId: string } }) => ({ id: `workflow-version:${create.workflowId}` })) },
       evalCase: { upsert: evalUpsert },

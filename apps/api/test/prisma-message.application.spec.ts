@@ -3,6 +3,30 @@ import { NotFoundException } from '@nestjs/common';
 
 const scope = { workspaceId: 'workspace-1', tenantId: 'tenant-1' };
 
+describe('PrismaMessageApplication buyer shop scope', () => {
+  it('lists only buyers related to the selected shop through an order or conversation', async () => {
+    const prisma = {
+      shop: { findFirst: jest.fn().mockResolvedValue({ id: 'shop-a' }) },
+      buyer: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const app = new PrismaMessageApplication(
+      prisma as never, { publish: jest.fn() } as never, {} as never, {} as never, {} as never,
+    );
+
+    await expect(app.listBuyers(scope, 'shop-a')).resolves.toEqual([]);
+    expect(prisma.buyer.findMany).toHaveBeenCalledWith({
+      where: {
+        ...scope,
+        OR: [
+          { orders: { some: { ...scope, shopId: 'shop-a' } } },
+          { conversations: { some: { ...scope, shopId: 'shop-a' } } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  });
+});
+
 describe('PrismaMessageApplication memory invalidation', () => {
   it('rejects an outgoing role before the buyer adapter recall is attempted', async () => {
     const adapter = { editMessage: jest.fn(), recallMessage: jest.fn() };

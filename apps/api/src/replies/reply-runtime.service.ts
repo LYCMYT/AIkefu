@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { ConversationTransportMutex, localConversationTransportMutex, transportShopMutexKey } from './conversation-transport-mutex.service';
 import { TraceService } from '../trace/trace.service';
 import { WorkflowRouterService } from '../workflow/workflow-router.service';
+import { autoReplyReady } from '../shops/shop-ai-readiness';
 
 type ReplyGeneration = { text: string; requiresHuman: boolean };
 type IntentPlanTask = {
@@ -57,7 +58,6 @@ export class ReplyRuntimeService {
     if (job.mode === 'MANUAL' || job.mode === 'HOLD') {
       return this.waitForHuman(scope, job, 'MANUAL_REQUIRED');
     }
-
     const claimed = await this.prisma.replyJob.updateMany({
       where: { id: job.id, ...scope, status: job.status, sourceContextVersion: job.sourceContextVersion },
       data: { status: 'GENERATING' },
@@ -107,9 +107,26 @@ export class ReplyRuntimeService {
       const { taskContexts, clarification } = resolvedContexts;
       void this.recordTrace(scope, job, 'CONTEXT', { contexts: [...taskContexts.entries()].map(([taskId, context]) => ({ taskId, status: context.status, entitySelected: Boolean(context.entity), manualRequired: context.manualRequired })) });
       if (clarification) {
-        const shop = await this.prisma.shop.findFirst({ where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId }, select: { aiMode: true } });
-        if (shop?.aiMode === 'MANUAL_ONLY') return this.waitForHuman(scope, job, 'CONTEXT_AMBIGUOUS');
-        return this.enqueueClarification(scope, job, taskContexts, clarification);
+        const shop = await this.prisma.shop.findFirst({
+          where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+          select: {
+            aiMode: true,
+            seedKey: true,
+            productLearningJobs: {
+              where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId },
+              orderBy: { createdAt: 'desc' }, take: 1, select: { status: true },
+            },
+          },
+        });
+        const autoReady = this.shopAutoReady(shop);
+        return this.enqueueClarification(
+          scope,
+          job,
+          taskContexts,
+          clarification,
+          autoReady,
+          shop?.aiMode === 'AUTO_ALLOWED' ? 'SHOP_AI_NOT_READY' : 'SHOP_AI_AUTO_DISABLED',
+        );
       }
       let execution = await executeTaskBundle(taskBundle, async (task) => {
         const context = taskContexts.get(task.id);
@@ -131,11 +148,23 @@ export class ReplyRuntimeService {
       execution = workflow.execution;
       void this.recordTrace(scope, job, 'TASKS', { tasks: execution.tasks.map((task) => ({ id: task.id, status: task.status, riskLevel: task.riskLevel, errorCode: task.errorCode ?? null })) });
       const [shop, settings] = await Promise.all([
-        this.prisma.shop.findFirst({ where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId }, select: { aiMode: true } }),
+        this.prisma.shop.findFirst({
+          where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+          select: {
+            aiMode: true,
+            seedKey: true,
+            productLearningJobs: {
+              where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId },
+              orderBy: { createdAt: 'desc' }, take: 1, select: { status: true },
+            },
+          },
+        }),
         this.prisma.shopSettings.findFirst({ where: { shopId: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId }, select: { forbiddenTermsJson: true, transferKeywordsJson: true } }),
       ]);
       const policy = decideReplyPolicy({
-        shopMode: shop?.aiMode ?? 'ASSIST_ONLY',
+        shopMode: shop?.aiMode === 'MANUAL_ONLY'
+          ? 'MANUAL_ONLY'
+          : this.shopAutoReady(shop) ? 'AUTO_ALLOWED' : 'ASSIST_ONLY',
         conversationOverride: job.conversation.overrideMode ?? (job.mode === 'ASSIST' ? 'ASSIST' : undefined),
         syncState: job.conversation.syncState,
         humanActive: job.conversation.humanActive,
@@ -216,7 +245,8 @@ export class ReplyRuntimeService {
       }
     }
 
-    if (!(await this.commitAutoSend(scope, job, text))) return { status: 'STALE', reason: 'REPLY_JOB_CLAIM_LOST' };
+    const autoSend = await this.commitAutoSend(scope, job, text);
+    if (!autoSend.committed) return { status: 'STALE', reason: autoSend.reason ?? 'REPLY_JOB_CLAIM_LOST' };
     this.publishRefresh(scope, job.conversationId, 'CONVERSATION_UPDATED', job.id);
     return { status: 'READY_TO_SEND' };
   }
@@ -226,7 +256,7 @@ export class ReplyRuntimeService {
     scope: ReplyJobScope,
     job: { id: string; conversationId: string; sourceContextVersion: number; sourceLastMessageId?: string | null; sourceSequence: number },
     text: string,
-  ): Promise<boolean> {
+  ): Promise<{ committed: boolean; reason?: string }> {
     type AutoSendInput = {
       replyJobId: string; conversationId: string; text: string; idempotencyKey: string;
       expectedLastMessageId?: string; expectedSequence: number; expectedContextVersion: number;
@@ -246,9 +276,9 @@ export class ReplyRuntimeService {
       const marked = await this.prisma.replyJob.updateMany({
         where: { id: job.id, ...scope, status: 'GENERATING', sourceContextVersion: job.sourceContextVersion }, data: { status: 'FAST_PATH_READY' },
       });
-      if (!marked.count) return false;
+      if (!marked.count) return { committed: false, reason: 'REPLY_JOB_CLAIM_LOST' };
       await this.sendOutboxes.enqueue(scope, input);
-      return true;
+      return { committed: true };
     }
     return client.$transaction(async (tx) => {
       await tx.$queryRaw(Prisma.sql`
@@ -264,16 +294,43 @@ export class ReplyRuntimeService {
           where: { id: job.id, ...scope, status: 'GENERATING', sourceContextVersion: job.sourceContextVersion },
           data: { status: 'STALE', staleReason: 'SEND_CONTEXT_STALE' },
         });
-        return false;
+        return { committed: false, reason: 'SEND_CONTEXT_STALE' };
+      }
+      // The policy decision may be minutes older than this durable commit.
+      // Re-read the scoped Shop and newest durable learning result inside the
+      // same transaction: AUTO can never materialize a send intent after its
+      // readiness has regressed or the master ceiling was turned off.
+      const shop = await tx.shop.findFirst({
+        where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+        select: {
+          aiMode: true,
+          seedKey: true,
+          productLearningJobs: {
+            where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { status: true },
+          },
+        },
+      });
+      if (!this.shopAutoReady(shop)) {
+        const reason = shop?.aiMode === 'AUTO_ALLOWED' ? 'SHOP_AI_NOT_READY' : 'SHOP_AI_AUTO_DISABLED';
+        const invalidated = await tx.replyJob.updateMany({
+          where: { id: job.id, ...scope, status: 'GENERATING', sourceContextVersion: job.sourceContextVersion },
+          data: { status: 'STALE', staleReason: reason },
+        });
+        return invalidated.count
+          ? { committed: false, reason }
+          : { committed: false, reason: 'REPLY_JOB_CLAIM_LOST' };
       }
       const marked = await tx.replyJob.updateMany({
         where: { id: job.id, ...scope, status: 'GENERATING', sourceContextVersion: job.sourceContextVersion }, data: { status: 'FAST_PATH_READY' },
       });
-      if (!marked.count) return false;
+      if (!marked.count) return { committed: false, reason: 'REPLY_JOB_CLAIM_LOST' };
       // A throw rolls back the READY transition with the missing outbox,
       // leaving only the original GENERATING job for recovery to claim/stale.
       await outboxes.enqueueInTransaction!(tx, scope, input);
-      return true;
+      return { committed: true };
     });
   }
 
@@ -464,7 +521,12 @@ export class ReplyRuntimeService {
     job: { id: string; conversationId: string; userTurnId: string; sourceContextVersion: number; sourceLastMessageId?: string | null; sourceSequence: number; conversation: { clarificationRoundsJson?: unknown } },
     contexts: Map<string, ReturnType<typeof resolveContext>>,
     text: string,
-  ): Promise<{ status: 'READY_TO_SEND' | 'STALE'; reason?: string }> {
+    autoSend: boolean,
+    manualReason: string,
+  ): Promise<
+    | { status: 'READY_TO_SEND' | 'STALE'; reason?: string }
+    | { status: 'WAITING_HUMAN'; draftId: string; reason: string }
+  > {
     const rounds = clarificationStates(job.conversation.clarificationRoundsJson);
     for (const context of contexts.values()) {
       if (context.clarification) {
@@ -478,12 +540,7 @@ export class ReplyRuntimeService {
         where: { id: job.conversationId, ...scope, contextVersion: job.sourceContextVersion, humanActive: false },
         data: { clarificationRoundsJson: cloneJson(rounds) },
       });
-      if (!persisted.count) return false;
-      const ready = await tx.replyJob.updateMany({
-        where: { id: job.id, ...scope, status: 'GENERATING', sourceContextVersion: job.sourceContextVersion },
-        data: { status: 'FAST_PATH_READY', staleReason: 'CLARIFICATION_ROUND' },
-      });
-      if (!ready.count) return false;
+      if (!persisted.count) return { committed: false, reason: 'CLARIFICATION_CAS_LOST' } as const;
       const taskRepository = tx as unknown as { task?: { createMany(input: unknown): Promise<unknown> } };
       const clarificationTasks = [...contexts.values()].flatMap((context, index) => context.clarification ? [{
         id: `reply-task:${job.id}:clarification:${index}`, ...scope, conversationId: job.conversationId, userTurnId: job.userTurnId,
@@ -492,15 +549,52 @@ export class ReplyRuntimeService {
         resultJson: cloneJson({ clarification: context.clarification }),
       }] : []);
       if (clarificationTasks.length && taskRepository.task) await taskRepository.task.createMany({ data: clarificationTasks, skipDuplicates: true });
+      // ASSIST_ONLY and not-yet-ready AUTO shops may retain the useful
+      // clarification plan, but they must never create an AI send intent.
+      // ReplyDraftService performs the later GENERATING -> WAITING_HUMAN CAS.
+      if (!autoSend) return { committed: true } as const;
+      // Planning readiness is only advisory. The master switch or durable
+      // learning projection can change while task context is resolved, so the
+      // final clarification transition must repeat the same scoped fence as a
+      // normal AUTO reply inside this transaction.
+      const shop = await tx.shop.findFirst({
+        where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+        select: {
+          aiMode: true,
+          seedKey: true,
+          productLearningJobs: {
+            where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { status: true },
+          },
+        },
+      });
+      if (!this.shopAutoReady(shop)) {
+        const reason = shop?.aiMode === 'AUTO_ALLOWED' ? 'SHOP_AI_NOT_READY' : 'SHOP_AI_AUTO_DISABLED';
+        const invalidated = await tx.replyJob.updateMany({
+          where: { id: job.id, ...scope, status: 'GENERATING', sourceContextVersion: job.sourceContextVersion },
+          data: { status: 'STALE', staleReason: reason },
+        });
+        return invalidated.count
+          ? { committed: false, reason } as const
+          : { committed: false, reason: 'CLARIFICATION_CAS_LOST' } as const;
+      }
+      const ready = await tx.replyJob.updateMany({
+        where: { id: job.id, ...scope, status: 'GENERATING', sourceContextVersion: job.sourceContextVersion },
+        data: { status: 'FAST_PATH_READY', staleReason: 'CLARIFICATION_ROUND' },
+      });
+      if (!ready.count) return { committed: false, reason: 'CLARIFICATION_CAS_LOST' } as const;
       await this.sendOutboxes.enqueueInTransaction(tx, scope, {
         replyJobId: job.id, conversationId: job.conversationId, text,
         idempotencyKey: `clarification:${job.id}:${JSON.stringify(rounds)}`,
         expectedLastMessageId: job.sourceLastMessageId ?? undefined, expectedSequence: job.sourceSequence,
         expectedContextVersion: job.sourceContextVersion,
       });
-      return true;
+      return { committed: true } as const;
     });
-    if (!result) return { status: 'STALE', reason: 'CLARIFICATION_CAS_LOST' };
+    if (!result.committed) return { status: 'STALE', reason: result.reason };
+    if (!autoSend) return this.waitForHuman(scope, job, manualReason, text);
     this.publishRefresh(scope, job.conversationId, 'CONVERSATION_UPDATED', job.id);
     return { status: 'READY_TO_SEND' };
   }
@@ -516,6 +610,7 @@ export class ReplyRuntimeService {
     scope: ReplyJobScope,
     job: { id: string; conversationId: string; sourceContextVersion: number; sourceLastMessageId?: string | null; sourceSequence: number },
     reason: string,
+    draftText = '请人工处理此会话。',
   ): Promise<{ status: 'WAITING_HUMAN'; draftId: string; reason: string } | { status: 'STALE'; reason: string }> {
     // ReplyDraftService owns the atomic GENERATING/PENDING -> WAITING_HUMAN
     // transition.  Updating it first would make the draft deliberately reject
@@ -523,7 +618,7 @@ export class ReplyRuntimeService {
     let draft: { id: string };
     try {
       draft = await this.drafts.createWaitingHuman(scope, {
-        replyJobId: job.id, aiDraft: '请人工处理此会话。', sourceContextVersion: job.sourceContextVersion,
+        replyJobId: job.id, aiDraft: draftText, sourceContextVersion: job.sourceContextVersion,
         sourceLastMessageId: job.sourceLastMessageId ?? undefined, sourceSequence: job.sourceSequence,
       });
     } catch (error) {
@@ -560,6 +655,18 @@ export class ReplyRuntimeService {
       entityType: 'CONVERSATION', entityId: conversationId, entityVersion: 1, occurredAt: new Date().toISOString(),
       payload: { conversationId, refresh: true },
     });
+  }
+
+  private shopAutoReady(shop: {
+    aiMode: string;
+    seedKey?: string;
+    productLearningJobs?: Array<{ status: string }>;
+  } | null): boolean {
+    return Boolean(shop && autoReplyReady({
+      aiMode: shop.aiMode,
+      seedKey: shop.seedKey,
+      learningStatus: shop.productLearningJobs?.[0]?.status,
+    }));
   }
 
   private async recordTrace(scope: ReplyJobScope, job: { id: string; conversationId: string }, stage: string, payload: Record<string, unknown>): Promise<void> {
