@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Conversation, Message, Product } from '../../api';
 import {
   derivePipelineStages,
+  deriveCurrentTurnLifecycle,
   mergeLiveMessages,
   resolveContextProduct,
   shouldRefreshLiveTest,
@@ -45,15 +46,43 @@ describe('Live Test projection model', () => {
       },
       sendOutbox: {
         id: 'outbox-a',
+        replyJobId: 'job-a',
         idempotencyKey: 'outbox-a',
+        expectedLastMessageId: 'message-buyer',
+        expectedSequence: 1,
         status: 'UNCERTAIN',
       },
+      activeReplyJob: { id: 'job-a', conversationId: 'conversation-a', userTurnId: 'turn-a', sourceLastMessageId: 'message-buyer', sourceSequence: 1, status: 'WAITING_HUMAN', mode: 'ASSIST' },
+      userTurns: [{ id: 'turn-a', sourceMessageIds: ['message-buyer'], normalizedText: '什么时候发货？', firstSequence: 1, lastSequence: 1, generation: 1, createdAt: '2026-08-29T08:00:00.000Z' }],
     };
     const stages = derivePipelineStages(conversation, [buyerMessage]);
 
     expect(stages.map((stage) => stage.key)).toEqual(['sent', 'received', 'draft', 'reply', 'receipt']);
     expect(stages.map((stage) => stage.state)).toEqual(['done', 'done', 'done', 'attention', 'attention']);
     expect(stages[4]?.description).toContain('UNCERTAIN');
+  });
+
+  it('never mixes an old job or outbox into a newer buyer turn', () => {
+    const latestBuyer = { ...buyerMessage, id: 'message-new', sequence: 4, text: '这一轮是新问题' };
+    const conversation: Conversation = {
+      id: 'conversation-a',
+      activeReplyJob: { id: 'job-old', conversationId: 'conversation-a', userTurnId: 'turn-old', sourceLastMessageId: 'message-buyer', sourceSequence: 1, status: 'FAST_PATH_READY', mode: 'AUTO' },
+      sendOutbox: { id: 'outbox-old', replyJobId: 'job-old', idempotencyKey: 'old', expectedLastMessageId: 'message-buyer', expectedSequence: 1, status: 'SENT' },
+      userTurns: [
+        { id: 'turn-new', sourceMessageIds: ['message-new'], normalizedText: latestBuyer.text!, firstSequence: 4, lastSequence: 4, generation: 2, createdAt: '2026-08-29T08:01:00.000Z' },
+        { id: 'turn-old', sourceMessageIds: ['message-buyer'], normalizedText: buyerMessage.text!, firstSequence: 1, lastSequence: 1, generation: 1, createdAt: '2026-08-29T08:00:00.000Z' },
+      ],
+    };
+
+    const stages = derivePipelineStages(conversation, [buyerMessage, latestBuyer]);
+    const lifecycle = deriveCurrentTurnLifecycle(conversation, [buyerMessage, latestBuyer]);
+
+    expect(stages.map((stage) => stage.state)).toEqual(['done', 'done', 'active', 'idle', 'idle']);
+    expect(stages[2]?.description).toBe('等待当前轮次回复任务');
+    expect(lifecycle).toMatchObject({ buyerMessage: { id: 'message-new' } });
+    expect(lifecycle.job).toBeUndefined();
+    expect(lifecycle.draft).toBeUndefined();
+    expect(lifecycle.outbox).toBeUndefined();
   });
 
   it('uses a sent product card as context unless the operator explicitly selects another product', () => {

@@ -104,15 +104,26 @@ describeReal('Workspace reset against real PostgreSQL', () => {
     })).resolves.toBe(1);
 
     const settings = await repository.getShopSettings(scope, shop.id);
-    expect(settings).toMatchObject({ shopId: shop.id, welcomeMessage: template.settings.welcomeMessage });
+    expect(settings).toMatchObject({ shopId: shop.id });
+    expect(settings?.welcomeMessage).toContain('Empty Workspace Clone');
+    expect(settings?.welcomeMessage).not.toContain(template.name);
     const replacement = {
       ...settings!,
       tone: '专业简洁',
       welcomeMessage: '欢迎光临演示店铺',
       transferKeywords: ['人工', '投诉'],
     };
-    const { shopId: _shopId, ...input } = replacement;
-    await expect(repository.updateShopSettings(scope, shop.id, input)).resolves.toMatchObject(replacement);
+    const {
+      shopId: _shopId,
+      settingsConfirmed: _settingsConfirmed,
+      settingsConfirmedAt: _settingsConfirmedAt,
+      ...input
+    } = replacement;
+    await expect(repository.updateShopSettings(scope, shop.id, input)).resolves.toMatchObject({
+      ...replacement,
+      settingsConfirmed: true,
+      settingsConfirmedAt: expect.any(String),
+    });
     const other = await repository.createWithSeed({
       tokenHash: randomUUID().replaceAll('-', '').padEnd(64, '0'),
       now: new Date(), expiresAt: new Date(Date.now() + 60_000), seed, profile: 'EMPTY',

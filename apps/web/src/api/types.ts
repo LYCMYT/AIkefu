@@ -69,10 +69,12 @@ export interface ShopSettings {
   closingMessages: Record<string, string>;
   transferKeywords: string[];
   forbiddenTerms: ForbiddenTermRule[];
+  settingsConfirmed?: boolean;
+  settingsConfirmedAt?: string | null;
   updatedAt?: string;
 }
 
-export type ShopSettingsInput = Omit<ShopSettings, 'shopId' | 'updatedAt'>;
+export type ShopSettingsInput = Omit<ShopSettings, 'shopId' | 'settingsConfirmed' | 'settingsConfirmedAt' | 'updatedAt'>;
 
 export interface Buyer {
   id: string;
@@ -187,6 +189,17 @@ export interface Conversation {
   currentOrder?: Order;
   lastMessage?: Message;
   messages?: Message[];
+  userTurns?: Array<{
+    id: string;
+    sourceMessageIds: string[];
+    normalizedText: string;
+    firstSequence: number;
+    lastSequence: number;
+    generation: number;
+    status?: string;
+    createdAt: string;
+    updatedAt?: string;
+  }>;
 }
 
 export type ReplyDraft = ReplyDraftContract;

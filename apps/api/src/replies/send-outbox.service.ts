@@ -11,6 +11,7 @@ import { autoReplyReady } from '../shops/shop-ai-readiness';
 type AutoShopSnapshot = {
   aiMode: string;
   seedKey: string;
+  settingsConfirmedAt: Date | null;
   productLearningJobs: Array<{ status: string }>;
 };
 
@@ -207,6 +208,7 @@ export class SendOutboxService {
           select: {
             aiMode: true,
             seedKey: true,
+            settingsConfirmedAt: true,
             productLearningJobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
           },
         }) ?? Promise.resolve(null),
@@ -264,6 +266,7 @@ export class SendOutboxService {
           select: {
             aiMode: true,
             seedKey: true,
+            settingsConfirmedAt: true,
             productLearningJobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
           },
         }) ?? Promise.resolve(null),
@@ -463,6 +466,7 @@ function autoSendAllowed(shop: AutoShopSnapshot | null, overrideMode: unknown): 
   return Boolean(shop && autoReplyReady({
     aiMode: shop.aiMode,
     seedKey: shop.seedKey,
+    settingsConfirmed: shop.settingsConfirmedAt === undefined ? true : Boolean(shop.settingsConfirmedAt),
     learningStatus: shop.productLearningJobs[0]?.status,
   }));
 }

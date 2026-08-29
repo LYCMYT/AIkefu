@@ -70,6 +70,8 @@ export interface Shop {
   externalShopId?: string;
   aiMode: ShopAIMode;
   aiReadiness: ShopAiReadiness;
+  /** False until the operator has reviewed and saved the copied policies. */
+  settingsConfirmed?: boolean;
   connectionState: ShopConnectionState;
   syncComplete: boolean;
 }
@@ -108,6 +110,8 @@ export interface ShopSettingsInput {
 
 export interface ShopSettings extends ShopSettingsInput {
   shopId: string;
+  settingsConfirmed: boolean;
+  settingsConfirmedAt?: IsoDateTime | null;
 }
 
 export interface SeedCounts {

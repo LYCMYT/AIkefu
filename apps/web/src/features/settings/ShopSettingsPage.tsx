@@ -13,6 +13,7 @@ interface ShopSettingsPageProps {
   refreshKey: number;
   onDirtyChange?: (dirty: boolean) => void;
   onNavigate?: (path: AppPath) => void;
+  onFoundationRefresh?: () => Promise<void> | void;
 }
 
 const blankSettings: ShopSettingsInput = {
@@ -28,7 +29,7 @@ function normalizedSettings(value: ShopSettings): ShopSettingsInput {
   };
 }
 
-export function ShopSettingsPage({ token, shops, shopId, refreshKey, onDirtyChange, onNavigate }: ShopSettingsPageProps) {
+export function ShopSettingsPage({ token, shops, shopId, refreshKey, onDirtyChange, onNavigate, onFoundationRefresh }: ShopSettingsPageProps) {
   const navigate = useNavigate();
   const shop = shops.find((item) => item.id === shopId);
   const [form, setForm] = useState<ShopSettingsInput>(blankSettings);
@@ -39,6 +40,7 @@ export function ShopSettingsPage({ token, shops, shopId, refreshKey, onDirtyChan
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
+  const [settingsConfirmed, setSettingsConfirmed] = useState(false);
   const dirty = useMemo(() => baseline !== '' && baseline !== JSON.stringify(form), [baseline, form]);
 
   useEffect(() => {
@@ -49,15 +51,23 @@ export function ShopSettingsPage({ token, shops, shopId, refreshKey, onDirtyChan
     let mounted = true;
     setLoading(true);
     setNotice('');
-    Promise.all([getShopSettings(token, shopId), getProductLearningJobs(token, shopId).catch(() => [])]).then(([settings, jobs]) => {
+    getShopSettings(token, shopId).then((settings) => {
       if (!mounted) return;
       const next = normalizedSettings(settings);
       setForm(next);
       setBaseline(JSON.stringify(next));
       setKeywordText(next.transferKeywords.join('\n'));
       setForbiddenText(next.forbiddenTerms.map((rule) => `${rule.term} => ${rule.replacement}`).join('\n'));
-      setJob(jobs[0]);
+      setSettingsConfirmed(settings.settingsConfirmed === true);
     }).catch((error) => { if (mounted) setNotice(errorMessage(error)); }).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [shopId, token]);
+
+  useEffect(() => {
+    let mounted = true;
+    getProductLearningJobs(token, shopId)
+      .then((jobs) => { if (mounted) setJob(jobs[0]); })
+      .catch(() => { if (mounted) setJob(undefined); });
     return () => { mounted = false; };
   }, [refreshKey, shopId, token]);
 
@@ -92,14 +102,18 @@ export function ShopSettingsPage({ token, shops, shopId, refreshKey, onDirtyChan
       setForm(saved); setBaseline(JSON.stringify(saved));
       setKeywordText(saved.transferKeywords.join('\n'));
       setForbiddenText(saved.forbiddenTerms.map((rule) => `${rule.term} => ${rule.replacement}`).join('\n'));
-      setNotice('设置已保存，后续新消息会使用最新策略。');
+    setNotice('设置已确认，商品学习完成后 AI 才会自动回复。');
+      setSettingsConfirmed(true);
+      await onFoundationRefresh?.();
+      window.dispatchEvent(new Event('aikefu:foundation-refresh'));
     } catch (error) { setNotice(errorMessage(error)); }
     finally { setSaving(false); }
   };
 
   const progress = learningProgress(job, []);
   return <div className="shop-settings-page">
-    <header className="shop-settings-header"><button className="settings-back" onClick={back} type="button"><ArrowLeft aria-hidden="true" size={18} />返回店铺</button><div><span>SHOP SETTINGS · MOCKDOUYIN</span><h2>基础设置</h2><p>{shop?.name ?? '当前店铺'} · 设置直接参与欢迎语、转人工与安全校验。</p></div><Button disabled={!dirty || saving || loading} onClick={() => void save()} variant="primary"><Save aria-hidden="true" size={17} />{saving ? '保存中…' : '保存设置'}</Button></header>
+    <header className="shop-settings-header"><button className="settings-back" onClick={back} type="button"><ArrowLeft aria-hidden="true" size={18} />返回店铺</button><div><span>SHOP SETTINGS · MOCKDOUYIN</span><h2>基础设置</h2><p>{shop?.name ?? '当前店铺'} · 设置直接参与欢迎语、转人工与安全校验。</p></div><Button disabled={(settingsConfirmed && !dirty) || saving || loading} onClick={() => void save()} variant="primary"><Save aria-hidden="true" size={17} />{saving ? '保存中…' : settingsConfirmed ? '保存设置' : '确认并启用 AI'}</Button></header>
+    {!loading && !settingsConfirmed && <div className="settings-notice" role="status">请检查模板带入的店铺政策。保存确认前，即使商品学习完成，AI 也不会自动发送。</div>}
     {notice && <div className={`settings-notice ${notice.includes('已保存') ? 'is-success' : ''}`} role="status">{notice}</div>}
     {loading ? <section className="settings-loading panel-surface"><span className="loading-spinner" /><p>正在读取店铺设置…</p></section> : <div className="shop-settings-layout"><main className="shop-settings-form">
       <section className="settings-section panel-surface"><header><span className="settings-section-icon"><CheckCircle2 size={19} /></span><div><h3>客服风格与欢迎语</h3><p>描述表达风格，并设置买家首次进入会话时看到的欢迎内容。</p></div></header><div className="settings-field-grid"><label><span>客服语气</span><input value={form.tone} onChange={(event) => patch('tone', event.currentTarget.value)} /></label><label className="is-wide"><span>进线欢迎语</span><textarea rows={3} value={form.welcomeMessage} onChange={(event) => patch('welcomeMessage', event.currentTarget.value)} /></label></div></section>

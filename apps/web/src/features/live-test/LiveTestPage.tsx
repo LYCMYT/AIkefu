@@ -47,6 +47,7 @@ import type { WorkspaceSocketEvent, WorkspaceSocketStatus } from '../../workspac
 import { ConfirmDialog } from '../../components/ui/primitives';
 import {
   derivePipelineStages,
+  deriveCurrentTurnLifecycle,
   eventConversationId,
   isVisibleMessage,
   mergeLiveMessages,
@@ -339,8 +340,9 @@ export function LiveTestPage({
   const currentProduct = useMemo(() => resolveContextProduct(selectedConversation, messages, products, productPinned ? selectedProductId : undefined), [messages, productPinned, products, selectedConversation, selectedProductId]);
   const currentProductLearning = productLearningPresentation(currentProduct, shop);
   const pipeline = useMemo(() => derivePipelineStages(selectedConversation, messages), [messages, selectedConversation]);
+  const currentTurn = useMemo(() => deriveCurrentTurnLifecycle(selectedConversation, messages), [messages, selectedConversation]);
   const filteredBuyers = useMemo(() => buyers.filter((buyer) => buyerLabel(buyer).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())), [buyers, search]);
-  const currentDraft = selectedConversation?.currentDraft ?? selectedConversation?.activeReplyJob?.currentDraft ?? selectedConversation?.activeReplyJob?.draft;
+  const currentDraft = currentTurn.draft;
   const storeCanSend = Boolean(conversationId && storeComposer.trim() && (selectedConversation?.humanActive || currentDraft?.status === 'WAITING_HUMAN'));
 
   useEffect(() => {

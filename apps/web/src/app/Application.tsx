@@ -145,6 +145,12 @@ export default function Application() {
   }, [loadFoundation, sessionKind]);
 
   useEffect(() => {
+    const refresh = () => { void refreshFoundation(); };
+    window.addEventListener('aikefu:foundation-refresh', refresh);
+    return () => window.removeEventListener('aikefu:foundation-refresh', refresh);
+  }, [refreshFoundation]);
+
+  useEffect(() => {
     if (window.location.pathname === '/') navigate('/workbench', { replace: true });
     setActiveShopId('');
     setRealtimeEvent(undefined);

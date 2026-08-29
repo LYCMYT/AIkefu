@@ -1924,7 +1924,7 @@ components:
 
     Shop:
       type: object
-      required: [id, name, platform, aiMode, aiReadiness, connectionState]
+      required: [id, name, platform, aiMode, aiReadiness, settingsConfirmed, connectionState]
       properties:
         id: { type: string }
         name: { type: string }
@@ -1933,6 +1933,9 @@ components:
           $ref: "#/components/schemas/ShopAIMode"
         aiReadiness:
           $ref: "#/components/schemas/ShopAiReadiness"
+        settingsConfirmed:
+          type: boolean
+          description: Whether the operator reviewed and saved the copied shop policies.
         connectionState:
           type: string
           enum: [CONNECTED, RECONNECTING, RECONCILING, DEGRADED, DISCONNECTED]
@@ -1978,9 +1981,11 @@ components:
       allOf:
         - $ref: "#/components/schemas/ShopSettingsInput"
         - type: object
-          required: [shopId]
+          required: [shopId, settingsConfirmed]
           properties:
             shopId: { type: string }
+            settingsConfirmed: { type: boolean }
+            settingsConfirmedAt: { type: string, format: date-time, nullable: true }
 
     Product:
       type: object

@@ -2566,7 +2566,7 @@ export class KnowledgeService {
     try {
       const shop = await this.prisma.shop.findFirst({
         where: { id: shopId, ...this.scope(scope) },
-        select: { aiMode: true, seedKey: true },
+        select: { aiMode: true, seedKey: true, settingsConfirmedAt: true },
       });
       if (!shop) return;
       this.gateway?.publish({
@@ -2580,7 +2580,7 @@ export class KnowledgeService {
         payload: {
           shopId,
           job,
-          readiness: projectShopAiReadiness({ aiMode: shop.aiMode, seedKey: shop.seedKey, learningStatus: job.status }),
+          readiness: projectShopAiReadiness({ aiMode: shop.aiMode, seedKey: shop.seedKey, settingsConfirmed: shop.settingsConfirmedAt === undefined ? true : Boolean(shop.settingsConfirmedAt), learningStatus: job.status }),
         },
       });
     } catch {

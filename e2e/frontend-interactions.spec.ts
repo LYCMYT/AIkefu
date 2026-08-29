@@ -62,7 +62,7 @@ test('shop actions menu has keyboard focus management and scoped routes', async 
   const save = page.getByRole('button', { name: '保存设置' });
   await expect(save).toBeEnabled();
   await save.click();
-  await expect(page.getByRole('status')).toContainText('设置已保存', { timeout: 30_000 });
+  await expect(page.getByRole('status')).toContainText('设置已确认', { timeout: 30_000 });
   await page.reload();
   await expect(page.getByLabel('客服语气')).toHaveValue(persistedTone, { timeout: 30_000 });
 

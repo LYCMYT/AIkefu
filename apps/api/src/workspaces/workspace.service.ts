@@ -106,7 +106,7 @@ export class WorkspaceService {
       throw new BadRequestException({ code: 'SHOP_PLATFORM_INVALID', message: 'Only DOUYIN_DEMO is supported' });
     }
     const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
-    const name = input.name?.trim() || `${template.name} Demo`;
+    const name = input.name?.trim() || (requestedTemplate === 'FASHION_DEMO' ? '青云服饰演示店' : '极光数码演示店');
     const externalShopId = input.externalShopId?.trim() || `dy_demo_${suffix}`;
     return this.repository.createShop(scope, {
       template,

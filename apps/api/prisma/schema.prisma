@@ -450,6 +450,9 @@ model Shop {
   aiMode             ShopAIMode
   connectionState    ShopConnectionState
   syncComplete       Boolean                  @default(true)
+  /// Runtime-created shops remain fail-closed until an operator reviews and
+  /// saves their copied policies. Seed fixtures are confirmed during reset.
+  settingsConfirmedAt DateTime?
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
   workspace          Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

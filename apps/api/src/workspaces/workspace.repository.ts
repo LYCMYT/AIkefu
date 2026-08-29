@@ -37,6 +37,7 @@ export type ShopView = {
   name: string;
   aiMode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY';
   aiReadiness: 'OFF' | 'PREPARING' | 'READY' | 'DEGRADED' | 'FAILED';
+  settingsConfirmed: boolean;
   connectionState: 'CONNECTED' | 'RECONNECTING' | 'RECONCILING' | 'DEGRADED' | 'DISCONNECTED';
   syncComplete: boolean;
 };

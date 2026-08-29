@@ -1,4 +1,4 @@
-import { messageText, type Conversation, type Message, type Product } from '../../api';
+import { messageText, type Conversation, type Message, type Product, type ReplyDraft, type ReplyJob, type SendOutbox } from '../../api';
 
 export type LiveTestSurface = 'buyer' | 'store';
 export type PipelineStageState = 'idle' | 'active' | 'done' | 'attention';
@@ -8,6 +8,14 @@ export interface PipelineStage {
   label: string;
   description: string;
   state: PipelineStageState;
+}
+
+export interface CurrentTurnLifecycle {
+  buyerMessage?: Message;
+  job?: ReplyJob;
+  draft?: ReplyDraft;
+  outbox?: SendOutbox;
+  response?: Message;
 }
 
 const removedStatuses = new Set(['RECALLED', 'DELETED']);
@@ -76,13 +84,49 @@ export function resolveContextProduct(
   return products.find((product) => product.id === productId) ?? latestProductMessage?.product ?? products[0];
 }
 
+export function deriveCurrentTurnLifecycle(conversation: Conversation | undefined, messages: Message[]): CurrentTurnLifecycle {
+  const buyerMessage = [...messages].reverse().find((message) => message.role === 'BUYER' && isVisibleMessage(message));
+  const turn = buyerMessage ? conversation?.userTurns?.find((item) => item.sourceMessageIds.includes(buyerMessage.id)) : undefined;
+  const candidateJob = conversation?.activeReplyJob;
+  const job = buyerMessage && candidateJob && (
+    (turn?.id && candidateJob.userTurnId === turn.id)
+    || candidateJob.sourceLastMessageId === buyerMessage.id
+    || (buyerMessage.sequence !== undefined && candidateJob.sourceSequence === buyerMessage.sequence)
+  ) ? candidateJob : undefined;
+  const candidateDraft = job?.currentDraft ?? job?.draft ?? conversation?.currentDraft;
+  const draft = buyerMessage && candidateDraft && (
+    candidateDraft.replyJobId === job?.id
+    || candidateDraft.sourceLastMessageId === buyerMessage.id
+    || (buyerMessage.sequence !== undefined && candidateDraft.sourceSequence === buyerMessage.sequence)
+  ) ? candidateDraft : undefined;
+  const candidateOutbox = job?.sendOutbox ?? conversation?.sendOutbox;
+  const senderRole = candidateOutbox?.payload && typeof candidateOutbox.payload === 'object'
+    ? (candidateOutbox.payload as Record<string, unknown>).senderRole
+    : undefined;
+  const outbox = buyerMessage && candidateOutbox && (
+    (job?.id && candidateOutbox.replyJobId === job.id)
+    || (senderRole === 'HUMAN' && (
+      candidateOutbox.expectedLastMessageId === buyerMessage.id
+      || (buyerMessage.sequence !== undefined && candidateOutbox.expectedSequence === buyerMessage.sequence)
+    ))
+    || (candidateOutbox.replyJobId && (
+      candidateOutbox.expectedLastMessageId === buyerMessage.id
+      || (buyerMessage.sequence !== undefined && candidateOutbox.expectedSequence === buyerMessage.sequence)
+    ))
+  ) ? candidateOutbox : undefined;
+  const responseCandidate = buyerMessage ? [...messages].reverse().find((message) =>
+    replyRoles.has(message.role ?? '')
+    && isVisibleMessage(message)
+    && (buyerMessage.sequence === undefined || message.sequence === undefined || message.sequence > buyerMessage.sequence),
+  ) : undefined;
+  const response = responseCandidate && (outbox?.status === 'SENT' || draft?.status === 'SENT') ? responseCandidate : undefined;
+  return { buyerMessage, job, draft, outbox, response };
+}
+
 export function derivePipelineStages(conversation: Conversation | undefined, messages: Message[]): PipelineStage[] {
-  const buyerMessage = [...messages].reverse().find((message) => message.role === 'BUYER');
+  const { buyerMessage, job, draft, outbox, response } = deriveCurrentTurnLifecycle(conversation, messages);
   const received = Boolean(conversation?.id && buyerMessage);
-  const draft = conversation?.currentDraft ?? conversation?.activeReplyJob?.currentDraft ?? conversation?.activeReplyJob?.draft;
-  const jobStatus = conversation?.activeReplyJob?.status;
-  const response = [...messages].reverse().find((message) => replyRoles.has(message.role ?? '') && isVisibleMessage(message));
-  const outbox = conversation?.sendOutbox ?? conversation?.activeReplyJob?.sendOutbox;
+  const jobStatus = job?.status;
 
   const draftState: PipelineStageState = draft
     ? ['STALE', 'EXPIRED', 'FAILED', 'CANCELLED'].includes(draft.status) ? 'attention' : 'done'
@@ -111,10 +155,20 @@ export function derivePipelineStages(conversation: Conversation | undefined, mes
   return [
     { key: 'sent', label: '买家已发送', description: buyerMessage ? '事件已写入消息管线' : '等待买家发送事件', state: buyerMessage ? 'done' : 'idle' },
     { key: 'received', label: '店铺已收到', description: received ? '同一会话已同步' : '等待服务端创建会话', state: received ? 'done' : buyerMessage ? 'active' : 'idle' },
-    { key: 'draft', label: 'AI处理', description: draft ? '回复草稿已生成' : jobStatus ? `任务状态：${jobStatus}` : '等待回复任务', state: draftState },
+    { key: 'draft', label: 'AI处理', description: draft ? '回复草稿已生成' : jobStatus ? `当前轮次：${readableJobStatus(jobStatus)}` : received ? '等待当前轮次回复任务' : '等待回复任务', state: draftState },
     { key: 'reply', label: '回复完成', description: response ? '店铺回复已进入时间线' : draft?.status === 'WAITING_HUMAN' || jobStatus === 'WAITING_HUMAN' ? '需要人工确认' : '等待自动或人工回复', state: replyState },
     { key: 'receipt', label: '发送回执', description: outbox ? `Outbox：${outbox.status}` : response ? '回复已持久化' : '等待外发结果', state: receiptState },
   ];
+}
+
+function readableJobStatus(status: string): string {
+  if (status === 'PENDING') return '等待处理';
+  if (status === 'GENERATING') return '生成回复';
+  if (status === 'FAST_PATH_READY') return '回复已就绪';
+  if (status === 'WAITING_HUMAN') return '等待人工确认';
+  if (['STALE', 'EXPIRED', 'CANCELLED'].includes(status)) return '已停止';
+  if (status === 'FAILED') return '处理失败';
+  return '处理中';
 }
 
 export function eventType(event: unknown): string {

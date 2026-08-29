@@ -59,15 +59,27 @@ export async function createOperationalShop(
   await expect(page).toHaveURL(/\/workbench\/shops\/[^/]+$/);
   const shopId = decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? '');
   await expect(page.getByRole('button', { name: new RegExp(`${escapeRegExp(name)} AI `) })).toBeVisible({ timeout: 30_000 });
+  // Learning may already be complete on a fast worker, but an unreviewed shop
+  // must still stay PREPARING until the operator confirms its copied policies.
+  await expect(page.getByRole('button', { name: new RegExp(`${escapeRegExp(name)} AI 正在准备`) })).toBeVisible({ timeout: 30_000 });
   if (options.expectInitialReadiness) {
-    // Learning is asynchronous and can finish before the first assertion on a
-    // fast local worker. Accept either observable initial state, then require
-    // the durable eventual READY projection below.
-    await expect(page.getByRole('button', { name: new RegExp(`${escapeRegExp(name)} AI (正在准备|已就绪)`) })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { level: 2, name: new RegExp(`${escapeRegExp(name)} 还需一步`) })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: '确认基础设置', exact: true })).toBeVisible();
   }
-  // Learning is asynchronous. Readiness must eventually reflect the durable
-  // SUCCEEDED job, not only the initial PREPARING bootstrap snapshot.
-  await expect(page.getByRole('button', { name: new RegExp(`${escapeRegExp(name)} AI 已就绪`) })).toBeVisible({ timeout: 60_000 });
+
+  await page.goto(`/workbench/shops/${encodeURIComponent(shopId)}/settings`);
+  await expect(page.getByRole('heading', { level: 2, name: '基础设置' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('status')).toContainText('保存确认前，即使商品学习完成，AI 也不会自动发送');
+  const welcome = page.getByLabel('进线欢迎语');
+  await expect(welcome).toHaveValue(new RegExp(escapeRegExp(name)));
+  await expect(welcome).not.toHaveValue(/MIA Fashion|Pixel Tech/);
+  await page.getByRole('button', { name: '确认并启用 AI', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('设置已确认', { timeout: 30_000 });
+  await page.goto(`/workbench/shops/${encodeURIComponent(shopId)}`);
+
+  // Readiness must reflect both a durable SUCCEEDED learning job and the
+  // explicit settings confirmation performed above.
+  await expect(page.getByRole('button', { name: new RegExp(`${escapeRegExp(name)} AI 已就绪`) })).toBeVisible({ timeout: 120_000 });
   return { name, shopId };
 }
 

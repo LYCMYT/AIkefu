@@ -171,12 +171,12 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
           data: {
             ...normalizedScope,
             shopId: shop.id,
-            tone: input.template.settings.tone,
-            logisticsPolicy: input.template.settings.logisticsPolicy,
-            shippingPolicy: input.template.settings.shippingPolicy,
-            afterSalesPolicy: input.template.settings.afterSalesPolicy,
-            welcomeMessage: input.template.settings.welcomeMessage,
-            closingMessagesJson: input.template.settings.closingMessages,
+            tone: this.personalizeTemplateText(input.template.settings.tone, input.template.name, input.name),
+            logisticsPolicy: this.personalizeTemplateText(input.template.settings.logisticsPolicy, input.template.name, input.name),
+            shippingPolicy: this.personalizeTemplateText(input.template.settings.shippingPolicy, input.template.name, input.name),
+            afterSalesPolicy: this.personalizeTemplateText(input.template.settings.afterSalesPolicy, input.template.name, input.name),
+            welcomeMessage: this.personalizeTemplateText(input.template.settings.welcomeMessage, input.template.name, input.name),
+            closingMessagesJson: Object.fromEntries(Object.entries(input.template.settings.closingMessages).map(([key, value]) => [key, this.personalizeTemplateText(value, input.template.name, input.name)])),
             transferKeywordsJson: input.template.settings.transferKeywords,
             forbiddenTermsJson: input.template.settings.forbiddenTerms,
           },
@@ -275,8 +275,9 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
           const version = await transaction.knowledgeVersion.create({
             data: {
               ...normalizedScope, knowledgeItemId: item.id, version: 1,
-              question: source.question, answer: source.answer,
-              sourceText: `${source.question}\n${source.answer}`,
+              question: this.personalizeTemplateText(source.question, input.template.name, input.name),
+              answer: this.personalizeTemplateText(source.answer, input.template.name, input.name),
+              sourceText: `${this.personalizeTemplateText(source.question, input.template.name, input.name)}\n${this.personalizeTemplateText(source.answer, input.template.name, input.name)}`,
               sourceVersion: `template:${input.template.key}`,
               confidence: source.sourceType === 'AUTO_LEARNED' ? 0.9 : 1,
               indexStatus: source.indexStatus,
@@ -313,7 +314,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
             payloadJson: { shopId: shop.id, productIds: [...productIds.values()], reason: 'SHOP_CREATED' },
           },
         });
-        return this.shopView({ ...shop, productLearningJobs: [{ status: 'PENDING' }] });
+        return this.shopView({ ...shop, settingsConfirmedAt: null, productLearningJobs: [{ status: 'PENDING' }] });
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -326,6 +327,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
   async getShopSettings(scope: WorkspaceScope, shopId: string): Promise<ShopSettings | null> {
     const settings = await this.prisma.shopSettings.findFirst({
       where: { shopId, ...this.scope(scope), shop: { id: shopId, ...this.scope(scope) } },
+      include: { shop: { select: { settingsConfirmedAt: true } } },
     });
     return settings ? this.shopSettingsView(settings) : null;
   }
@@ -353,6 +355,8 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
         },
       });
       if (updated.count !== 1) return null;
+      const settingsConfirmedAt = new Date();
+      await transaction.shop.update({ where: { id: shop.id }, data: { settingsConfirmedAt } });
       const settings = await transaction.shopSettings.findFirst({ where: { shopId, ...normalizedScope } });
       if (!settings) return null;
       await transaction.auditLog.create({
@@ -364,7 +368,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
           metadataJson: { fields: Object.keys(input).sort() },
         },
       });
-      return this.shopSettingsView(settings);
+      return this.shopSettingsView({ ...settings, shop: { settingsConfirmedAt } });
     });
   }
 
@@ -500,6 +504,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
           aiMode: source.aiMode,
           connectionState: source.connectionState,
           syncComplete: true,
+          settingsConfirmedAt: new Date(),
         },
         update: {
           platform: source.platform,
@@ -508,6 +513,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
           aiMode: source.aiMode,
           connectionState: source.connectionState,
           syncComplete: true,
+          settingsConfirmedAt: new Date(),
         },
       });
       shops.set(source.key, shop.id);
@@ -871,6 +877,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
     aiMode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY';
     connectionState: 'CONNECTED' | 'RECONNECTING' | 'RECONCILING' | 'DEGRADED' | 'DISCONNECTED';
     syncComplete: boolean;
+    settingsConfirmedAt?: Date | null;
     seedKey?: string;
     productLearningJobs?: Array<{ status: string }>;
   }): ShopView {
@@ -885,8 +892,10 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       aiReadiness: projectShopAiReadiness({
         aiMode: shop.aiMode,
         seedKey: shop.seedKey,
+        settingsConfirmed: Boolean(shop.settingsConfirmedAt),
         learningStatus: shop.productLearningJobs?.[0]?.status,
       }),
+      settingsConfirmed: Boolean(shop.settingsConfirmedAt),
       connectionState: shop.connectionState,
       syncComplete: shop.syncComplete,
     };
@@ -902,6 +911,8 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
     closingMessagesJson: unknown;
     transferKeywordsJson: unknown;
     forbiddenTermsJson: unknown;
+    shop?: { settingsConfirmedAt: Date | null };
+    updatedAt?: Date;
   }): ShopSettings {
     return {
       shopId: settings.shopId,
@@ -913,7 +924,13 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       closingMessages: this.stringRecord(settings.closingMessagesJson),
       transferKeywords: this.stringArray(settings.transferKeywordsJson),
       forbiddenTerms: this.forbiddenTerms(settings.forbiddenTermsJson),
+      settingsConfirmed: Boolean(settings.shop?.settingsConfirmedAt),
+      settingsConfirmedAt: settings.shop?.settingsConfirmedAt?.toISOString() ?? null,
     };
+  }
+
+  private personalizeTemplateText(value: string, templateName: string, shopName: string): string {
+    return value.split(templateName).join(shopName);
   }
 
   private stringRecord(value: unknown): Record<string, string> {

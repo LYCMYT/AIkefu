@@ -12,6 +12,7 @@
     "test:unit": "jest --config jest.unit.config.cjs --runInBand",
     "test:integration": "jest --config jest.integration.config.cjs --runInBand",
     "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy"
   },

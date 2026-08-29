@@ -109,6 +109,7 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
       id: `shop_${randomUUID()}`, ...scope, platform: 'DOUYIN_DEMO',
       externalShopId: input.externalShopId, name: input.name, aiMode: input.aiMode,
       aiReadiness: input.aiMode === 'MANUAL_ONLY' ? 'OFF' : 'PREPARING',
+      settingsConfirmed: false,
       connectionState: 'CONNECTED', syncComplete: true,
     };
     record.shops.push(shop);
@@ -127,6 +128,7 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
       closingMessages: { ...input.template.settings.closingMessages },
       transferKeywords: [...input.template.settings.transferKeywords],
       forbiddenTerms: input.template.settings.forbiddenTerms.map((entry) => ({ ...entry })),
+      settingsConfirmed: false,
     });
     return { ...shop };
   }
@@ -145,7 +147,10 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
       closingMessages: { ...input.closingMessages },
       transferKeywords: [...input.transferKeywords],
       forbiddenTerms: input.forbiddenTerms.map((entry) => ({ ...entry })),
+      settingsConfirmed: true,
     };
+    const shop = record.shops.find((entry) => entry.id === shopId);
+    if (shop) shop.settingsConfirmed = true;
     record.settings.set(shopId, settings);
     return settings;
   }
@@ -198,6 +203,7 @@ export class InMemoryWorkspaceRepository implements WorkspaceRepository {
       name: source.name,
       aiMode: source.aiMode,
       aiReadiness: source.aiMode === 'MANUAL_ONLY' ? 'OFF' : 'READY',
+      settingsConfirmed: true,
       connectionState: source.connectionState,
       syncComplete: true,
     }));

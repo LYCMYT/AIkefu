@@ -3,6 +3,7 @@ import type { ShopAiReadiness } from '@ai-customer-service/contracts';
 type ReadinessSource = {
   aiMode?: string | null;
   seedKey?: string | null;
+  settingsConfirmed?: boolean | null;
   learningStatus?: string | null;
 };
 
@@ -13,6 +14,7 @@ type ReadinessSource = {
  */
 export function projectShopAiReadiness(source: ReadinessSource): ShopAiReadiness {
   if (source.aiMode === 'MANUAL_ONLY') return 'OFF';
+  if (source.settingsConfirmed !== true) return 'PREPARING';
   if (source.learningStatus === 'SUCCEEDED') return 'READY';
   if (source.learningStatus === 'PARTIAL_SUCCESS') return 'DEGRADED';
   if (source.learningStatus === 'FAILED') return 'FAILED';

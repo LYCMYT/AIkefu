@@ -112,6 +112,7 @@ export class ReplyRuntimeService {
           select: {
             aiMode: true,
             seedKey: true,
+            settingsConfirmedAt: true,
             productLearningJobs: {
               where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId },
               orderBy: { createdAt: 'desc' }, take: 1, select: { status: true },
@@ -153,6 +154,7 @@ export class ReplyRuntimeService {
           select: {
             aiMode: true,
             seedKey: true,
+            settingsConfirmedAt: true,
             productLearningJobs: {
               where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId },
               orderBy: { createdAt: 'desc' }, take: 1, select: { status: true },
@@ -305,6 +307,7 @@ export class ReplyRuntimeService {
         select: {
           aiMode: true,
           seedKey: true,
+          settingsConfirmedAt: true,
           productLearningJobs: {
             where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId },
             orderBy: { createdAt: 'desc' },
@@ -562,6 +565,7 @@ export class ReplyRuntimeService {
         select: {
           aiMode: true,
           seedKey: true,
+          settingsConfirmedAt: true,
           productLearningJobs: {
             where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId },
             orderBy: { createdAt: 'desc' },
@@ -660,11 +664,13 @@ export class ReplyRuntimeService {
   private shopAutoReady(shop: {
     aiMode: string;
     seedKey?: string;
+    settingsConfirmedAt?: Date | null;
     productLearningJobs?: Array<{ status: string }>;
   } | null): boolean {
     return Boolean(shop && autoReplyReady({
       aiMode: shop.aiMode,
       seedKey: shop.seedKey,
+      settingsConfirmed: shop.settingsConfirmedAt === undefined ? true : Boolean(shop.settingsConfirmedAt),
       learningStatus: shop.productLearningJobs?.[0]?.status,
     }));
   }

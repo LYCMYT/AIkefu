@@ -576,6 +576,10 @@ export function projectedShopAiReadiness(
 ): ShopSummary['aiReadiness'] {
   if (!shop) return 'PREPARING';
   if (shop.aiMode === 'MANUAL_ONLY') return 'OFF';
+  // A completed learning job is necessary but not sufficient. The operator
+  // must explicitly confirm copied policies before the UI may advertise that
+  // automatic replies are ready; this mirrors the API/send final fence.
+  if (shop.settingsConfirmed === false) return 'PREPARING';
   switch (learningJob?.status) {
     case 'SUCCEEDED':
       return 'READY';
