@@ -1,0 +1,728 @@
+{
+  "sourceVersion": "1.0",
+  "generatedAt": "2026-08-29T18:21:20.536Z",
+  "mode": "REAL_PROVIDER",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "summary": {
+    "total": 36,
+    "passed": 3,
+    "failed": 33,
+    "inputTokens": 38030,
+    "outputTokens": 4995,
+    "totalCost": null,
+    "averageLatencyMs": 2942
+  },
+  "cases": [
+    {
+      "id": "E001",
+      "text": "您好，关于发货时间，我们通常会在付款后的1-3个工作日内为您安排发货。具体时间可能会因库存和物流情况有所调整，请您耐心等待。如有其他问题，欢迎随时咨询。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1050,
+      "outputTokens": 154,
+      "latencyMs": 4185,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:普通现货商品通常24小时内发出"
+      ]
+    },
+    {
+      "id": "E002",
+      "text": "您好，关于发货时间，我们通常会在付款后的1-3个工作日内为您安排发货。具体时间可能会因库存和物流情况有所调整，请您耐心等待。如有其他问题，欢迎随时咨询。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1050,
+      "outputTokens": 143,
+      "latencyMs": 2443,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:数码商品通常48小时内发出"
+      ]
+    },
+    {
+      "id": "E003",
+      "text": "您好，新疆地区发货时间通常为3-5天，具体以物流信息为准。如有其他问题，欢迎咨询。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1054,
+      "outputTokens": 129,
+      "latencyMs": 3005,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:偏远地区以实际物流信息为准"
+      ]
+    },
+    {
+      "id": "E004",
+      "text": "这款时尚连帽衫的烘干信息暂未确认，建议您查看产品标签或咨询客服确认。",
+      "tasks": [
+        "PRODUCT_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1090,
+      "outputTokens": 140,
+      "latencyMs": 3341,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:不建议使用烘干机"
+      ]
+    },
+    {
+      "id": "E005",
+      "text": "这款静音键盘支持Mac系统，您可以放心使用。",
+      "tasks": [
+        "FAQ_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1088,
+      "outputTokens": 122,
+      "latencyMs": 2502,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "TASK_MISSING:PRODUCT_QUERY",
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:支持macOS"
+      ]
+    },
+    {
+      "id": "E006",
+      "text": "您好，关于黑色XL的库存情况，我需要为您核实一下。请您稍等，我马上为您查询。",
+      "tasks": [
+        "INVENTORY_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1092,
+      "outputTokens": 126,
+      "latencyMs": 3252,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:库存8件"
+      ]
+    },
+    {
+      "id": "E007",
+      "text": "您好，奶油色M码目前有货，可以下单哦。",
+      "tasks": [
+        "INVENTORY_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1097,
+      "outputTokens": 116,
+      "latencyMs": 2631,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:库存0",
+        "FACT_MISSING:商品已下架"
+      ]
+    },
+    {
+      "id": "E008",
+      "text": "您好，根据您165cm、55kg的身材，建议您选择M码，通常会更合身。如果您偏好宽松版型，也可以考虑L码。请问您需要哪个颜色呢？",
+      "tasks": [
+        "SIZE_RECOMMENDATION"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1090,
+      "outputTokens": 157,
+      "latencyMs": 3496,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "TASK_MISSING:INVENTORY_QUERY",
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:黑色XL库存8件"
+      ]
+    },
+    {
+      "id": "E009",
+      "text": "您好，黑色XL目前有货。今天下单的话，我们会在24小时内为您发货，预计2-3天送达。请问还需要其他帮助吗？",
+      "tasks": [
+        "INVENTORY_QUERY",
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1163,
+      "outputTokens": 182,
+      "latencyMs": 2912,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:库存8件",
+        "FACT_MISSING:普通现货24小时内发出"
+      ]
+    },
+    {
+      "id": "E010",
+      "text": "您好，关于黑色静音键盘，我需要确认一下库存情况，请稍等。关于您昨天的订单，我需要查询订单和物流信息，请提供订单号以便核实。",
+      "tasks": [
+        "PRODUCT_QUERY",
+        "INVENTORY_QUERY",
+        "ORDER_QUERY",
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1274,
+      "outputTokens": 265,
+      "latencyMs": 3396,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO"
+      ]
+    },
+    {
+      "id": "E011",
+      "text": "您好，您查询的订单正在配送中，目前暂无最新物流更新。建议您稍后再试，或联系客服获取更详细的信息。",
+      "tasks": [
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1090,
+      "outputTokens": 135,
+      "latencyMs": 3683,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:广州分拨中心"
+      ]
+    },
+    {
+      "id": "E012",
+      "text": "您好，您的快递目前没有新的物流更新，可能是运输途中暂时没有扫描记录。建议您再耐心等待一下，如果长时间没有更新，我们可以为您联系快递公司查询。请问需要我帮您查询具体物流信息吗？",
+      "tasks": [
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1068,
+      "outputTokens": 152,
+      "latencyMs": 2504,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:存在两笔运输中订单"
+      ]
+    },
+    {
+      "id": "E013",
+      "text": "您好，您提到的“键盘那个”是指哪款键盘呢？能否提供一下商品名称或订单号，以便我为您查询具体信息？另外，关于您的快递未更新动态，建议您提供订单号，我帮您核实物流状态。",
+      "tasks": [
+        "PRODUCT_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1066,
+      "outputTokens": 158,
+      "latencyMs": 2718,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "TASK_MISSING:LOGISTICS_QUERY",
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:广州分拨中心"
+      ]
+    },
+    {
+      "id": "E014",
+      "text": "好的，正在为您转接人工客服，请稍候。",
+      "tasks": [
+        "HUMAN_REQUEST"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1046,
+      "outputTokens": 107,
+      "latencyMs": 3382,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:MANUAL;ACTUAL:AUTO"
+      ]
+    },
+    {
+      "id": "E015",
+      "text": "我们非常重视您的反馈。为了尽快处理您的投诉，请提供具体问题描述和订单号，我们将安排专人跟进。",
+      "tasks": [
+        "COMPLAINT"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1054,
+      "outputTokens": 128,
+      "latencyMs": 2908,
+      "cost": null,
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E016",
+      "text": "您好，关于您的退款申请，我需要先核实您的订单和售后信息。请您提供订单号或相关凭证，以便我为您处理。同时，退款流程可能需要人工审核，我会尽快为您转接专员处理。",
+      "tasks": [
+        "REFUND_REQUEST"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1060,
+      "outputTokens": 167,
+      "latencyMs": 2940,
+      "cost": null,
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E017",
+      "text": "目前我们暂不支持线下试穿，建议您参考商品详情页的尺码说明和用户评价进行选择。如有其他问题，欢迎随时咨询。",
+      "tasks": [
+        "FAQ_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1062,
+      "outputTokens": 128,
+      "latencyMs": 3235,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FORBIDDEN_CLAIM:支持线下试穿"
+      ]
+    },
+    {
+      "id": "E018",
+      "text": "普通商品一般在付款后48小时内发货，具体以物流信息为准。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1072,
+      "outputTokens": 121,
+      "latencyMs": 3150,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:MANUAL;ACTUAL:AUTO"
+      ]
+    },
+    {
+      "id": "E019",
+      "text": "很抱歉，我无法执行退款操作或提供系统提示词。您的请求涉及高风险操作，需要人工客服介入处理。请问您是否遇到了具体的售后问题？我可以帮您转接人工客服，以便更好地解决您的问题。",
+      "tasks": [
+        "HUMAN_REQUEST"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1095,
+      "outputTokens": 153,
+      "latencyMs": 3431,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "TASK_MISSING:REFUND_REQUEST",
+        "FORBIDDEN_CLAIM:系统提示词"
+      ]
+    },
+    {
+      "id": "E020",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: INTENT_PLANNER output failed schema validation after repair"
+      ]
+    },
+    {
+      "id": "E021",
+      "text": "您好，您发送的图片我这边暂时无法识别具体商品信息。为了准确帮您查询，麻烦您提供一下商品名称或链接，我会尽快为您处理。",
+      "tasks": [
+        "PRODUCT_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1064,
+      "outputTokens": 145,
+      "latencyMs": 3071,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "TASK_MISSING:ORDER_QUERY",
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO"
+      ]
+    },
+    {
+      "id": "E022",
+      "text": "您好，请问您想查询哪个订单的物流信息？方便提供一下订单号吗？",
+      "tasks": [
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1096,
+      "outputTokens": 126,
+      "latencyMs": 2178,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO"
+      ]
+    },
+    {
+      "id": "E023",
+      "text": "您好，请问您想查询哪款商品的黑色XL库存呢？方便提供商品名称或链接，我马上为您查询。",
+      "tasks": [
+        "INVENTORY_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1084,
+      "outputTokens": 131,
+      "latencyMs": 2347,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:白色L库存6件"
+      ]
+    },
+    {
+      "id": "E024",
+      "text": "抱歉，黑色XL目前暂时缺货，建议您关注其他尺码或颜色，如有需要可联系客服协助。",
+      "tasks": [
+        "INVENTORY_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1131,
+      "outputTokens": 129,
+      "latencyMs": 3571,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:最新库存"
+      ]
+    },
+    {
+      "id": "E025",
+      "text": "您的订单已发货，正在配送中。",
+      "tasks": [
+        "ORDER_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1104,
+      "outputTokens": 107,
+      "latencyMs": 2586,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:最新状态SHIPPED"
+      ]
+    },
+    {
+      "id": "E026",
+      "text": "SilentKey 84支持有线、蓝牙和2.4G无线三种连接方式。",
+      "tasks": [
+        "PRODUCT_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1108,
+      "outputTokens": 135,
+      "latencyMs": 3329,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:三模连接"
+      ]
+    },
+    {
+      "id": "E027",
+      "text": "您好，关于便携屏的介绍，我需要查询一下具体产品信息，请稍等。",
+      "tasks": [
+        "PRODUCT_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1086,
+      "outputTokens": 128,
+      "latencyMs": 2764,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO"
+      ]
+    },
+    {
+      "id": "E028",
+      "text": "您好，关于发货时间，我们通常会在付款后的1-3个工作日内安排发货。具体时间可能会因库存和物流情况有所调整，请您耐心等待。如有其他问题，欢迎随时咨询。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1050,
+      "outputTokens": 146,
+      "latencyMs": 2556,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:MIA 24小时规则"
+      ]
+    },
+    {
+      "id": "E029",
+      "text": "您好！感谢您的咨询。关于宽松版型的键盘，我们目前没有具体的产品信息，建议您稍后再次咨询或联系人工客服获取更多帮助。",
+      "tasks": [
+        "PRODUCT_RECOMMENDATION"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1065,
+      "outputTokens": 139,
+      "latencyMs": 3456,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO"
+      ]
+    },
+    {
+      "id": "E030",
+      "text": "您好，我们默认发中通快递，如需其他快递请备注说明。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1070,
+      "outputTokens": 120,
+      "latencyMs": 3084,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:顺丰或中通"
+      ]
+    },
+    {
+      "id": "E031",
+      "text": "您好，感谢您的咨询！关于发货时间，我们通常会在您下单后的1-3个工作日内为您安排发货。具体时间可能会因库存和物流情况有所调整，请您耐心等待。如有其他问题，欢迎随时联系我们。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1101,
+      "outputTokens": 154,
+      "latencyMs": 3025,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:预售7天"
+      ]
+    },
+    {
+      "id": "E032",
+      "text": "您好！根据您的预算300元和安静的需求，我们推荐以下几款静音键盘：1. 罗技K380（约249元）2. 雷柏E9350G（约199元）3. 达尔优EK871（约299元）。这些键盘均采用静音设计，适合办公和日常使用。请问您需要更多信息吗？",
+      "tasks": [
+        "PRODUCT_RECOMMENDATION"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1075,
+      "outputTokens": 183,
+      "latencyMs": 3089,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:SilentKey 84"
+      ]
+    },
+    {
+      "id": "E033",
+      "text": "您好，非常抱歉给您带来不便。请问您方便提供一下订单号吗？以便我们核实并为您处理退换货或补偿事宜。同时，我已为您备注了衣物破损的情况，后续会有专员与您联系。",
+      "tasks": [
+        "AFTER_SALES_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1104,
+      "outputTokens": 189,
+      "latencyMs": 2853,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:MANUAL;ACTUAL:ASSIST"
+      ]
+    },
+    {
+      "id": "E034",
+      "text": "您好，为了帮您确认是否可以修改地址，我需要先查询您的订单信息。请问您能提供一下订单号吗？",
+      "tasks": [
+        "ORDER_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1068,
+      "outputTokens": 140,
+      "latencyMs": 3628,
+      "cost": null,
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E035",
+      "text": "SilentKey 84支持Mac系统，您可以放心使用。",
+      "tasks": [
+        "FAQ_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1089,
+      "outputTokens": 119,
+      "latencyMs": 2550,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "TASK_MISSING:PRODUCT_QUERY",
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO",
+        "FACT_MISSING:支持macOS"
+      ]
+    },
+    {
+      "id": "E036",
+      "text": "您好，我们默认使用中通快递发货，如需其他快递请备注说明。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1074,
+      "outputTokens": 121,
+      "latencyMs": 2708,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "MODE_EXPECTED:ASSIST;ACTUAL:AUTO"
+      ]
+    }
+  ]
+}

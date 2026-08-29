@@ -9,7 +9,7 @@
 
 | 审查项 | 当前结论 | 证据 / 处置 |
 | --- | --- | --- |
-| P0-1 真实基础设施未验收 | 已完成（外部模型完成 Chat 主链，Eval 仍部分） | Docker PostgreSQL/pgvector、Redis/BullMQ、MinIO、18 migrations、48 real-infra integration 已实跑；DeepSeek Chat 风险探针及合成 Buyer→Draft→Human Final 浏览器链通过，完整 36 Eval / embedding / image 尚未完成。 |
+| P0-1 真实基础设施未验收 | 已完成（外部模型完成 Chat 主链，Eval 仍部分） | Docker PostgreSQL/pgvector、Redis/BullMQ、MinIO、18 migrations 与 real-infra integration 已实跑；DeepSeek Chat 风险探针及合成 Buyer→Draft→Human Final 浏览器链通过；36 Case 已生成离线与真实 Provider-only 报告，但生产 ReplyRuntime + DB Evidence、Judge、外部 embedding / image Gate 尚未完成。 |
 | P0-2 公开 Demo 防滥用 | 冻结决策冲突 | `docs/16` 明确 V1 不实现 Workspace Quota / Rate Limit / 超额 Fallback。不擅自改需求；未有访问控制的公网部署仍禁止宣称完成。 |
 | P0-3 Runtime 请求校验 | 已完成 | 全局 ValidationPipe、DTO 白名单/上限、Body limit、跨店边界测试。 |
 | P0-4 仓库/交付卫生 | 已完成 | Secret scan、tracked-file 白名单源码归档、`.env`/依赖/构建产物拒绝规则。 |
@@ -31,7 +31,7 @@
 | R1 真实基础设施 | PASS | 本机 Docker 真实通过；CI 也已新增非 skip 容器 Gate。 |
 | R2 安全与 Runtime Validation | PASS with frozen exception | 请求/存储/响应头完成；Quota/Rate Limit 因冻结决策不实施。 |
 | R3 真实全链路 E2E | PASS for Mock V1 | 真实 DB/Redis/MinIO/API/Web/WS/Mock sender 链路通过；不把真实电商平台列入范围。 |
-| R4 真实模型与 Eval | CODE PASS / LIVE CHAT FLOW PASS / EVAL PARTIAL | DeepSeek OpenAI-compatible Chat JSON 适配器与 Key 文件读取完成，`deepseek-v4-flash` 风险探针及 Intent/Risk/Reply 合成浏览器主链通过；Embedding 保持本地 fallback、图片外送关闭，Judge/36 Eval 仍不得报 PASS。 |
+| R4 真实模型与 Eval | CODE PASS / LIVE CHAT FLOW PASS / EVAL PARTIAL | DeepSeek OpenAI-compatible Chat JSON 适配器与 Key 文件读取完成，`deepseek-v4-flash` 风险探针及 Intent/Risk/Reply 合成浏览器主链通过；36 Case 已实际执行（真实 Provider-only 3/36），但未接生产 DB Evidence，Embedding 保持本地 fallback、图片外送关闭，Judge 仍不得报 PASS。 |
 | R5 前端模块化与视觉 | PARTIAL PASS | 路由/查询 provider、feature 目录、Loading/Error/Empty 组件和三尺寸快照完成；剩余 App/API/CSS 拆分是渐进技术债。 |
 | R6 CI / 部署 / 交付 | LOCAL + CI PASS / PUBLIC BLOCKED | 本地生产 Compose 五容器全 healthy；GHCR workflow/部署文档/实基础 CI 完成。没有公网主机与域名，不写公开 Preview 已完成。 |
 

@@ -41,19 +41,27 @@ describe('ReplyRuntimeService', () => {
           id: 'reply-a', status: 'PENDING', mode: 'ASSIST', conversationId: 'conversation-a', userTurnId: 'turn-a',
           sourceLastMessageId: 'message-8', sourceSequence: 8, sourceContextVersion: 5,
           evidences: [],
-          conversation: { id: 'conversation-a', contextVersion: 5, humanActive: false, state: 'ACTIVE' },
+          conversation: { id: 'conversation-a', buyerId: 'buyer-a', contextVersion: 5, humanActive: false, state: 'ACTIVE' },
           userTurn: { normalizedText: '新疆多久发货？' },
         }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       replyEvidence: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'ASSIST_ONLY' }) },
-      shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [] }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'ASSIST_ONLY', platform: 'DOUYIN_DEMO' }) },
+      shopSettings: { findFirst: jest.fn().mockResolvedValue({
+        tone: '亲切简洁', logisticsPolicy: '默认承运方以订单物流为准。',
+        shippingPolicy: '偏远地区以实际物流信息为准。', afterSalesPolicy: '售后需人工确认。',
+        forbiddenTermsJson: [], transferKeywordsJson: [],
+      }) },
       task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
       conversationMemory: { findFirst: jest.fn().mockResolvedValue({ narrative: '买家偏好黑色。', structuredFactsJson: { openQuestions: ['确认尺码'], orderStatus: 'SHIPPED' }, status: 'CLEAN' }) },
       customerMemory: { findMany: jest.fn().mockResolvedValue([
         { type: 'PREFERENCE', key: 'color', valueJson: { preferred: 'black' } },
         { type: 'PREFERENCE', key: 'phone', valueJson: { phone: '13800138000' } },
+      ]) },
+      message: { findMany: jest.fn().mockResolvedValue([
+        { role: 'BUYER', kind: 'TEXT', contentJson: { text: '那新疆呢？' }, sequence: 8 },
+        { role: 'ASSISTANT', kind: 'TEXT', contentJson: { text: '普通地区通常更快。' }, sequence: 7 },
       ]) },
     };
     const knowledge = {
@@ -76,21 +84,31 @@ describe('ReplyRuntimeService', () => {
 
     await expect(service.process(scope, 'reply-a')).resolves.toMatchObject({ status: 'WAITING_HUMAN', draftId: 'draft-a' });
 
-    expect(knowledge.search).toHaveBeenCalledWith(scope, { shopId: 'shop-a', query: '新疆多久发货？', topK: 3 });
+    expect(knowledge.search).toHaveBeenCalledWith(scope, { shopId: 'shop-a', query: '新疆多久发货？', scope: 'STORE', topK: 3 });
     expect(prisma.replyEvidence.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
       workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', replyJobId: 'reply-a',
       knowledgeItemId: 'knowledge-a', knowledgeVersionId: 'version-a',
       retrievedContentSnapshotJson: { question: '偏远地区多久发货？', answer: '偏远地区通常 72 小时内发货。' },
     })] });
     expect(runtime.runStructured).toHaveBeenCalledWith(scope, expect.objectContaining({
-      purpose: 'REPLY_GENERATION', schema: 'ReplyGeneration', allowedDataClasses: ['turn', 'knowledge', 'taskResults', 'conversationSummary', 'customerMemory'],
+      purpose: 'REPLY_GENERATION', schema: 'ReplyGeneration', allowedDataClasses: ['turn', 'tasks', 'realtimeFacts', 'evidence', 'recentMessages', 'structuredFacts', 'summary', 'customerMemory', 'shopSettings', 'channel'],
       evidence: expect.arrayContaining([expect.objectContaining({ itemId: 'knowledge-a', versionId: 'version-a' })]),
       context: expect.objectContaining({ turn: { text: '新疆多久发货？' } }),
     }));
     const composer = runtime.runStructured.mock.calls.find(([, input]) => input.purpose === 'REPLY_GENERATION')![1];
     expect(composer.context).toMatchObject({
-      conversationSummary: { narrative: '买家偏好黑色。', structuredFacts: { openQuestions: ['确认尺码'] } },
+      summary: { narrative: '买家偏好黑色。' },
+      structuredFacts: { openQuestions: ['确认尺码'] },
       customerMemory: [{ type: 'PREFERENCE', key: 'color', value: { preferred: 'black' } }],
+      recentMessages: [
+        { role: 'ASSISTANT', kind: 'TEXT', text: '普通地区通常更快。', sequence: 7 },
+        { role: 'BUYER', kind: 'TEXT', text: '那新疆呢？', sequence: 8 },
+      ],
+      shopSettings: {
+        tone: '亲切简洁', logisticsPolicy: '默认承运方以订单物流为准。',
+        shippingPolicy: '偏远地区以实际物流信息为准。', afterSalesPolicy: '售后需人工确认。',
+      },
+      channel: 'DOUYIN_DEMO',
     });
     expect(JSON.stringify(composer.context)).not.toContain('13800138000');
     expect(JSON.stringify(composer.context)).not.toContain('SHIPPED');
@@ -273,7 +291,7 @@ describe('ReplyRuntimeService', () => {
     expect(workflowRouter.route).toHaveBeenCalledWith(scope, { conversationId: 'conversation-a', taskIds: [persistedTaskId] });
     const composerCalls = runtime.runStructured.mock.calls.filter(([, input]) => input.purpose === 'REPLY_GENERATION');
     expect(composerCalls).toHaveLength(1);
-    expect(composerCalls[0]![1].context.taskResults).toEqual([
+    expect(composerCalls[0]![1].context.tasks).toEqual([
       expect.objectContaining({ facts: expect.objectContaining({ reply: '工作流推荐：合成商品 A。', workflowRunId: 'run-a' }) }),
     ]);
     expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '最终答复：工作流推荐合成商品 A。' }));
@@ -393,7 +411,10 @@ describe('ReplyRuntimeService', () => {
       where: { id: 'reply-a', workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', status: 'PENDING' },
       data: { status: 'STALE', staleReason: 'HUMAN_ACTIVE' },
     });
+    // Human takeover is an initial durable guard: no provider call is allowed
+    // once the source conversation is already human-active.
     expect(runtime.runStructured).not.toHaveBeenCalled();
+    expect(runtime.runStructured).not.toHaveBeenCalledWith(scope, expect.objectContaining({ purpose: 'REPLY_GENERATION' }));
     expect(outboxes.enqueue).not.toHaveBeenCalled();
   });
 
@@ -421,7 +442,10 @@ describe('ReplyRuntimeService', () => {
     const service = new ReplyRuntimeService(prisma as never, { search: jest.fn().mockResolvedValue({ status: 'CONFLICTED', evidence: [], conflictItemIds: ['item-a', 'item-b'] }) } as never, runtime as never, drafts as never, outboxes as never);
 
     await expect(service.process(scope, 'reply-conflict')).resolves.toMatchObject({ status: 'WAITING_HUMAN', reason: 'CONTEXT_CONFLICT' });
-    expect(runtime.runStructured).not.toHaveBeenCalled();
+    // Conflict is now discovered by Task-scoped retrieval, after intent and
+    // risk planning but before reply composition.
+    expect(runtime.runStructured).toHaveBeenCalledTimes(2);
+    expect(runtime.runStructured).not.toHaveBeenCalledWith(scope, expect.objectContaining({ purpose: 'REPLY_GENERATION' }));
     expect(outboxes.enqueue).not.toHaveBeenCalled();
     expect(drafts.createWaitingHuman).toHaveBeenCalledWith(scope, expect.objectContaining({ replyJobId: 'reply-conflict' }));
   });
@@ -509,7 +533,10 @@ describe('ReplyRuntimeService', () => {
       replyEvidence: { createMany: jest.fn() }, task: { createMany: jest.fn() },
       conversation: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       message: { findMany: jest.fn().mockResolvedValue([{ id: 'card-order', kind: 'ORDER_CARD', contentJson: { orderId: 'order-2' } }]) },
-      order: { findMany: jest.fn().mockResolvedValue([{ id: 'order-1', externalOrderId: 'one' }, { id: 'order-2', externalOrderId: 'two' }]) },
+      order: { findMany: jest.fn().mockResolvedValue([
+        { id: 'order-1', externalOrderId: 'one', status: 'WAITING_SHIPMENT', logisticsSnapshotJson: {}, version: 1 },
+        { id: 'order-2', externalOrderId: 'two', status: 'SHIPPED', logisticsSnapshotJson: {}, version: 2 },
+      ]) },
       shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
       shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
     };
@@ -560,7 +587,7 @@ describe('ReplyRuntimeService', () => {
 
     await expect(service.process(scope, 'reply-order-b')).resolves.toMatchObject({ status: 'READY_TO_SEND' });
     expect(prisma.order.findFirst).not.toHaveBeenCalled();
-    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '订单 B当前状态为 SHIPPED。' }));
+    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '这笔订单已经发货，请留意物流更新。' }));
     expect(prisma.conversation.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ currentOrderId: 'order-b' }) }));
   });
 
@@ -598,7 +625,7 @@ describe('ReplyRuntimeService', () => {
     expect(prisma.conversation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'conversation-a', ...scope, contextVersion: 5 }, data: expect.objectContaining({ currentProductId: 'product-a' }),
     }));
-    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '规格 black-xl当前可售库存为 3。' }));
+    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '这个规格目前库存较少，建议尽快下单。' }));
     expect(runtime.runStructured).toHaveBeenCalledTimes(2);
   });
 
@@ -635,7 +662,7 @@ describe('ReplyRuntimeService', () => {
     await expect(service.process(scope, 'reply-preferred-sku')).resolves.toMatchObject({ status: 'READY_TO_SEND' });
     expect(prisma.productSku.findFirst).not.toHaveBeenCalled();
     expect(prisma.productSku.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { ...scope, productId: 'product-a' } }));
-    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '规格 current当前可售库存为 3。' }));
+    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '这个规格目前库存较少，建议尽快下单。' }));
   });
 
   it('forces partial multi-task work to ASSIST and exposes the unresolved task to the composer instead of AUTO-sending a subset', async () => {
@@ -669,7 +696,7 @@ describe('ReplyRuntimeService', () => {
 
     await expect(service.process(scope, 'reply-partial')).resolves.toMatchObject({ status: 'WAITING_HUMAN', draftId: 'draft-partial' });
     const composer = runtime.runStructured.mock.calls.find(([, input]) => input.purpose === 'REPLY_GENERATION')![1];
-    expect(composer.context.taskResults).toEqual(expect.arrayContaining([expect.objectContaining({ status: 'FAILED', errorCode: 'NO_EVIDENCE' })]));
+    expect(composer.context.tasks).toEqual(expect.arrayContaining([expect.objectContaining({ status: 'FAILED', errorCode: 'NO_EVIDENCE' })]));
     expect(outboxes.enqueue).not.toHaveBeenCalled();
   });
 

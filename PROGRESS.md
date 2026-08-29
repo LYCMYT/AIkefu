@@ -78,7 +78,7 @@
 ### Phase 03 已知问题 / 环境复验项
 
 - Phase 03 Migration、pgvector/HNSW、PostgreSQL-backed 检索、MinIO 上传/签名下载/删除与 Redis 队列已在本机真实基础设施中复验通过；浏览器也已连接同一真实 Workspace API。
-- AI Runtime 与 Embedding 均提供显式服务器端 Provider Gateway 配置边界，并以确定性离线 Provider 做无凭据回退；已验证非协作 Provider 强制超时、重试一次、fallback 一次、结构化修复一次、失败关闭、熔断、PII/Secret 清洗、Invocation/Usage/Evidence 持久化。新增 DeepSeek OpenAI-compatible Chat JSON 适配器与 `AI_API_KEY_FILE`，`deepseek-v4-flash` 的合成 `RISK_CLASSIFIER` 探针已真实通过；embedding、图片多模态和完整 36 Eval 仍不冒充已通过。
+- AI Runtime 与 Embedding 均提供显式服务器端 Provider 边界，并以确定性离线 Provider 做无凭据回退；已验证超时、重试、fallback、结构化修复、失败关闭、熔断、PII/Secret 清洗及 Invocation/Usage/Evidence 持久化。新增可审查的版本化 Prompt Registry、DeepSeek / OpenAI-compatible Chat / Responses 适配器与 `AI_API_KEY_FILE`；36 Case 已真实执行，但真实 DeepSeek Provider-only 报告仅 3/36 PASS，不能作为产品回复质量 PASS。
 - 未接入任何真实电商平台私有接口、Cookie、Token、真实账号或原产品代码；商品、知识、图片与 Eval 数据全部为合成数据。
 - 独立审查登记 3 项非阻断 P2：pgvector SQL 前推 ENABLED / activeVersion 过滤、XLSX 解压炸弹资源限制、Memory DIRTY 扫描 lease / backoff / 稳定排序；不阻断 Phase 04，将在后续可靠性/发布硬化中处理。
 
@@ -149,7 +149,7 @@
 - 公开边界硬化已完成：Nest 全局 `ValidationPipe` 对全部 Body DTO 启用 transform/whitelist/forbidNonWhitelisted；文本、JSON、Knowledge topK、Workflow 图与普通请求体均有上限；环境变量启动时 fail-closed；API Helmet/安全响应头生效。
 - 附件对象存储已由手写 SigV4 改为官方 AWS SDK v3，并为 PUT/DELETE/CreateBucket 增加强制 Abort/deadline；真实 MinIO opt-in integration 随全套 47/47 通过。
 - AI Gateway 已按错误类型做有界重试：网络、超时、408、429 与选定 5xx 最多重试一次；400、401、403 与无效响应不重试。`AiRuntime` 内存 Usage 视图默认仅保留最近 1,000 条，持久化 Invocation / Usage 账本仍是事实源。
-- DeepSeek Chat endpoint / 模型 / 服务端 Key 文件已经配置；结构化风险分类探针，以及合成 Buyer→Intent/Risk/Reply→Workbench Draft→Human Final 的连接态浏览器链均通过。Judge、Embedding / Image 与 36 个 Eval Case 仍标记为外部复验项，禁止据此伪造准确率与成本数据。
+- DeepSeek Chat endpoint / 模型 / 服务端 Key 文件已经配置；结构化风险分类探针及合成 Buyer→Intent/Risk/Reply→Workbench Draft→Human Final 的连接态浏览器链均通过。36 个固定 Case 已生成离线与真实 Provider 报告；真实报告为 3/36，且 Provider-only runner 不含生产 DB Evidence，禁止把它表述为端到端准确率。Judge、外部 Embedding / Image 仍是复验项。
 - `docs/16` 冻结的“公开 Demo 不做 Workspace Quota / Rate Limit / 超额 Fallback”保持不变并继续作为已知费用风险；未用外部审查建议擅自覆盖冻结决策。
 
 ## Release
@@ -198,7 +198,7 @@
 - [x] R3：连接态 Reset→Buyer 三连发→Workbench Draft→人工接管→Human Final→Buyer 可见 E2E。同时修复 Reset 500 与 WebSocket 刷新期静默丢发。
 - [x] R4 代码 Gate：模型错误分类、有界重试、RUNNING 账本、最近 1,000 条内存 Usage。
 - [x] R4 外部 Chat Gate：DeepSeek `deepseek-v4-flash` 风险探针与 Intent/Risk/Reply 合成浏览器主链通过，Key 仅从仓库外文件读取。
-- [ ] R4 完整 Eval Gate：Judge、Embedding、Image 与 36 Eval 尚未执行，不虚构成本或准确率。
+- [ ] R4 完整 Eval Gate：36 Case 的离线 / DeepSeek Provider-only 报告已执行（真实 3/36）；生产 ReplyRuntime + DB Evidence 的 36 Case runner、Judge、外部 Embedding 与 Image 尚未完成，不虚构成本或准确率。
 - [x] R5 安全拆分基线：React Router、TanStack Query、`app/`、`features/`、`components/ui/`，Usage / Privacy 移出 `App.tsx`；三尺寸快照已视觉复核。
 - [x] R5 产品化拆分：Workbench / Buyer / Workflow、`api.ts` 与 `styles.css` 已按 feature / client / normalizer / endpoint / style domain 拆分，并由 69 条 Web unit 与真实连接态 E2E 回归。
 - [x] R6 本地/CI/容器交付：CI 现实跑非 skip 基础设施 integration 与连接态 Playwright；生产风格五容器验收通过。

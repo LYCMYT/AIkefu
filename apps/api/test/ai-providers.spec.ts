@@ -6,6 +6,7 @@ import type { AiProviderRequest } from '@ai-customer-service/core';
 import {
   DeepSeekJsonProvider,
   JsonModelGatewayProvider,
+  OpenAICompatibleProvider,
   OfflineStructuredProvider,
   createServerAiRuntime,
 } from '../src/ai/ai-providers';
@@ -108,6 +109,41 @@ describe('server AI providers', () => {
     expect(JSON.stringify(body.messages)).toContain('JSON');
   });
 
+  it('adapts a generic OpenAI-compatible Chat Completions endpoint', async () => {
+    const fetcher = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"riskLevel":"LOW","reasons":[],"recommendedMode":"AUTO"}' } }],
+        model: 'compatible-model', usage: { prompt_tokens: 4, completion_tokens: 3 },
+      }),
+    });
+    const provider = new OpenAICompatibleProvider({
+      endpoint: 'https://models.example.test/v1/chat/completions', secret: 'secret', model: 'compatible-model', apiStyle: 'chat-completions', fetcher: fetcher as never,
+    });
+
+    const result = await provider.invoke({ ...request('RISK_CLASSIFIER', { tasks: [] }), prompt: { version: 'reply-risk-v1', system: 'Return safe JSON.', instructions: 'Classify risk.' } });
+
+    expect(result.output).toMatchObject({ riskLevel: 'LOW' });
+    expect(fetcher).toHaveBeenCalledWith('https://models.example.test/v1/chat/completions', expect.any(Object));
+    expect(JSON.parse(String((fetcher.mock.calls[0]![1] as RequestInit).body)).messages[0].content).toContain('Return safe JSON');
+  });
+
+  it('adapts an OpenAI-compatible Responses endpoint and disables provider-side storage', async () => {
+    const fetcher = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ output_text: '{"riskLevel":"LOW","reasons":[],"recommendedMode":"AUTO"}', model: 'responses-model', usage: { input_tokens: 7, output_tokens: 2 } }),
+    });
+    const provider = new OpenAICompatibleProvider({
+      endpoint: 'https://models.example.test/v1/responses', secret: 'secret', model: 'responses-model', apiStyle: 'responses', fetcher: fetcher as never,
+    });
+
+    const result = await provider.invoke({ ...request('RISK_CLASSIFIER', { tasks: [] }), prompt: { version: 'reply-risk-v1', system: 'Return safe JSON.', instructions: 'Classify risk.' } });
+
+    expect(result.usage).toEqual({ inputTokens: 7, outputTokens: 2 });
+    const body = JSON.parse(String((fetcher.mock.calls[0]![1] as RequestInit).body)) as Record<string, unknown>;
+    expect(body).toMatchObject({ model: 'responses-model', store: false, instructions: expect.stringContaining('Return safe JSON') });
+  });
+
   it('can resolve a DeepSeek key from a server-only file without embedding it in environment values', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'aikefu-model-key-'));
     const keyPath = join(directory, 'deepseek.key');
@@ -154,6 +190,7 @@ describe('server AI providers', () => {
       json: async () => ({}),
     });
     const runtime = createServerAiRuntime({
+      AI_PROVIDER: 'json-gateway',
       AI_BASE_URL: 'https://models.example.test/structured',
       AI_API_KEY: 'server-only-secret',
       AI_FAST_MODEL: 'fast-model',
@@ -189,6 +226,7 @@ describe('server AI providers', () => {
     } as Response);
     try {
       const runtime = createServerAiRuntime({
+        AI_PROVIDER: 'json-gateway',
         AI_BASE_URL: 'https://models.example.test/structured',
         AI_API_KEY: 'server-only-secret',
         AI_FAST_MODEL: 'fast-model',
@@ -214,6 +252,7 @@ describe('server AI providers', () => {
     async (purpose) => {
       const fetcher = jest.fn().mockRejectedValue(new Error('configured provider unavailable'));
       const runtime = createServerAiRuntime({
+        AI_PROVIDER: 'json-gateway',
         AI_BASE_URL: 'https://models.example.test/structured',
         AI_API_KEY: 'server-only-secret',
         AI_FAST_MODEL: 'fast-model',

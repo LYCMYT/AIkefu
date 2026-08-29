@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { ReplyEvidenceSnapshot } from '@ai-customer-service/contracts';
-import { buildReply, checkForbiddenTerms, createTaskBundle, decideReplyPolicy, executeTaskBundle, resolveContext, resolveSafeKnowledgeIntent, resolveSafeSocialReply, sanitizeContext, type TaskBundleExecution, type TaskState } from '@ai-customer-service/core';
+import { buildReply, buildReplyContext, checkForbiddenTerms, createTaskBundle, decideReplyPolicy, executeTaskBundle, guardReplyOutput, isTaskBlocking, renderCustomerFactReply, resolveContext, resolveSafeKnowledgeIntent, resolveSafeSocialReply, sanitizeContext, type TaskBundleExecution, type TaskState } from '@ai-customer-service/core';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { AiRuntimeApplicationService } from '../ai/ai-runtime-application.service';
@@ -20,7 +20,15 @@ type IntentPlanTask = {
   intent: string;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   requiredContext: string[];
+  requiredKnowledge?: Array<'STORE' | 'PRODUCT'>;
   requiredTools: string[];
+};
+
+type TaskEvidenceLookup = {
+  byTaskId: Map<string, ReplyEvidenceSnapshot[]>;
+  evidence: ReplyEvidenceSnapshot[];
+  hasConflict: boolean;
+  conflictItemIds: string[];
 };
 
 /**
@@ -68,19 +76,7 @@ export class ReplyRuntimeService {
     this.publishRefresh(scope, job.conversationId, 'REPLY_JOB_STARTED', job.id);
 
     const safeSocial = resolveSafeSocialReply(job.userTurn.normalizedText);
-    const lookup = safeSocial
-      ? { evidence: [], hasConflict: false, conflictItemIds: [] }
-      : job.evidences.length > 0
-      ? { evidence: job.evidences.map(toEvidence), hasConflict: false, conflictItemIds: [] }
-      : await this.retrieveAndFreezeEvidence(scope, job.id, job.userTurn.normalizedText);
-    const evidence = lookup.evidence;
-    const safeKnowledgeIntent = evidence.length > 0
-      ? resolveSafeKnowledgeIntent(job.userTurn.normalizedText)
-      : undefined;
-    void this.recordTrace(scope, job, 'EVIDENCE', { evidenceCount: evidence.length, knowledgeVersionIds: evidence.map((entry) => entry.versionId), conflicted: lookup.hasConflict });
-    // Conflicted scoped knowledge is a hard stop.  It must not be included in
-    // a planner/risk prompt merely to arrive at the same manual outcome.
-    if (lookup.hasConflict) return this.waitForHuman(scope, job, 'CONTEXT_CONFLICT');
+    const safeKnowledgeIntent = safeSocial ? undefined : resolveSafeKnowledgeIntent(job.userTurn.normalizedText);
     let output: ReplyGeneration | undefined;
     try {
       const contextSupport = safeSocial ? {} : await this.buildContextSupport(scope, job);
@@ -96,15 +92,24 @@ export class ReplyRuntimeService {
         recommendedMode = 'AUTO';
         void this.recordTrace(scope, job, 'BUILT_IN_SAFE_REPLY', { intent: safeSocial.intent });
       } else {
+        const plannerContext = buildReplyContext({
+          maxCharacters: 6_000,
+          currentTurn: { text: job.userTurn.normalizedText },
+          recentMessages: contextSupport.recentMessages,
+          structuredFacts: contextSupport.structuredFacts,
+          summary: contextSupport.conversationSummary,
+          customerMemory: contextSupport.customerMemory,
+        });
+        void this.recordTrace(scope, job, 'CONTEXT_BUDGET', { purpose: 'INTENT_PLANNER', characters: plannerContext.characterCount, omittedSections: plannerContext.omittedSections, truncatedSections: plannerContext.truncatedSections });
         const intent = await this.runtime.runStructured<{ tasks: IntentPlanTask[] }>(scope, {
-          purpose: 'INTENT_PLANNER', schema: 'IntentPlan', context: { turn: { text: job.userTurn.normalizedText }, ...contextSupport },
-          allowedDataClasses: ['turn', 'conversationSummary', 'customerMemory'], promptVersion: 'reply-intent-plan-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
+          purpose: 'INTENT_PLANNER', schema: 'IntentPlan', context: plannerContext.context,
+          allowedDataClasses: ['turn', 'recentMessages', 'structuredFacts', 'summary', 'customerMemory'], promptVersion: 'reply-intent-plan-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
         });
         const modelPlannedTasks = augmentExplicitIntentTasks(job.userTurn.normalizedText, intent.output.tasks);
         const safeKnowledgeAuto = Boolean(safeKnowledgeIntent && modelPlannedTasks.every((task) =>
           task.intent === 'UNKNOWN' || task.intent === safeKnowledgeIntent));
         plannedTasks = safeKnowledgeAuto
-          ? [{ intent: safeKnowledgeIntent!, riskLevel: 'LOW', requiredContext: [], requiredTools: [] }]
+          ? [{ intent: safeKnowledgeIntent!, riskLevel: 'LOW', requiredContext: [], requiredKnowledge: ['STORE'], requiredTools: [] }]
           : modelPlannedTasks;
         const risk = await this.runtime.runStructured<{ riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; reasons: string[]; recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' }>(scope, {
           purpose: 'RISK_CLASSIFIER', schema: 'RiskResult',
@@ -113,13 +118,13 @@ export class ReplyRuntimeService {
         });
         classifierRisk = safeKnowledgeAuto ? 'LOW' : risk.output.riskLevel;
         recommendedMode = safeKnowledgeAuto ? 'AUTO' : conservativeRecommendation(risk.output.recommendedMode);
-        if (safeKnowledgeAuto) void this.recordTrace(scope, job, 'SAFE_KNOWLEDGE_POLICY', { intent: safeKnowledgeIntent, evidenceCount: evidence.length });
         void this.recordTrace(scope, job, 'AI_USAGE', { invocations: [intent, risk].map((result) => ({ invocationId: result.invocationId, provider: result.provider, model: result.model, fallbackUsed: result.fallbackUsed })) });
       }
       const taskBundle = createTaskBundle({
         tasks: plannedTasks.slice(0, 4).map((task, index) => ({
           id: `${job.id}:${index}`, intent: task.intent, operation: 'READ' as const, riskLevel: maxRisk(task.riskLevel, classifierRisk),
-          requiredContext: task.requiredContext, requiredTools: task.requiredTools, blocking: task.requiredTools.length > 0,
+          requiredContext: task.requiredContext, requiredKnowledge: task.requiredKnowledge,
+          requiredTools: task.requiredTools, blocking: isTaskBlocking(task.requiredTools, task.riskLevel),
         })),
       });
       // Dynamic fact reads and the selected entity persistence share the same
@@ -138,6 +143,7 @@ export class ReplyRuntimeService {
           where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
           select: {
             aiMode: true,
+            platform: true,
             seedKey: true,
             settingsConfirmedAt: true,
             productLearningJobs: {
@@ -156,6 +162,19 @@ export class ReplyRuntimeService {
           shop?.aiMode === 'AUTO_ALLOWED' ? 'SHOP_AI_NOT_READY' : 'SHOP_AI_AUTO_DISABLED',
         );
       }
+      const lookup = safeSocial
+        ? { byTaskId: new Map<string, ReplyEvidenceSnapshot[]>(), evidence: [], hasConflict: false, conflictItemIds: [] }
+        : await this.retrieveAndFreezeTaskEvidence(scope, job, taskBundle.tasks, taskContexts);
+      const evidence = lookup.evidence;
+      void this.recordTrace(scope, job, 'EVIDENCE', {
+        evidenceCount: evidence.length,
+        knowledgeVersionIds: evidence.map((entry) => entry.versionId),
+        conflicted: lookup.hasConflict,
+        tasks: [...lookup.byTaskId.entries()].map(([taskId, entries]) => ({ taskId, knowledgeVersionIds: entries.map((entry) => entry.versionId) })),
+      });
+      if (safeKnowledgeIntent) void this.recordTrace(scope, job, 'SAFE_KNOWLEDGE_POLICY', { intent: safeKnowledgeIntent, evidenceCount: evidence.length });
+      // A conflict in any Task-scoped retrieval blocks the whole customer reply.
+      if (lookup.hasConflict) return this.waitForHuman(scope, job, 'CONTEXT_CONFLICT');
       let execution = await executeTaskBundle(taskBundle, async (task) => {
         const context = taskContexts.get(task.id);
         if (context && context.status !== 'RESOLVED') {
@@ -164,15 +183,16 @@ export class ReplyRuntimeService {
         const dynamicReplyText = context?.entity ? dynamicReply(task.intent, context.entity as unknown as Record<string, unknown>) : undefined;
         const builtInReplyText = safeSocial && task.intent === `SAFE_SOCIAL_${safeSocial.intent}` ? safeSocial.text : undefined;
         const deterministicReplyText = builtInReplyText ?? dynamicReplyText;
-        if (evidence.length === 0 && !deterministicReplyText) return { status: 'FAILED' as const, errorCode: 'NO_EVIDENCE' };
+        const taskEvidence = lookup.byTaskId.get(task.id) ?? [];
+        if (taskEvidence.length === 0 && !deterministicReplyText) return { status: 'FAILED' as const, errorCode: 'NO_EVIDENCE' };
         return {
           status: 'RESOLVED' as const,
           facts: {
-            reply: deterministicReplyText ?? evidence[0]!.contentSnapshot.answer,
+            reply: deterministicReplyText ?? taskEvidence[0]!.contentSnapshot.answer,
             ...(builtInReplyText ? { source: 'SYSTEM_SAFE_REPLY' } : {}),
             ...(context?.entity ? { context: context.entity } : {}),
           },
-          evidence: evidence.map((entry) => entry.versionId),
+          evidence: taskEvidence.map((entry) => entry.versionId),
         };
       });
       const persistedTaskIds = await this.persistTasks(scope, job.id, job.conversationId, job.userTurnId, execution.tasks);
@@ -186,6 +206,7 @@ export class ReplyRuntimeService {
           where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
           select: {
             aiMode: true,
+            platform: true,
             seedKey: true,
             settingsConfirmedAt: true,
             productLearningJobs: {
@@ -194,7 +215,13 @@ export class ReplyRuntimeService {
             },
           },
         }),
-        this.prisma.shopSettings.findFirst({ where: { shopId: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId }, select: { forbiddenTermsJson: true, transferKeywordsJson: true } }),
+        this.prisma.shopSettings.findFirst({
+          where: { shopId: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
+          select: {
+            tone: true, logisticsPolicy: true, shippingPolicy: true, afterSalesPolicy: true,
+            forbiddenTermsJson: true, transferKeywordsJson: true,
+          },
+        }),
       ]);
       const policy = decideReplyPolicy({
         shopMode: shop?.aiMode === 'MANUAL_ONLY'
@@ -218,16 +245,38 @@ export class ReplyRuntimeService {
         return this.waitForHuman(scope, job, policy.reasons.join(',') || 'MANUAL_REQUIRED');
       }
       const composeFinalReply = async () => {
+          const taskResults = execution.tasks.map((task) => ({
+            id: task.id, intent: task.intent, status: task.status, facts: task.facts,
+            evidence: task.evidence, errorCode: task.errorCode ?? null,
+          }));
+          const composerContext = buildReplyContext({
+            maxCharacters: 12_000,
+            currentTurn: { text: job.userTurn.normalizedText },
+            tasks: taskResults,
+            realtimeFacts: execution.tasks.flatMap((task) => task.facts?.context ? [{ taskId: task.id, context: task.facts.context }] : []),
+            evidence: evidence.map((entry) => ({
+              versionId: entry.versionId, question: entry.contentSnapshot.question,
+              answer: entry.contentSnapshot.answer, source: entry.source, scope: entry.scope, productId: entry.productId,
+            })),
+            recentMessages: contextSupport.recentMessages,
+            structuredFacts: contextSupport.structuredFacts,
+            summary: contextSupport.conversationSummary,
+            customerMemory: contextSupport.customerMemory,
+            shopSettings: settings ? {
+              tone: settings.tone,
+              logisticsPolicy: settings.logisticsPolicy,
+              shippingPolicy: settings.shippingPolicy,
+              afterSalesPolicy: settings.afterSalesPolicy,
+            } : undefined,
+            channel: shop?.platform,
+          });
+          void this.recordTrace(scope, job, 'CONTEXT_BUDGET', { purpose: 'REPLY_GENERATION', characters: composerContext.characterCount, omittedSections: composerContext.omittedSections, truncatedSections: composerContext.truncatedSections });
           const result = await this.runtime.runStructured<ReplyGeneration>(scope, {
             purpose: 'REPLY_GENERATION', schema: 'ReplyGeneration',
-            context: {
-              turn: { text: job.userTurn.normalizedText },
-              knowledge: evidence.map((entry) => ({ question: entry.contentSnapshot.question, answer: entry.contentSnapshot.answer, source: entry.source })),
-              taskResults: execution.tasks.map((task) => ({ id: task.id, status: task.status, facts: task.facts, errorCode: task.errorCode ?? null })),
-              ...contextSupport,
-            },
-            allowedDataClasses: ['turn', 'knowledge', 'taskResults', 'conversationSummary', 'customerMemory'], promptVersion: 'reply-composer-v1', evidence,
-            ragStrategy: evidence.length ? 'SCOPED_KNOWLEDGE_SNAPSHOT' : 'NO_EVIDENCE', contextVersion: job.sourceContextVersion,
+            context: composerContext.context,
+            allowedDataClasses: ['turn', 'tasks', 'realtimeFacts', 'evidence', 'recentMessages', 'structuredFacts', 'summary', 'customerMemory', 'shopSettings', 'channel'],
+            promptVersion: 'reply-composer-v1', evidence,
+            ragStrategy: evidence.length ? 'TASK_SCOPED_KNOWLEDGE_SNAPSHOT' : 'NO_EVIDENCE', contextVersion: job.sourceContextVersion,
           });
           output = result.output;
           void this.recordTrace(scope, job, 'AI_USAGE', { invocationId: result.invocationId, provider: result.provider, model: result.model, fallbackUsed: result.fallbackUsed, purpose: 'REPLY_GENERATION' });
@@ -239,6 +288,14 @@ export class ReplyRuntimeService {
       const built = workflow.hasWorkflowResult
         ? { strategy: 'COMPOSER' as const, text: (await composeFinalReply()).trim() }
         : await buildReply({ tasks: execution.tasks }, { compose: composeFinalReply });
+      const outputGuard = guardReplyOutput({
+        text: built.text,
+        taskResults: execution.tasks.map((task) => ({ intent: task.intent, facts: task.facts })),
+      });
+      if (!outputGuard.allowed) {
+        void this.recordTrace(scope, job, 'OUTPUT_GUARD', { allowed: false, reason: outputGuard.reason });
+        return this.waitForHuman(scope, job, `OUTPUT_GUARD_${outputGuard.reason}`);
+      }
       const checked = checkForbiddenTerms(built.text, forbiddenRules(settings?.forbiddenTermsJson));
       if (!checked.allowed) {
         await this.prisma.replyJob.updateMany({
@@ -370,20 +427,68 @@ export class ReplyRuntimeService {
     });
   }
 
-  private async retrieveAndFreezeEvidence(scope: ReplyJobScope, replyJobId: string, query: string): Promise<{ evidence: ReplyEvidenceSnapshot[]; hasConflict: boolean; conflictItemIds: string[] }> {
-    const result = await this.knowledge.search(scope, { shopId: scope.shopId, query, topK: 3 });
-    if (result.status !== 'EVIDENCE') return { evidence: [], hasConflict: result.status === 'CONFLICTED', conflictItemIds: [...result.conflictItemIds] };
-    const evidence = result.evidence.map((entry) => ({ ...entry, contentSnapshot: { ...entry.contentSnapshot } }));
-    if (evidence.length > 0) {
+  private async retrieveAndFreezeTaskEvidence(
+    scope: ReplyJobScope,
+    job: { id: string; userTurn: { normalizedText: string }; evidences: Array<Parameters<typeof toEvidence>[0]> },
+    tasks: Array<{ id: string; intent: string; requiredKnowledge?: Array<'STORE' | 'PRODUCT'> }>,
+    contexts: Map<string, ReturnType<typeof resolveContext>>,
+  ): Promise<TaskEvidenceLookup> {
+    const existing = job.evidences.map(toEvidence);
+    const byTaskId = new Map<string, ReplyEvidenceSnapshot[]>();
+    const collected = new Map<string, ReplyEvidenceSnapshot>(existing.map((entry) => [entry.versionId, entry]));
+    const conflictItemIds = new Set<string>();
+    let hasConflict = false;
+
+    for (const task of tasks) {
+      const scopes = knowledgeScopesForTask(task, contexts.get(task.id));
+      if (!scopes.length) {
+        byTaskId.set(task.id, []);
+        continue;
+      }
+      const productId = resolvedProductId(contexts.get(task.id));
+      const reusable = existing.filter((entry) => scopes.includes(entry.scope) && (entry.scope !== 'PRODUCT' || entry.productId === productId));
+      if (reusable.length) {
+        byTaskId.set(task.id, reusable);
+        continue;
+      }
+      const taskEvidence: ReplyEvidenceSnapshot[] = [];
+      for (const knowledgeScope of scopes) {
+        if (knowledgeScope === 'PRODUCT' && !productId) continue;
+        const result = await this.knowledge.search(scope, {
+          shopId: scope.shopId,
+          query: job.userTurn.normalizedText,
+          scope: knowledgeScope,
+          ...(knowledgeScope === 'PRODUCT' && productId ? { productId } : {}),
+          topK: 3,
+        });
+        if (result.status === 'CONFLICTED') {
+          hasConflict = true;
+          result.conflictItemIds.forEach((id) => conflictItemIds.add(id));
+          continue;
+        }
+        if (result.status !== 'EVIDENCE') continue;
+        for (const entry of result.evidence) {
+          const frozen = { ...entry, contentSnapshot: { ...entry.contentSnapshot } };
+          collected.set(frozen.versionId, frozen);
+          taskEvidence.push(frozen);
+        }
+      }
+      byTaskId.set(task.id, uniqueEvidence(taskEvidence));
+    }
+
+    const evidence = [...collected.values()];
+    const existingIds = new Set(existing.map((entry) => entry.versionId));
+    const newEvidence = evidence.filter((entry) => !existingIds.has(entry.versionId));
+    if (newEvidence.length > 0) {
       await this.prisma.replyEvidence.createMany({
-        data: evidence.map((entry) => ({
-          ...scope, replyJobId, knowledgeItemId: entry.itemId, knowledgeVersionId: entry.versionId,
+        data: newEvidence.map((entry) => ({
+          ...scope, replyJobId: job.id, knowledgeItemId: entry.itemId, knowledgeVersionId: entry.versionId,
           knowledgeVersionNumber: entry.version, sourceType: entry.source, scope: entry.scope,
           productId: entry.productId, retrievedContentSnapshotJson: cloneJson(entry.contentSnapshot), retrievalScore: entry.retrievalScore,
         })),
       });
     }
-    return { evidence, hasConflict: result.conflictItemIds.length > 0, conflictItemIds: [...result.conflictItemIds] };
+    return { byTaskId, evidence, hasConflict, conflictItemIds: [...conflictItemIds] };
   }
 
   /** P5/P6 context is read-only, scoped, expired rows excluded, then sanitized before any provider call. */
@@ -394,8 +499,9 @@ export class ReplyRuntimeService {
     const repository = this.prisma as unknown as {
       conversationMemory?: { findFirst(input: unknown): Promise<{ narrative: string; structuredFactsJson: unknown; status: string } | null> };
       customerMemory?: { findMany(input: unknown): Promise<Array<{ type: string; key: string; valueJson: unknown }>> };
+      message?: { findMany(input: unknown): Promise<Array<{ role: string; kind: string; contentJson: unknown; sequence: number }>> };
     };
-    const [memory, memories] = await Promise.all([
+    const [memory, memories, recentRows] = await Promise.all([
       repository.conversationMemory?.findFirst({
         where: { ...scope, conversationId: job.conversationId, status: 'CLEAN' },
         select: { narrative: true, structuredFactsJson: true, status: true },
@@ -404,18 +510,26 @@ export class ReplyRuntimeService {
         where: { ...scope, buyerId: job.conversation.buyerId, status: 'ACTIVE', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
         orderBy: { updatedAt: 'desc' }, take: 6, select: { type: true, key: true, valueJson: true },
       }) ?? Promise.resolve([]),
+      repository.message?.findMany({
+        where: { ...scope, conversationId: job.conversationId, status: { notIn: ['RECALLED', 'DELETED'] } },
+        orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }], take: 12,
+        select: { role: true, kind: true, contentJson: true, sequence: true },
+      }) ?? Promise.resolve([]),
     ]);
     const safeCustomerMemory = memories.flatMap((entry) => {
       const sanitized = sanitizeContext({ customerMemory: { type: entry.type, key: entry.key, value: entry.valueJson } }, ['customerMemory']);
       return sanitized.audit.excludedPII.length === 0 ? [sanitized.value.customerMemory] : [];
     });
+    const recentMessages = recentRows.slice().reverse().flatMap((message) => {
+      const text = messageText(message.contentJson);
+      return text ? [{ role: message.role, kind: message.kind, text, sequence: message.sequence }] : [];
+    });
     const safe = sanitizeContext({
-      ...(memory ? { conversationSummary: {
-        ...(stableNarrative(memory.narrative) ? { narrative: stableNarrative(memory.narrative) } : {}),
-        structuredFacts: withoutDynamicFacts(memory.structuredFactsJson),
-      } } : {}),
+      ...(memory && stableNarrative(memory.narrative) ? { conversationSummary: { narrative: stableNarrative(memory.narrative) } } : {}),
+      ...(memory ? { structuredFacts: withoutDynamicFacts(memory.structuredFactsJson) } : {}),
+      ...(recentMessages.length ? { recentMessages } : {}),
       ...(safeCustomerMemory.length ? { customerMemory: safeCustomerMemory } : {}),
-    }, ['conversationSummary', 'customerMemory']);
+    }, ['conversationSummary', 'structuredFacts', 'recentMessages', 'customerMemory']);
     return safe.value;
   }
 
@@ -717,7 +831,7 @@ export class ReplyRuntimeService {
     replyJobId: string,
     conversationId: string,
     userTurnId: string,
-    tasks: Array<{ id: string; intent: string; operation: 'READ' | 'WRITE'; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; requiredContext: string[]; requiredTools: string[]; status: string; facts?: Record<string, unknown>; errorCode?: string; blocking: boolean }>,
+    tasks: Array<{ id: string; intent: string; operation: 'READ' | 'WRITE'; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; requiredContext: string[]; requiredKnowledge?: Array<'STORE' | 'PRODUCT'>; requiredTools: string[]; status: string; facts?: Record<string, unknown>; evidence?: string[]; errorCode?: string; blocking: boolean }>,
   ): Promise<string[]> {
     const persistedTaskIds = tasks.map((task) => `reply-task:${replyJobId}:${task.id}`);
     const repository = this.prisma as unknown as {
@@ -732,8 +846,9 @@ export class ReplyRuntimeService {
         data: tasks.map((task) => ({
           ...scope, id: `reply-task:${replyJobId}:${task.id}`, conversationId, userTurnId, intent: task.intent,
           operation: task.operation, riskLevel: task.riskLevel, requiredContextJson: task.requiredContext,
-          requiredKnowledgeJson: [], requiredToolsJson: task.requiredTools, status: task.status,
-          ...(task.facts ? { resultJson: task.facts } : {}), errorCode: task.errorCode, blocking: task.blocking,
+          requiredKnowledgeJson: task.requiredKnowledge ?? [], requiredToolsJson: task.requiredTools, status: task.status,
+          ...((task.facts || task.evidence?.length) ? { resultJson: { ...(task.facts ?? {}), evidenceVersionIds: task.evidence ?? [] } } : {}),
+          errorCode: task.errorCode, blocking: task.blocking,
         })),
         skipDuplicates: true,
       });
@@ -872,10 +987,10 @@ function augmentExplicitIntentTasks(text: string, tasks: IntentPlanTask[]): Inte
 
   const augmented = tasks.filter((task) => task.intent !== 'UNKNOWN');
   if (inventoryRequested && !augmented.some((task) => /(?:^|_)INVENTORY(?:_|$)/.test(task.intent))) {
-    augmented.push({ intent: 'INVENTORY_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'], requiredTools: ['GET_INVENTORY'] });
+    augmented.push({ intent: 'INVENTORY_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'], requiredKnowledge: [], requiredTools: ['GET_INVENTORY'] });
   }
   if (sizeRequested && !augmented.some((task) => task.intent === 'SIZE_RECOMMENDATION')) {
-    augmented.push({ intent: 'SIZE_RECOMMENDATION', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU', 'CUSTOMER_MEMORY'], requiredTools: ['GET_PRODUCT'] });
+    augmented.push({ intent: 'SIZE_RECOMMENDATION', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU', 'CUSTOMER_MEMORY'], requiredKnowledge: ['PRODUCT'], requiredTools: ['GET_PRODUCT'] });
   }
   return augmented.slice(0, 4);
 }
@@ -1014,19 +1129,47 @@ function explicitOrderMatches<T extends { externalOrderId: string }>(rows: T[], 
   return rows.filter((row) => row.externalOrderId.trim().length > 0 && normalized.includes(row.externalOrderId.trim().toLocaleLowerCase()));
 }
 
+function knowledgeScopesForTask(
+  task: { intent: string; requiredKnowledge?: Array<'STORE' | 'PRODUCT'> },
+  context: ReturnType<typeof resolveContext> | undefined,
+): Array<'STORE' | 'PRODUCT'> {
+  if (isDynamicFactIntent(task.intent) || /REFUND|EXCHANGE|COMPLAINT|HUMAN/i.test(task.intent)) return [];
+  if (task.requiredKnowledge?.length) return [...new Set(task.requiredKnowledge)];
+  if (/PRODUCT|SIZE|CARE|MATERIAL|SPECIFICATION|RECOMMENDATION/i.test(task.intent)) {
+    return resolvedProductId(context) ? ['PRODUCT'] : [];
+  }
+  return ['STORE'];
+}
+
+function isDynamicFactIntent(intent: string): boolean {
+  return /(?:^|_)(?:INVENTORY|STOCK|ORDER|LOGISTICS)(?:_|$)/i.test(intent);
+}
+
+function resolvedProductId(context: ReturnType<typeof resolveContext> | undefined): string | undefined {
+  if (context?.status !== 'RESOLVED' || !context.entity) return undefined;
+  if (context.entity.kind === 'PRODUCT') return context.entity.id;
+  if (context.entity.kind !== 'SKU') return undefined;
+  const dynamic = jsonRecord((context.entity as unknown as Record<string, unknown>).dynamic);
+  return typeof dynamic?.productId === 'string' ? dynamic.productId : undefined;
+}
+
+function uniqueEvidence(evidence: ReplyEvidenceSnapshot[]): ReplyEvidenceSnapshot[] {
+  return [...new Map(evidence.map((entry) => [entry.versionId, entry])).values()];
+}
+
+function messageText(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  for (const key of ['text', 'content', 'caption']) {
+    const candidate = record[key];
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim().slice(0, 1_000);
+  }
+  return undefined;
+}
+
 /** Controlled local rendering of current operational facts; never RAG/model truth. */
 function dynamicReply(intent: string, entity: Record<string, unknown>): string | undefined {
   const dynamic = jsonRecord(entity.dynamic);
   if (!dynamic) return undefined;
-  if (typeof dynamic.status === 'string' && /ORDER|LOGISTICS|SHIP/i.test(intent)) {
-    const order = typeof dynamic.externalOrderId === 'string' ? `订单 ${dynamic.externalOrderId}` : '该订单';
-    const logistics = jsonRecord(dynamic.logistics);
-    const tracking = logistics && typeof logistics.trackingNumber === 'string' ? `，物流单号 ${logistics.trackingNumber}` : '';
-    return `${order}当前状态为 ${dynamic.status}${tracking}。`;
-  }
-  if (typeof dynamic.inventory === 'number' && /SKU|INVENTORY|STOCK|PRODUCT/i.test(intent)) {
-    const sku = typeof dynamic.externalSkuId === 'string' ? `规格 ${dynamic.externalSkuId}` : '该规格';
-    return `${sku}当前可售库存为 ${dynamic.inventory}。`;
-  }
-  return undefined;
+  return renderCustomerFactReply(intent, dynamic);
 }

@@ -37,7 +37,7 @@ describe('AiRuntimeApplicationService', () => {
         schema: 'RiskResult',
         context: { text: '联系电话 13800138000', token: 'must-not-leave-server' },
         allowedDataClasses: ['text', 'token'],
-        promptVersion: 'risk-v1',
+        promptVersion: 'reply-risk-v1',
         evidence,
       },
     );
@@ -89,7 +89,7 @@ describe('AiRuntimeApplicationService', () => {
         schema: 'ConversationSummary',
         context: { messages: [{ text: 'secret content' }] },
         allowedDataClasses: ['messages'],
-        promptVersion: 'summary-v1',
+        promptVersion: 'conversation-summary-v1',
       },
     )).rejects.toMatchObject({ code: 'PROVIDER_FAILED' });
 
@@ -163,14 +163,14 @@ describe('AiRuntimeApplicationService', () => {
       schema: 'ConversationSummary',
       context: { messages: [{ text: 'A private prompt' }] },
       allowedDataClasses: ['messages'],
-      promptVersion: 'summary-v1',
+      promptVersion: 'conversation-summary-v1',
     });
     const succeeded = service.runStructured(scope, {
       purpose: 'RISK_CLASSIFIER',
       schema: 'RiskResult',
       context: { text: 'B safe' },
       allowedDataClasses: ['text'],
-      promptVersion: 'risk-v1',
+      promptVersion: 'reply-risk-v1',
     });
     await expect(succeeded).resolves.toMatchObject({ provider: 'succeeded-provider', model: 'succeeded-model' });
     // B has now completed while A remains pending. Release A only after the

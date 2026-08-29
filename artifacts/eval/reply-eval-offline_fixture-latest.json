@@ -1,0 +1,630 @@
+{
+  "sourceVersion": "1.0",
+  "generatedAt": "2026-08-29T18:15:55.074Z",
+  "mode": "OFFLINE_FIXTURE",
+  "provider": "offline-structured-demo",
+  "model": "offline-structured-v1",
+  "summary": {
+    "total": 36,
+    "passed": 0,
+    "failed": 36,
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "totalCost": null,
+    "averageLatencyMs": 0
+  },
+  "cases": [
+    {
+      "id": "E001",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: INTENT_PLANNER output failed schema validation after repair"
+      ]
+    },
+    {
+      "id": "E002",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: INTENT_PLANNER output failed schema validation after repair"
+      ]
+    },
+    {
+      "id": "E003",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: INTENT_PLANNER output failed schema validation after repair"
+      ]
+    },
+    {
+      "id": "E004",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E005",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E006",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E007",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E008",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E009",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E010",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E011",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E012",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E013",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E014",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E015",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E016",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E017",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E018",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E019",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E020",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E021",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E022",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E023",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E024",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E025",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E026",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E027",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E028",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E029",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E030",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E031",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E032",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E033",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E034",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E035",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    },
+    {
+      "id": "E036",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: primary:INTENT_PLANNER circuit is open"
+      ]
+    }
+  ]
+}

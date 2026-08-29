@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import {
@@ -16,10 +17,19 @@ async function saveFinalScreenshot(page: Parameters<typeof captureConsoleDiagnos
   mkdirSync(directory, { recursive: true });
   await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-  await page.screenshot({
-    path: resolve(directory, `${name}.png`),
-    fullPage: false,
-  });
+  const screenshot = await page.screenshot({ fullPage: false });
+  const destination = resolve(directory, `${name}.png`);
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await writeFile(destination, screenshot);
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolveRetry) => setTimeout(resolveRetry, 100 * (attempt + 1)));
+    }
+  }
+  throw lastError;
 }
 
 test('final visual evidence covers the real operational and scenario surfaces', async ({ page }) => {

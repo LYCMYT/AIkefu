@@ -19,8 +19,13 @@ export type JsonModelGatewayOptions = {
   fetcher?: FetchLike;
 };
 
+export type OpenAICompatibleOptions = JsonModelGatewayOptions & {
+  apiStyle?: 'chat-completions' | 'responses';
+};
+
 type ServerAiRuntimeOptions = Partial<JsonModelGatewayOptions> & Partial<Record<
   | 'AI_PROVIDER'
+  | 'AI_API_STYLE'
   | 'AI_BASE_URL'
   | 'AI_API_KEY'
   | 'AI_API_KEY_FILE'
@@ -40,6 +45,13 @@ type DeepSeekChatCompletion = {
   choices?: Array<{ message?: { content?: unknown } }>;
   model?: unknown;
   usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+};
+
+type OpenAIResponsesPayload = {
+  output_text?: unknown;
+  output?: Array<{ content?: Array<{ text?: unknown }> }>;
+  model?: unknown;
+  usage?: { input_tokens?: unknown; output_tokens?: unknown };
 };
 
 /**
@@ -74,6 +86,7 @@ export class JsonModelGatewayProvider implements AiProvider {
         body: JSON.stringify({
           model: this.options.model,
           purpose: request.purpose,
+          ...(request.prompt ? { prompt: request.prompt } : {}),
           input: request.input,
           attempt: request.attempt,
           repair: request.repair,
@@ -101,6 +114,91 @@ export class JsonModelGatewayProvider implements AiProvider {
       output: record.output,
       model: typeof record.model === 'string' && record.model ? record.model : this.options.model,
       ...(validUsage(record.usage) ? { usage: record.usage } : {}),
+    };
+  }
+}
+
+/**
+ * Direct, explicit OpenAI-compatible boundary. It supports both the common
+ * Chat Completions JSON mode and the Responses JSON-object shape; it is never
+ * selected as an implicit fallback for the custom gateway contract.
+ */
+export class OpenAICompatibleProvider implements AiProvider {
+  readonly name = 'openai-compatible-json';
+  private readonly fetcher: FetchLike;
+  private readonly endpoint: string;
+  private readonly apiStyle: 'chat-completions' | 'responses';
+
+  constructor(private readonly options: OpenAICompatibleOptions) {
+    this.apiStyle = options.apiStyle ?? (new URL(options.endpoint).pathname.endsWith('/responses') ? 'responses' : 'chat-completions');
+    this.endpoint = normalizeOpenAICompatibleEndpoint(options.endpoint, this.apiStyle);
+    if (!options.secret?.trim() || !options.model?.trim()) throw new Error('AI_PROVIDER_CONFIGURATION_INVALID');
+    this.fetcher = options.fetcher ?? (globalThis.fetch as unknown as FetchLike);
+  }
+
+  async invoke(request: AiProviderRequest): Promise<AiProviderResponse> {
+    if (request.signal.aborted) throw abortedProviderFailure(request.signal);
+    const system = request.prompt?.system ?? deepSeekSystemPrompt(request.purpose);
+    const instructions = request.prompt?.instructions ?? 'Return one valid JSON object.';
+    const providerInput = JSON.stringify({
+      promptVersion: request.prompt?.version,
+      instructions,
+      input: request.input,
+      repair: request.repair,
+      ...(request.previousOutput === undefined ? {} : { previousOutput: request.previousOutput }),
+    });
+    const body = this.apiStyle === 'responses'
+      ? {
+          model: this.options.model,
+          instructions: system,
+          input: providerInput,
+          text: { format: { type: 'json_object' } },
+          store: false,
+        }
+      : {
+          model: this.options.model,
+          messages: [{ role: 'system', content: system }, { role: 'user', content: providerInput }],
+          response_format: { type: 'json_object' },
+          temperature: 0,
+          max_tokens: 2_048,
+        };
+    let response: Awaited<ReturnType<FetchLike>>;
+    try {
+      response = await this.fetcher(this.endpoint, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.options.secret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: request.signal,
+      });
+    } catch (error) {
+      if (request.signal.aborted) throw abortedProviderFailure(request.signal, error);
+      throw new AiProviderFailure('NETWORK', true, 'AI_PROVIDER_NETWORK_ERROR', { cause: error });
+    }
+    if (!response.ok) {
+      const status = response.status ?? 0;
+      throw new AiProviderFailure('HTTP', isRetryableHttpStatus(status), `AI_PROVIDER_HTTP_${status}`, { status });
+    }
+    let payload: DeepSeekChatCompletion | OpenAIResponsesPayload;
+    try {
+      payload = await response.json() as DeepSeekChatCompletion | OpenAIResponsesPayload;
+    } catch (error) {
+      throw new AiProviderFailure('RESPONSE', false, 'AI_PROVIDER_RESPONSE_INVALID', { cause: error });
+    }
+    const content = this.apiStyle === 'responses'
+      ? responseText(payload as OpenAIResponsesPayload)
+      : (payload as DeepSeekChatCompletion).choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) throw new AiProviderFailure('RESPONSE', false, 'AI_PROVIDER_RESPONSE_INVALID');
+    let output: unknown;
+    try { output = JSON.parse(content); } catch (error) {
+      throw new AiProviderFailure('RESPONSE', false, 'AI_PROVIDER_RESPONSE_INVALID', { cause: error });
+    }
+    const usage = this.apiStyle === 'responses'
+      ? responsesUsage((payload as OpenAIResponsesPayload).usage)
+      : deepSeekUsage((payload as DeepSeekChatCompletion).usage);
+    return {
+      output,
+      model: typeof payload.model === 'string' && payload.model ? payload.model : this.options.model,
+      ...(usage ? { usage } : {}),
     };
   }
 }
@@ -135,11 +233,13 @@ export class DeepSeekJsonProvider implements AiProvider {
         body: JSON.stringify({
           model: this.options.model,
           messages: [
-            { role: 'system', content: deepSeekSystemPrompt(request.purpose) },
+            { role: 'system', content: request.prompt?.system ?? deepSeekSystemPrompt(request.purpose) },
             {
               role: 'user',
               content: JSON.stringify({
                 input: request.input,
+                promptVersion: request.prompt?.version,
+                instructions: request.prompt?.instructions,
                 repair: request.repair,
                 ...(request.previousOutput === undefined ? {} : { previousOutput: request.previousOutput }),
               }),
@@ -229,17 +329,21 @@ export function createServerAiRuntime(options: ServerAiRuntimeOptions = process.
     const model = explicitModel || modelForPurpose(options, purpose);
     if (endpoint && secret && model) {
       const key = `primary:${purpose}`;
-      providers[key] = providerKind === 'deepseek' ? new DeepSeekJsonProvider({
-        endpoint,
-        secret,
-        model,
-        ...(options.fetcher ? { fetcher: options.fetcher } : {}),
-      }) : new JsonModelGatewayProvider({
-        endpoint,
-        secret,
-        model,
-        ...(options.fetcher ? { fetcher: options.fetcher } : {}),
-      });
+      const providerOptions = { endpoint, secret, model, ...(options.fetcher ? { fetcher: options.fetcher } : {}) };
+      if (providerKind === 'deepseek') {
+        providers[key] = new DeepSeekJsonProvider(providerOptions);
+      } else if (providerKind === 'openai-compatible' || providerKind === 'openai' || providerKind === 'responses') {
+        const apiStyle = providerKind === 'responses' || options.AI_API_STYLE?.trim().toLowerCase() === 'responses'
+          ? 'responses' as const
+          : 'chat-completions' as const;
+        providers[key] = new OpenAICompatibleProvider({ ...providerOptions, apiStyle });
+      } else if (providerKind === 'json-gateway' || providerKind === 'custom-gateway' || (!providerKind && options.endpoint)) {
+        providers[key] = new JsonModelGatewayProvider(providerOptions);
+      } else {
+        // AI_BASE_URL is intentionally not guessed. A vendor-compatible API
+        // and AIkefu's custom structured gateway have different wire formats.
+        throw new Error('AI_PROVIDER_REQUIRED_FOR_CONFIGURED_ENDPOINT');
+      }
       // Intent and risk decide whether the system may act automatically. Once
       // an operator has configured their primary decision provider, silently
       // falling back to the demo's permissive synthetic result is unsafe.
@@ -267,6 +371,15 @@ function normalizeDeepSeekEndpoint(rawEndpoint: string): string {
   return endpoint.toString();
 }
 
+function normalizeOpenAICompatibleEndpoint(rawEndpoint: string, style: 'chat-completions' | 'responses'): string {
+  const endpoint = new URL(rawEndpoint);
+  if (endpoint.protocol !== 'https:' && endpoint.hostname !== 'localhost' && endpoint.hostname !== '127.0.0.1') {
+    throw new Error('AI_GATEWAY_HTTPS_REQUIRED');
+  }
+  if (endpoint.pathname === '/' || endpoint.pathname === '') endpoint.pathname = style === 'responses' ? '/v1/responses' : '/v1/chat/completions';
+  return endpoint.toString();
+}
+
 function readSecretFile(path: string | undefined): string | undefined {
   if (!path?.trim()) return undefined;
   let secret: string;
@@ -283,6 +396,20 @@ function deepSeekUsage(value: DeepSeekChatCompletion['usage']): AiProviderRespon
   if (!value || !Number.isSafeInteger(value.prompt_tokens) || Number(value.prompt_tokens) < 0
     || !Number.isSafeInteger(value.completion_tokens) || Number(value.completion_tokens) < 0) return undefined;
   return { inputTokens: Number(value.prompt_tokens), outputTokens: Number(value.completion_tokens) };
+}
+
+function responsesUsage(value: OpenAIResponsesPayload['usage']): AiProviderResponse['usage'] | undefined {
+  if (!value || !Number.isSafeInteger(value.input_tokens) || Number(value.input_tokens) < 0
+    || !Number.isSafeInteger(value.output_tokens) || Number(value.output_tokens) < 0) return undefined;
+  return { inputTokens: Number(value.input_tokens), outputTokens: Number(value.output_tokens) };
+}
+
+function responseText(value: OpenAIResponsesPayload): unknown {
+  if (typeof value.output_text === 'string') return value.output_text;
+  for (const item of value.output ?? []) {
+    for (const content of item.content ?? []) if (typeof content.text === 'string') return content.text;
+  }
+  return undefined;
 }
 
 function deepSeekSystemPrompt(purpose: AiPurpose): string {

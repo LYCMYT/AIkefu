@@ -8,6 +8,7 @@ export * from './reply-policy';
 export * from './reply-strategy';
 export * from './send-guard';
 export * from './safe-social-reply';
+export * from './reply-quality';
 export * from './structured-output';
 export * from './intent-task-bundle';
 export * from './turn-buffer';

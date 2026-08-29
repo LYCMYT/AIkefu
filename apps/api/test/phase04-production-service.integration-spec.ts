@@ -298,12 +298,18 @@ describe('Phase 04 production-service integration', () => {
     };
     const runtime = new ReplyRuntimeService(prisma as never, knowledge as never, {} as never, {} as never, {} as never);
     const shopB = { ...scope, shopId: 'shop-b' };
+    const retrieve = runtime as unknown as { retrieveAndFreezeTaskEvidence(
+      s: typeof scope,
+      job: { id: string; userTurn: { normalizedText: string }; evidences: [] },
+      tasks: Array<{ id: string; intent: string; requiredKnowledge: Array<'STORE'> }>,
+      contexts: Map<string, never>,
+    ): Promise<unknown> };
     await Promise.all([
-      (runtime as unknown as { retrieveAndFreezeEvidence(s: typeof scope, id: string, q: string): Promise<unknown> }).retrieveAndFreezeEvidence(scope, 'reply-buyer-a', '同一个问题'),
-      (runtime as unknown as { retrieveAndFreezeEvidence(s: typeof scope, id: string, q: string): Promise<unknown> }).retrieveAndFreezeEvidence(shopB, 'reply-buyer-b', '同一个问题'),
+      retrieve.retrieveAndFreezeTaskEvidence(scope, { id: 'reply-buyer-a', userTurn: { normalizedText: '同一个问题' }, evidences: [] }, [{ id: 'task-a', intent: 'FAQ_QUERY', requiredKnowledge: ['STORE'] }], new Map<string, never>()),
+      retrieve.retrieveAndFreezeTaskEvidence(shopB, { id: 'reply-buyer-b', userTurn: { normalizedText: '同一个问题' }, evidences: [] }, [{ id: 'task-b', intent: 'FAQ_QUERY', requiredKnowledge: ['STORE'] }], new Map<string, never>()),
     ]);
-    expect(knowledge.search).toHaveBeenCalledWith(scope, { shopId: scope.shopId, query: '同一个问题', topK: 3 });
-    expect(knowledge.search).toHaveBeenCalledWith(shopB, { shopId: shopB.shopId, query: '同一个问题', topK: 3 });
+    expect(knowledge.search).toHaveBeenCalledWith(scope, { shopId: scope.shopId, query: '同一个问题', scope: 'STORE', topK: 3 });
+    expect(knowledge.search).toHaveBeenCalledWith(shopB, { shopId: shopB.shopId, query: '同一个问题', scope: 'STORE', topK: 3 });
     expect(persisted).toEqual(expect.arrayContaining([
       expect.objectContaining({ replyJobId: 'reply-buyer-a', shopId: 'shop-a', knowledgeItemId: 'item-shop-a' }),
       expect.objectContaining({ replyJobId: 'reply-buyer-b', shopId: 'shop-b', knowledgeItemId: 'item-shop-b' }),

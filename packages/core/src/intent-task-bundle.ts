@@ -12,6 +12,7 @@ export interface PlannedTask {
   operation: TaskOperation;
   riskLevel: TaskRiskLevel;
   requiredContext: string[];
+  requiredKnowledge?: Array<'STORE' | 'PRODUCT'>;
   requiredTools: string[];
   blocking: boolean;
 }
@@ -64,6 +65,7 @@ export function createTaskBundle(input: { tasks: PlannedTask[] }): TaskBundle {
       return {
         ...task,
         requiredContext: [...task.requiredContext],
+        requiredKnowledge: task.requiredKnowledge ? [...task.requiredKnowledge] : undefined,
         requiredTools: [...task.requiredTools],
         status: 'OPEN' as const,
       };
@@ -155,6 +157,7 @@ export function coalesceTaskBundles(current: TaskBundle, incoming: TaskBundle): 
     tasks: incoming.tasks.map((task) => ({
       ...task,
       requiredContext: [...task.requiredContext],
+      requiredKnowledge: task.requiredKnowledge ? [...task.requiredKnowledge] : undefined,
       requiredTools: [...task.requiredTools],
     })),
   };

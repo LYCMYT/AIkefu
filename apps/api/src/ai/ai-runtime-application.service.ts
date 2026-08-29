@@ -16,6 +16,7 @@ import type {
   AIInvocationScope,
 } from './ai-invocation.repository';
 import { WorkspaceGateway } from '../websocket/workspace.gateway';
+import { getPromptDefinition } from './prompt-registry';
 
 export const AI_RUNTIME = Symbol('AI_RUNTIME');
 
@@ -55,11 +56,13 @@ export class AiRuntimeApplicationService {
     const startedAt = Date.now();
     const sanitized = sanitizeContext(input.context, input.allowedDataClasses);
     const evidence = cloneEvidence(input.evidence ?? []);
+    const prompt = getPromptDefinition(input.purpose, input.promptVersion);
 
     try {
       const result = await this.runtime.runStructured<T>({
         purpose: input.purpose,
         input: sanitized.value,
+        prompt,
         validate: (value: unknown): value is T => validateStructuredOutput(input.schema, value),
         ...(input.signal ? { signal: input.signal } : {}),
         ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),

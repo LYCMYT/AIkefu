@@ -10,11 +10,18 @@ export type AiPurpose =
 export type AiProviderRequest = {
   purpose: AiPurpose;
   input: unknown;
+  prompt?: AiPrompt;
   signal: AbortSignal;
   attempt: number;
   repair: boolean;
   previousOutput?: unknown;
 };
+
+export type AiPrompt = Readonly<{
+  version: string;
+  system: string;
+  instructions: string;
+}>;
 
 export type AiProviderResponse = {
   output: unknown;
@@ -117,6 +124,7 @@ export class AiRuntime {
   async runStructured<T>(request: {
     purpose: AiPurpose;
     input: unknown;
+    prompt?: AiPrompt;
     validate: (value: unknown) => value is T;
     signal?: AbortSignal;
     timeoutMs?: number;
@@ -211,7 +219,7 @@ export class AiRuntime {
 
   private async invokeWithRetry(
     provider: AiProvider,
-    request: { purpose: AiPurpose; input: unknown; signal?: AbortSignal },
+    request: { purpose: AiPurpose; input: unknown; prompt?: AiPrompt; signal?: AbortSignal },
     timeoutMs?: number,
   ): Promise<AiProviderResponse> {
     let failure: unknown;
@@ -231,6 +239,7 @@ export class AiRuntime {
     request: {
       purpose: AiPurpose;
       input: unknown;
+      prompt?: AiPrompt;
       signal?: AbortSignal;
       attempt: number;
       repair: boolean;
@@ -249,6 +258,7 @@ export class AiRuntime {
       const invocation = provider.invoke({
         purpose: request.purpose,
         input: request.input,
+        ...(request.prompt ? { prompt: request.prompt } : {}),
         signal: controller.signal,
         attempt: request.attempt,
         repair: request.repair,

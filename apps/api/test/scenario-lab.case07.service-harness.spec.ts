@@ -251,11 +251,11 @@ describe('Scenario Lab Case07 production-service evidence chain', () => {
 
     expect(search).toHaveBeenCalledWith(
       { ...scope, shopId: 'shop-mia' },
-      { shopId: 'shop-mia', query: '多久发货？', topK: 3 },
+      { shopId: 'shop-mia', query: '多久发货？', scope: 'STORE', topK: 3 },
     );
     expect(search).toHaveBeenCalledWith(
       { ...scope, shopId: 'shop-pixel' },
-      { shopId: 'shop-pixel', query: '多久发货？', topK: 3 },
+      { shopId: 'shop-pixel', query: '多久发货？', scope: 'STORE', topK: 3 },
     );
 
     const miaJob = harness.rowsFor('replyJob', { ...scope, shopId: 'shop-mia' })[0]!;

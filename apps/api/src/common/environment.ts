@@ -37,8 +37,11 @@ export function validateEnvironment(environment: Record<string, string | undefin
     const value = environment[key];
     if (value !== undefined && value !== 'true' && value !== 'false') errors.push(key);
   }
-  if (environment.AI_PROVIDER && !['deepseek', 'json-gateway'].includes(environment.AI_PROVIDER.trim().toLowerCase())) {
+  if (environment.AI_PROVIDER && !['deepseek', 'json-gateway', 'custom-gateway', 'openai', 'openai-compatible', 'responses'].includes(environment.AI_PROVIDER.trim().toLowerCase())) {
     errors.push('AI_PROVIDER');
+  }
+  if (environment.AI_API_STYLE && !['chat-completions', 'responses'].includes(environment.AI_API_STYLE.trim().toLowerCase())) {
+    errors.push('AI_API_STYLE');
   }
 
   const webOrigin = validHttpUrl(environment.WEB_ORIGIN ?? 'http://localhost:5173', 'WEB_ORIGIN', errors);

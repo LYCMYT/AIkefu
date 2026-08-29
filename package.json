@@ -20,6 +20,8 @@
     "db:deploy": "dotenv -e .env -- pnpm --filter @ai-customer-service/api prisma:deploy",
     "security:secrets": "node scripts/scan-secrets.mjs",
     "ai:probe": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node scripts/probe-ai-runtime.cjs",
+    "ai:eval:offline": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/reply-eval.cli.js --offline-fixture",
+    "ai:eval": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/reply-eval.cli.js --real-provider",
     "release:archive": "node scripts/create-source-archive.mjs"
   },
   "devDependencies": {
