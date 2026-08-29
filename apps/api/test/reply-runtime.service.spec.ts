@@ -146,6 +146,82 @@ describe('ReplyRuntimeService', () => {
     expect(drafts.createWaitingHuman).not.toHaveBeenCalled();
   });
 
+  it('auto-replies to an exact safe greeting without knowledge or a model call', async () => {
+    const prisma = {
+      replyJob: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce({
+            id: 'reply-greeting', status: 'PENDING', mode: 'AUTO', conversationId: 'conversation-a', userTurnId: 'turn-a',
+            sourceLastMessageId: 'message-8', sourceSequence: 8, sourceContextVersion: 5, evidences: [],
+            conversation: { id: 'conversation-a', buyerId: 'buyer-a', contextVersion: 5, humanActive: false, state: 'ACTIVE', syncState: 'CONNECTED', overrideMode: null },
+            userTurn: { normalizedText: '你好！', sourceMessageIdsJson: ['message-8'] },
+          })
+          .mockResolvedValueOnce({
+            id: 'reply-greeting', status: 'GENERATING', sourceContextVersion: 5,
+            conversation: { id: 'conversation-a', contextVersion: 5, humanActive: false, state: 'ACTIVE' },
+          }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      replyEvidence: { createMany: jest.fn() },
+      task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
+      shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
+    };
+    const knowledge = { search: jest.fn() };
+    const runtime = { runStructured: jest.fn() };
+    const drafts = { createWaitingHuman: jest.fn() };
+    const outboxes = { enqueue: jest.fn().mockResolvedValue({ id: 'send-greeting' }) };
+    const service = new ReplyRuntimeService(prisma as never, knowledge as never, runtime as never, drafts as never, outboxes as never);
+
+    await expect(service.process(scope, 'reply-greeting')).resolves.toMatchObject({ status: 'READY_TO_SEND' });
+    expect(knowledge.search).not.toHaveBeenCalled();
+    expect(runtime.runStructured).not.toHaveBeenCalled();
+    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({
+      text: '您好，我在的。您可以咨询商品、库存、订单、物流或售后问题。',
+    }));
+    expect(drafts.createWaitingHuman).not.toHaveBeenCalled();
+  });
+
+  it('keeps an evidenced static shipping question AUTO when a greeting makes the model return UNKNOWN/MEDIUM', async () => {
+    const prisma = {
+      replyJob: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce({
+            id: 'reply-polite-shipping', status: 'PENDING', mode: 'AUTO', conversationId: 'conversation-a', userTurnId: 'turn-a',
+            sourceLastMessageId: 'message-9', sourceSequence: 9, sourceContextVersion: 6, evidences: [],
+            conversation: { id: 'conversation-a', buyerId: 'buyer-a', contextVersion: 6, humanActive: false, state: 'ACTIVE', syncState: 'CONNECTED', overrideMode: null },
+            userTurn: { normalizedText: '你好，请问多久发货？', sourceMessageIdsJson: ['message-9'] },
+          })
+          .mockResolvedValueOnce({
+            id: 'reply-polite-shipping', status: 'GENERATING', sourceContextVersion: 6,
+            conversation: { id: 'conversation-a', contextVersion: 6, humanActive: false, state: 'ACTIVE' },
+          }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      replyEvidence: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
+      shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
+    };
+    const knowledge = { search: jest.fn().mockResolvedValue({ status: 'EVIDENCE', conflictItemIds: [], evidence: [{
+      itemId: 'knowledge-shipping', versionId: 'version-shipping', version: 1, source: 'MANUAL', scope: 'STORE', productId: null,
+      contentSnapshot: { question: '多久发货？', answer: '普通现货商品通常在24小时内发出；预售商品以商品说明为准。' }, retrievalScore: 0.98,
+    }] }) };
+    const runtime = { runStructured: jest.fn()
+      .mockResolvedValueOnce({ output: { tasks: [{ intent: 'UNKNOWN', riskLevel: 'MEDIUM', requiredContext: [], requiredTools: [] }] } })
+      .mockResolvedValueOnce({ output: { riskLevel: 'MEDIUM', recommendedMode: 'ASSIST', reasons: ['uncertain'] } }),
+    };
+    const drafts = { createWaitingHuman: jest.fn().mockResolvedValue({ id: 'draft-shipping' }) };
+    const outboxes = { enqueue: jest.fn().mockResolvedValue({ id: 'send-shipping' }) };
+    const service = new ReplyRuntimeService(prisma as never, knowledge as never, runtime as never, drafts as never, outboxes as never);
+
+    await expect(service.process(scope, 'reply-polite-shipping')).resolves.toMatchObject({ status: 'READY_TO_SEND' });
+    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({
+      text: '普通现货商品通常在24小时内发出；预售商品以商品说明为准。',
+    }));
+    expect(drafts.createWaitingHuman).not.toHaveBeenCalled();
+  });
+
   it('routes a durable Task before replying and sends the Workflow TaskResult through exactly one final Composer', async () => {
     const persistedTaskId = 'reply-task:reply-workflow:reply-workflow:0';
     const prisma = {

@@ -469,7 +469,7 @@ export function FormalKnowledgePage({
           <span className="overline">KNOWLEDGE OPERATIONS</span>
           <h2>知识运营</h2>
           <p>
-            管理店铺与商品知识，分离业务状态和索引状态，保留每次版本切换的证据。
+            管理店铺政策与商品知识，保留每次版本切换的证据；问候、致谢等 5 类安全社交回复由系统内置，不占用知识条目。
           </p>
         </div>
         <div className="admin-header-controls">

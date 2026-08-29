@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { ReplyEvidenceSnapshot } from '@ai-customer-service/contracts';
-import { buildReply, checkForbiddenTerms, createTaskBundle, decideReplyPolicy, executeTaskBundle, resolveContext, sanitizeContext, type TaskBundleExecution, type TaskState } from '@ai-customer-service/core';
+import { buildReply, checkForbiddenTerms, createTaskBundle, decideReplyPolicy, executeTaskBundle, resolveContext, resolveSafeKnowledgeIntent, resolveSafeSocialReply, sanitizeContext, type TaskBundleExecution, type TaskState } from '@ai-customer-service/core';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { AiRuntimeApplicationService } from '../ai/ai-runtime-application.service';
@@ -67,31 +67,58 @@ export class ReplyRuntimeService {
     void this.recordTrace(scope, job, 'USER_TURN', { userTurnId: job.userTurnId, sourceSequence: job.sourceSequence, sourceMessageCount: Array.isArray(job.userTurn.sourceMessageIdsJson) ? job.userTurn.sourceMessageIdsJson.length : 0 });
     this.publishRefresh(scope, job.conversationId, 'REPLY_JOB_STARTED', job.id);
 
-    const lookup = job.evidences.length > 0
+    const safeSocial = resolveSafeSocialReply(job.userTurn.normalizedText);
+    const lookup = safeSocial
+      ? { evidence: [], hasConflict: false, conflictItemIds: [] }
+      : job.evidences.length > 0
       ? { evidence: job.evidences.map(toEvidence), hasConflict: false, conflictItemIds: [] }
       : await this.retrieveAndFreezeEvidence(scope, job.id, job.userTurn.normalizedText);
     const evidence = lookup.evidence;
+    const safeKnowledgeIntent = evidence.length > 0
+      ? resolveSafeKnowledgeIntent(job.userTurn.normalizedText)
+      : undefined;
     void this.recordTrace(scope, job, 'EVIDENCE', { evidenceCount: evidence.length, knowledgeVersionIds: evidence.map((entry) => entry.versionId), conflicted: lookup.hasConflict });
     // Conflicted scoped knowledge is a hard stop.  It must not be included in
     // a planner/risk prompt merely to arrive at the same manual outcome.
     if (lookup.hasConflict) return this.waitForHuman(scope, job, 'CONTEXT_CONFLICT');
     let output: ReplyGeneration | undefined;
     try {
-      const contextSupport = await this.buildContextSupport(scope, job);
-      const intent = await this.runtime.runStructured<{ tasks: IntentPlanTask[] }>(scope, {
-        purpose: 'INTENT_PLANNER', schema: 'IntentPlan', context: { turn: { text: job.userTurn.normalizedText }, ...contextSupport },
-        allowedDataClasses: ['turn', 'conversationSummary', 'customerMemory'], promptVersion: 'reply-intent-plan-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
-      });
-      const plannedTasks = augmentExplicitIntentTasks(job.userTurn.normalizedText, intent.output.tasks);
-      const risk = await this.runtime.runStructured<{ riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; reasons: string[]; recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' }>(scope, {
-        purpose: 'RISK_CLASSIFIER', schema: 'RiskResult',
-        context: { tasks: plannedTasks.map((task) => ({ intent: task.intent, riskLevel: task.riskLevel })) },
-        allowedDataClasses: ['tasks'], promptVersion: 'reply-risk-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
-      });
-      void this.recordTrace(scope, job, 'AI_USAGE', { invocations: [intent, risk].map((result) => ({ invocationId: result.invocationId, provider: result.provider, model: result.model, fallbackUsed: result.fallbackUsed })) });
+      const contextSupport = safeSocial ? {} : await this.buildContextSupport(scope, job);
+      let plannedTasks: IntentPlanTask[];
+      let classifierRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+      let recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' | undefined;
+      if (safeSocial) {
+        plannedTasks = [{
+          intent: `SAFE_SOCIAL_${safeSocial.intent}`,
+          riskLevel: 'LOW', requiredContext: [], requiredTools: [],
+        }];
+        classifierRisk = 'LOW';
+        recommendedMode = 'AUTO';
+        void this.recordTrace(scope, job, 'BUILT_IN_SAFE_REPLY', { intent: safeSocial.intent });
+      } else {
+        const intent = await this.runtime.runStructured<{ tasks: IntentPlanTask[] }>(scope, {
+          purpose: 'INTENT_PLANNER', schema: 'IntentPlan', context: { turn: { text: job.userTurn.normalizedText }, ...contextSupport },
+          allowedDataClasses: ['turn', 'conversationSummary', 'customerMemory'], promptVersion: 'reply-intent-plan-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
+        });
+        const modelPlannedTasks = augmentExplicitIntentTasks(job.userTurn.normalizedText, intent.output.tasks);
+        const safeKnowledgeAuto = Boolean(safeKnowledgeIntent && modelPlannedTasks.every((task) =>
+          task.intent === 'UNKNOWN' || task.intent === safeKnowledgeIntent));
+        plannedTasks = safeKnowledgeAuto
+          ? [{ intent: safeKnowledgeIntent!, riskLevel: 'LOW', requiredContext: [], requiredTools: [] }]
+          : modelPlannedTasks;
+        const risk = await this.runtime.runStructured<{ riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; reasons: string[]; recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' }>(scope, {
+          purpose: 'RISK_CLASSIFIER', schema: 'RiskResult',
+          context: { tasks: plannedTasks.map((task) => ({ intent: task.intent, riskLevel: task.riskLevel })) },
+          allowedDataClasses: ['tasks'], promptVersion: 'reply-risk-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
+        });
+        classifierRisk = safeKnowledgeAuto ? 'LOW' : risk.output.riskLevel;
+        recommendedMode = safeKnowledgeAuto ? 'AUTO' : conservativeRecommendation(risk.output.recommendedMode);
+        if (safeKnowledgeAuto) void this.recordTrace(scope, job, 'SAFE_KNOWLEDGE_POLICY', { intent: safeKnowledgeIntent, evidenceCount: evidence.length });
+        void this.recordTrace(scope, job, 'AI_USAGE', { invocations: [intent, risk].map((result) => ({ invocationId: result.invocationId, provider: result.provider, model: result.model, fallbackUsed: result.fallbackUsed })) });
+      }
       const taskBundle = createTaskBundle({
         tasks: plannedTasks.slice(0, 4).map((task, index) => ({
-          id: `${job.id}:${index}`, intent: task.intent, operation: 'READ' as const, riskLevel: maxRisk(task.riskLevel, risk.output.riskLevel),
+          id: `${job.id}:${index}`, intent: task.intent, operation: 'READ' as const, riskLevel: maxRisk(task.riskLevel, classifierRisk),
           requiredContext: task.requiredContext, requiredTools: task.requiredTools, blocking: task.requiredTools.length > 0,
         })),
       });
@@ -135,10 +162,16 @@ export class ReplyRuntimeService {
           return { status: 'AMBIGUOUS' as const, errorCode: `CONTEXT_${context.status}` };
         }
         const dynamicReplyText = context?.entity ? dynamicReply(task.intent, context.entity as unknown as Record<string, unknown>) : undefined;
-        if (evidence.length === 0 && !dynamicReplyText) return { status: 'FAILED' as const, errorCode: 'NO_EVIDENCE' };
+        const builtInReplyText = safeSocial && task.intent === `SAFE_SOCIAL_${safeSocial.intent}` ? safeSocial.text : undefined;
+        const deterministicReplyText = builtInReplyText ?? dynamicReplyText;
+        if (evidence.length === 0 && !deterministicReplyText) return { status: 'FAILED' as const, errorCode: 'NO_EVIDENCE' };
         return {
           status: 'RESOLVED' as const,
-          facts: { reply: dynamicReplyText ?? evidence[0]!.contentSnapshot.answer, ...(context?.entity ? { context: context.entity } : {}) },
+          facts: {
+            reply: deterministicReplyText ?? evidence[0]!.contentSnapshot.answer,
+            ...(builtInReplyText ? { source: 'SYSTEM_SAFE_REPLY' } : {}),
+            ...(context?.entity ? { context: context.entity } : {}),
+          },
           evidence: evidence.map((entry) => entry.versionId),
         };
       });
@@ -178,7 +211,7 @@ export class ReplyRuntimeService {
         hasPartialFailure: execution.tasks.some((task) => task.status === 'FAILED' || task.status === 'AMBIGUOUS'),
         userRequestedHuman: transferRequested(job.userTurn.normalizedText, settings?.transferKeywordsJson),
         hasConflict: lookup.hasConflict,
-        recommendedMode: conservativeRecommendation(risk.output.recommendedMode),
+        recommendedMode,
       });
       void this.recordTrace(scope, job, 'REPLY_POLICY', { mode: policy.mode, reasons: policy.reasons, evidenceCount: evidence.length, taskStatuses: execution.tasks.map((task) => task.status) });
       if (policy.mode === 'MANUAL') {

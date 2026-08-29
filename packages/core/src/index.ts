@@ -7,6 +7,7 @@ export * from './reorder-buffer';
 export * from './reply-policy';
 export * from './reply-strategy';
 export * from './send-guard';
+export * from './safe-social-reply';
 export * from './structured-output';
 export * from './intent-task-bundle';
 export * from './turn-buffer';
