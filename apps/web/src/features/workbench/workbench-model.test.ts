@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation } from '../../api';
-import { conversationAiExplanation, filterConversations } from './workbench-model';
+import { conversationAiExplanation, filterConversations, shouldClearConversationSelection } from './workbench-model';
 
 const conversations: Conversation[] = [
   { id: 'unread', buyer: { id: 'buyer-a', displayName: '小林' }, unreadCount: 2, humanActive: false },
@@ -23,5 +23,11 @@ describe('workbench conversation filters', () => {
     expect(conversationAiExplanation({ effectiveMode: 'ASSIST' }, { aiMode: 'AUTO_ALLOWED', aiReadiness: 'READY' })).toBe('AI 已开启，本轮因风险或证据不足需要人工确认');
     expect(conversationAiExplanation({}, { aiMode: 'AUTO_ALLOWED', aiReadiness: 'PREPARING', settingsConfirmed: false })).toBe('请先确认基础设置，完成后 AI 才能自动回复');
     expect(conversationAiExplanation({}, { aiMode: 'MANUAL_ONLY', aiReadiness: 'OFF' })).toBe('店铺 AI 已关闭，新消息仅由人工处理');
+  });
+
+  it('keeps the selected conversation while a realtime list refresh is in flight', () => {
+    expect(shouldClearConversationSelection(true, 'conversation-a', [])).toBe(false);
+    expect(shouldClearConversationSelection(false, 'conversation-a', [{ id: 'conversation-a' }])).toBe(false);
+    expect(shouldClearConversationSelection(false, 'conversation-a', [{ id: 'conversation-b' }])).toBe(true);
   });
 });

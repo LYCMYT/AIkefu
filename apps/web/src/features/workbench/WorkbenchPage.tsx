@@ -129,7 +129,7 @@ type WorkbenchConversationMode = viewModel.WorkbenchConversationMode;
 
 import { Avatar, MessageBubble, ContextProduct, ContextOrder, DeveloperTracePanel } from '../workbench/components';
 import { ConfirmDialog, Drawer, SegmentedTabs } from '../../components/ui/primitives';
-import { conversationAiExplanation, conversationAiState, filterConversations, type ConversationFilter } from './workbench-model';
+import { conversationAiExplanation, conversationAiState, filterConversations, shouldClearConversationSelection, type ConversationFilter } from './workbench-model';
 import { EmptyStoreHome } from './EmptyStoreHome';
 import { StoreContextMenu } from './StoreContextMenu';
 
@@ -200,6 +200,7 @@ function ShopWorkbenchPage({ token, shops, activeShopId, onShopChange, refreshKe
   const [developerTraceLoading, setDeveloperTraceLoading] = useState(false);
   const [developerTraceError, setDeveloperTraceError] = useState('');
   const queryInputRef = useRef<HTMLInputElement>(null);
+  const resourceScopeRef = useRef('');
 
   useEffect(() => {
     const focusConversationSearch = (event: KeyboardEvent) => {
@@ -224,16 +225,25 @@ function ShopWorkbenchPage({ token, shops, activeShopId, onShopChange, refreshKe
   useEffect(() => {
     if (!shopId) return;
     let mounted = true;
+    const resourceScope = `${token}:${shopId}`;
+    const scopeChanged = resourceScopeRef.current !== resourceScope;
+    resourceScopeRef.current = resourceScope;
     setLoading(true);
     setResourceError('');
-    setConversations([]);
-    setProducts([]);
-    setLearningJob(undefined);
-    setOrders([]);
-    setMemories([]);
-    setDraft(null);
-    setDraftText('');
-    setDraftEditType('STYLE_EDIT');
+    if (scopeChanged) {
+      setConversations([]);
+      setProducts([]);
+      setLearningJob(undefined);
+      setOrders([]);
+      setMemories([]);
+      setDraft(null);
+      setDraftText('');
+      setDraftEditType('STYLE_EDIT');
+      setSelectedConversationId('');
+      setSelectedConversation(undefined);
+      setDetail(undefined);
+      setLocalMessages([]);
+    }
     Promise.all([getConversations(token, shopId), getProducts(token, shopId), getProductLearningJobs(token, shopId).catch(() => [])])
       .then(([nextConversations, nextProducts, learningJobs]) => {
         if (!mounted) return;
@@ -261,8 +271,8 @@ function ShopWorkbenchPage({ token, shops, activeShopId, onShopChange, refreshKe
       const name = buyerName(conversation.buyer);
       return `${name} ${text} ${conversation.externalConversationId ?? ''}`.toLowerCase().includes(query.toLowerCase());
     });
-    if (selectedConversationId && !visible.some((conversation) => conversation.id === selectedConversationId)) setSelectedConversationId('');
-  }, [conversations, query, selectedConversationId]);
+    if (shouldClearConversationSelection(loading, selectedConversationId, visible)) setSelectedConversationId('');
+  }, [conversations, loading, query, selectedConversationId]);
 
   useEffect(() => {
     setSelectedConversation(conversations.find((conversation) => conversation.id === selectedConversationId));

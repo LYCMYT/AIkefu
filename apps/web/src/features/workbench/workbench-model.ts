@@ -59,3 +59,12 @@ export function filterConversations(conversations: Conversation[], query: string
     return `${buyerName(conversation.buyer)} ${conversation.externalConversationId ?? ''} ${message}`.toLocaleLowerCase('zh-CN').includes(normalizedQuery);
   });
 }
+
+export function shouldClearConversationSelection(
+  loading: boolean,
+  selectedConversationId: string,
+  visibleConversations: Array<Pick<Conversation, 'id'>>,
+): boolean {
+  if (loading || !selectedConversationId) return false;
+  return !visibleConversations.some((conversation) => conversation.id === selectedConversationId);
+}
