@@ -64,8 +64,12 @@ test('final visual evidence covers the real operational and scenario surfaces', 
 
   await page.goto(shopPath);
   await expect(page.getByRole('heading', { level: 1, name: '店铺工作台' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('button', { name: new RegExp(message) })).toBeVisible({ timeout: 45_000 });
-  await page.getByRole('button', { name: new RegExp(message) }).click();
+  // The scheduled welcome can legitimately become the latest conversation
+  // preview before this page loads. Select the sole real conversation, then
+  // prove that the buyer message itself is present in the durable transcript.
+  const conversation = page.getByRole('region', { name: '会话列表' }).locator('.conversation-row').first();
+  await expect(conversation).toBeVisible({ timeout: 45_000 });
+  await conversation.click();
   await expect(page.getByRole('region', { name: '聊天与消息' }).getByText(message, { exact: true })).toBeVisible({ timeout: 30_000 });
   await expectConnected(page);
   await expectNoGlobalOverflow(page);
