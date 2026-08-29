@@ -5,6 +5,8 @@ export type ConversationFilter = 'all' | 'unread' | 'taken_over';
 
 export type ConversationAiDisplayState = '生成中' | '已自动发送' | '已停止' | '需要人工';
 
+export const CONVERSATION_SNAPSHOT_FALLBACK_MS = 3_000;
+
 type ShopAiContext = {
   aiMode?: string;
   aiReadiness?: string;

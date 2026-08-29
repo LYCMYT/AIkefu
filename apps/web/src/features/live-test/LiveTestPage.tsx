@@ -50,6 +50,7 @@ import {
   deriveCurrentTurnLifecycle,
   eventConversationId,
   isVisibleMessage,
+  liveTestRefreshKind,
   mergeLiveMessages,
   resolveContextProduct,
   shouldRefreshLiveTest,
@@ -227,6 +228,7 @@ export function LiveTestPage({
   const [editingText, setEditingText] = useState('');
   const [pendingRecallId, setPendingRecallId] = useState('');
   const requestGeneration = useRef(0);
+  const loadedScopeRef = useRef('');
   const buyerMessagesRef = useRef<HTMLDivElement>(null);
   const storeMessagesRef = useRef<HTMLDivElement>(null);
 
@@ -234,11 +236,13 @@ export function LiveTestPage({
     if (shopId && activeShopId !== shopId) onShopChange(shopId);
   }, [activeShopId, onShopChange, shopId]);
 
-  const loadShop = useCallback(async () => {
+  const loadShop = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!shopId) return;
     const generation = ++requestGeneration.current;
-    setLoading(true);
-    setNotice(undefined);
+    if (!background) {
+      setLoading(true);
+      setNotice(undefined);
+    }
     try {
       const [nextBuyers, nextProducts, nextConversations] = await Promise.all([
         getBuyers(token, shopId),
@@ -252,22 +256,32 @@ export function LiveTestPage({
       setBuyerId((current) => nextBuyers.some((buyer) => buyer.id === current) ? current : (nextBuyers[0]?.id ?? ''));
       setSelectedProductId((current) => nextProducts.some((product) => product.id === current) ? current : (nextProducts[0]?.id ?? ''));
     } catch (error) {
-      if (generation === requestGeneration.current) setNotice({ text: errorMessage(error), tone: 'error' });
+      if (generation === requestGeneration.current && !background) setNotice({ text: errorMessage(error), tone: 'error' });
     } finally {
+      // A background refresh may supersede the initial request. Whichever
+      // request is newest owns the snapshot and must also settle its loading
+      // state, otherwise the buyer pane can remain stuck behind a spinner.
       if (generation === requestGeneration.current) setLoading(false);
     }
   }, [shopId, token]);
 
   useEffect(() => {
-    setBuyerId('');
-    setConversationId('');
-    setDetail(undefined);
-    setOrders([]);
-    setOptimisticMessages([]);
-    setMessageOverrides({});
-    setProductPinned(false);
-    void loadShop();
-  }, [loadShop, refreshKey]);
+    const scope = `${token}:${shopId}`;
+    const refreshKind = liveTestRefreshKind(loadedScopeRef.current, token, shopId);
+    loadedScopeRef.current = scope;
+    if (refreshKind === 'initialize') {
+      setBuyerId('');
+      setConversationId('');
+      setDetail(undefined);
+      setOrders([]);
+      setOptimisticMessages([]);
+      setMessageOverrides({});
+      setProductPinned(false);
+      void loadShop();
+      return;
+    }
+    void loadShop({ background: true });
+  }, [loadShop, refreshKey, shopId, token]);
 
   useEffect(() => {
     const matching = conversations.find((conversation) => conversation.buyerId === buyerId);

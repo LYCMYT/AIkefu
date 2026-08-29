@@ -3,6 +3,7 @@ import type { Conversation, Message, Product } from '../../api';
 import {
   derivePipelineStages,
   deriveCurrentTurnLifecycle,
+  liveTestRefreshKind,
   mergeLiveMessages,
   resolveContextProduct,
   shouldRefreshLiveTest,
@@ -98,5 +99,11 @@ describe('Live Test projection model', () => {
     expect(shouldRefreshLiveTest({ eventType: 'PRODUCT_LEARNING_UPDATED', payload: { shopId: 'shop-a' } }, 'shop-a', 'conversation-a')).toBe(true);
     expect(shouldRefreshLiveTest({ eventType: 'MESSAGE_RECEIVED', payload: { shopId: 'shop-b', conversationId: 'conversation-a' } }, 'shop-a', 'conversation-a')).toBe(false);
     expect(shouldRefreshLiveTest({ eventType: 'KNOWLEDGE_UPDATED', payload: { shopId: 'shop-a' } }, 'shop-a', 'conversation-a')).toBe(false);
+  });
+
+  it('keeps same-shop realtime refreshes in the background without resetting operator state', () => {
+    expect(liveTestRefreshKind('', 'token-a', 'shop-a')).toBe('initialize');
+    expect(liveTestRefreshKind('token-a:shop-a', 'token-a', 'shop-a')).toBe('background');
+    expect(liveTestRefreshKind('token-a:shop-a', 'token-a', 'shop-b')).toBe('initialize');
   });
 });

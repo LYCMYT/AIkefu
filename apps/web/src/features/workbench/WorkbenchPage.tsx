@@ -129,7 +129,7 @@ type WorkbenchConversationMode = viewModel.WorkbenchConversationMode;
 
 import { Avatar, MessageBubble, ContextProduct, ContextOrder, DeveloperTracePanel } from '../workbench/components';
 import { ConfirmDialog, Drawer, SegmentedTabs } from '../../components/ui/primitives';
-import { conversationAiExplanation, conversationAiState, filterConversations, shouldClearConversationSelection, type ConversationFilter } from './workbench-model';
+import { CONVERSATION_SNAPSHOT_FALLBACK_MS, conversationAiExplanation, conversationAiState, filterConversations, shouldClearConversationSelection, type ConversationFilter } from './workbench-model';
 import { EmptyStoreHome } from './EmptyStoreHome';
 import { StoreContextMenu } from './StoreContextMenu';
 
@@ -201,6 +201,7 @@ function ShopWorkbenchPage({ token, shops, activeShopId, onShopChange, refreshKe
   const [developerTraceError, setDeveloperTraceError] = useState('');
   const queryInputRef = useRef<HTMLInputElement>(null);
   const resourceScopeRef = useRef('');
+  const conversationRequestVersionRef = useRef(0);
 
   useEffect(() => {
     const focusConversationSearch = (event: KeyboardEvent) => {
@@ -228,6 +229,7 @@ function ShopWorkbenchPage({ token, shops, activeShopId, onShopChange, refreshKe
     const resourceScope = `${token}:${shopId}`;
     const scopeChanged = resourceScopeRef.current !== resourceScope;
     resourceScopeRef.current = resourceScope;
+    const conversationRequestVersion = ++conversationRequestVersionRef.current;
     setLoading(true);
     setResourceError('');
     if (scopeChanged) {
@@ -247,7 +249,7 @@ function ShopWorkbenchPage({ token, shops, activeShopId, onShopChange, refreshKe
     Promise.all([getConversations(token, shopId), getProducts(token, shopId), getProductLearningJobs(token, shopId).catch(() => [])])
       .then(([nextConversations, nextProducts, learningJobs]) => {
         if (!mounted) return;
-        setConversations(nextConversations);
+        if (conversationRequestVersionRef.current === conversationRequestVersion) setConversations(nextConversations);
         setProducts(nextProducts);
         setLearningJob(learningJobs[0]);
       })
@@ -264,6 +266,39 @@ function ShopWorkbenchPage({ token, shops, activeShopId, onShopChange, refreshKe
       mounted = false;
     };
   }, [refreshKey, shopId, token]);
+
+  // WebSocket events remain the primary refresh path. This bounded visible-page
+  // poll repairs the navigation window where a commit event can arrive after
+  // the old page disconnects but before this lazy route subscribes.
+  useEffect(() => {
+    if (!shopId) return;
+    let disposed = false;
+    let requestInFlight = false;
+    const refreshConversationList = async () => {
+      if (disposed || requestInFlight || document.visibilityState === 'hidden') return;
+      requestInFlight = true;
+      const conversationRequestVersion = ++conversationRequestVersionRef.current;
+      try {
+        const nextConversations = await getConversations(token, shopId);
+        if (!disposed && conversationRequestVersionRef.current === conversationRequestVersion) setConversations(nextConversations);
+      } catch {
+        // Keep the latest visible snapshot; the normal resource loader owns
+        // user-facing errors and the next interval can recover transient loss.
+      } finally {
+        requestInFlight = false;
+      }
+    };
+    const interval = window.setInterval(() => { void refreshConversationList(); }, CONVERSATION_SNAPSHOT_FALLBACK_MS);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshConversationList();
+    };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [shopId, token]);
 
   useEffect(() => {
     const visible = conversations.filter((conversation) => {

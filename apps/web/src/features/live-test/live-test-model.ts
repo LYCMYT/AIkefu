@@ -18,6 +18,10 @@ export interface CurrentTurnLifecycle {
   response?: Message;
 }
 
+export function liveTestRefreshKind(previousScope: string, token: string, shopId: string): 'initialize' | 'background' {
+  return previousScope === `${token}:${shopId}` ? 'background' : 'initialize';
+}
+
 const removedStatuses = new Set(['RECALLED', 'DELETED']);
 const replyRoles = new Set(['ASSISTANT', 'AI', 'HUMAN']);
 

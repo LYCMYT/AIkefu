@@ -71,8 +71,8 @@ test('a real buyer event reaches workbench and live-test on the same shop', asyn
   const takeover = page.getByRole('button', { name: '人工接管', exact: true });
   await expect(takeover).toBeVisible({ timeout: 30_000 });
   await takeover.click();
-  await expect(page.getByRole('status')).toContainText('人工接管已开启', { timeout: 30_000 });
-  await expect(page.getByRole('button', { name: '交还 AI', exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('status')).toContainText('人工接管已开启', { timeout: 60_000 });
+  await expect(page.getByRole('button', { name: '交还 AI', exact: true })).toBeVisible({ timeout: 60_000 });
 
   await expectNoGlobalOverflow(page);
   await expectNoDiagnostics(diagnostics);

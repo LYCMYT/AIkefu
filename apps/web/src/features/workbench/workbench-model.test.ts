@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation } from '../../api';
-import { conversationAiExplanation, filterConversations, shouldClearConversationSelection } from './workbench-model';
+import { CONVERSATION_SNAPSHOT_FALLBACK_MS, conversationAiExplanation, filterConversations, shouldClearConversationSelection } from './workbench-model';
 
 const conversations: Conversation[] = [
   { id: 'unread', buyer: { id: 'buyer-a', displayName: '小林' }, unreadCount: 2, humanActive: false },
@@ -29,5 +29,10 @@ describe('workbench conversation filters', () => {
     expect(shouldClearConversationSelection(true, 'conversation-a', [])).toBe(false);
     expect(shouldClearConversationSelection(false, 'conversation-a', [{ id: 'conversation-a' }])).toBe(false);
     expect(shouldClearConversationSelection(false, 'conversation-a', [{ id: 'conversation-b' }])).toBe(true);
+  });
+
+  it('uses a bounded fallback refresh when a websocket event is missed during navigation', () => {
+    expect(CONVERSATION_SNAPSHOT_FALLBACK_MS).toBeGreaterThanOrEqual(2_000);
+    expect(CONVERSATION_SNAPSHOT_FALLBACK_MS).toBeLessThanOrEqual(5_000);
   });
 });
