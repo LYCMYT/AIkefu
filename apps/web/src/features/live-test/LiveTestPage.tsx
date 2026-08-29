@@ -226,8 +226,8 @@ export function LiveTestPage({
   const [editingText, setEditingText] = useState('');
   const [pendingRecallId, setPendingRecallId] = useState('');
   const requestGeneration = useRef(0);
-  const buyerMessagesEndRef = useRef<HTMLDivElement>(null);
-  const storeMessagesEndRef = useRef<HTMLDivElement>(null);
+  const buyerMessagesRef = useRef<HTMLDivElement>(null);
+  const storeMessagesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (shopId && activeShopId !== shopId) onShopChange(shopId);
@@ -344,8 +344,10 @@ export function LiveTestPage({
   const storeCanSend = Boolean(conversationId && storeComposer.trim() && (selectedConversation?.humanActive || currentDraft?.status === 'WAITING_HUMAN'));
 
   useEffect(() => {
-    buyerMessagesEndRef.current?.scrollIntoView({ block: 'nearest' });
-    storeMessagesEndRef.current?.scrollIntoView({ block: 'nearest' });
+    const buyerMessages = buyerMessagesRef.current;
+    const storeMessages = storeMessagesRef.current;
+    if (buyerMessages) buyerMessages.scrollTop = buyerMessages.scrollHeight;
+    if (storeMessages) storeMessages.scrollTop = storeMessages.scrollHeight;
   }, [messages.length]);
 
   const appendOptimistic = (message: Message) => setOptimisticMessages((current) => [...current, message]);
@@ -544,7 +546,7 @@ export function LiveTestPage({
       <header className="live-test-header">
         <div>
           <span className="live-eyebrow">REAL-TIME INTEGRATION</span>
-          <h1 id="live-test-title">实时联调</h1>
+          <h2 id="live-test-title">实时联调</h2>
           <p>买家端与店铺端共享同一 Workspace、同一会话和同一服务端事实。</p>
         </div>
         <div className="live-test-header-actions">
@@ -574,7 +576,7 @@ export function LiveTestPage({
             <div className="live-phone-top"><span>09:41</span><span>● ● ▰</span></div>
             <header><span aria-hidden="true" className="live-avatar">{buyerLabel(selectedBuyer).slice(0, 1)}</span><div><strong>{shop.name}</strong><small><i /> 在线 · 智能客服</small></div></header>
             <label className="live-buyer-picker"><span>当前买家</span><select aria-label="选择模拟买家" value={buyerId} onChange={(event) => setBuyerId(event.currentTarget.value)}>{buyers.length === 0 ? <option value="">暂无买家</option> : buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyerLabel(buyer)}</option>)}</select></label>
-            <div className="live-phone-messages" aria-live="polite">
+            <div ref={buyerMessagesRef} className="live-phone-messages" aria-live="polite">
               {loading ? <div className="live-chat-empty"><RefreshCw aria-hidden="true" className="is-spinning" size={22} /><strong>正在同步会话</strong></div> : messages.length === 0 ? <div className="live-chat-empty"><MessageSquareText aria-hidden="true" size={26} /><strong>开始一次真实咨询</strong><small>发送后可在右侧观察接收、AI处理和回执。</small></div> : messages.map((message) => (
                 <div className="live-buyer-message-wrap" key={message.id}>
                   <MessageCard compact message={message} />
@@ -582,7 +584,6 @@ export function LiveTestPage({
                   {editingId === message.id && <div className="live-inline-editor"><label><span className="live-sr-only">编辑消息</span><textarea aria-label="编辑买家消息" rows={2} value={editingText} onChange={(event) => setEditingText(event.currentTarget.value)} /></label><div><button type="button" onClick={() => setEditingId('')}>取消</button><button type="button" onClick={() => void saveBuyerEdit()} disabled={!editingText.trim() || Boolean(busyAction)}>保存</button></div></div>}
                 </div>
               ))}
-              <div ref={buyerMessagesEndRef} />
             </div>
             <div className="live-phone-events">
               <label><Package aria-hidden="true" size={14} /><select aria-label="选择要发送的商品" value={currentProduct?.id ?? selectedProductId} onChange={(event) => { setSelectedProductId(event.currentTarget.value); setProductPinned(true); }}><option value="">暂无商品</option>{products.map((product) => <option key={product.id} value={product.id}>{productLabel(product)}</option>)}</select><button type="button" onClick={() => void sendProductCard()} disabled={!currentProduct || !buyerId || Boolean(busyAction)}>发商品卡</button></label>
@@ -609,10 +610,9 @@ export function LiveTestPage({
 
             <section className="live-store-chat" aria-label="店铺聊天">
               <header><div><span className="live-avatar is-store-avatar"><UserRound aria-hidden="true" size={15} /></span><span><strong>{buyerLabel(selectedBuyer)}</strong><small>{selectedConversation ? `会话 ${selectedConversation.id.slice(0, 8)} · ${selectedConversation.effectiveMode ?? selectedConversation.mode ?? '策略继承店铺'}` : '等待买家发送第一条消息'}</small></span></div>{selectedConversation && <button className={selectedConversation.humanActive ? 'is-human-active' : ''} type="button" onClick={() => void toggleHumanTakeover()} disabled={busyAction === 'takeover'}>{selectedConversation.humanActive ? '交还 AI' : '人工接管'}</button>}</header>
-              <div className="live-store-messages" aria-live="polite">
+              <div ref={storeMessagesRef} className="live-store-messages" aria-live="polite">
                 {messages.length === 0 ? <div className="live-chat-empty"><Bot aria-hidden="true" size={28} /><strong>等待买家消息</strong><small>买家端发送后，这里会通过 WebSocket 与 REST 快照自动同步。</small></div> : messages.map((message) => <MessageCard key={message.id} message={message} />)}
                 {currentDraft && isVisibleMessage({ id: currentDraft.id, status: currentDraft.status } as Message) && currentDraft.status !== 'SENT' && <article className="live-draft-card"><div><Bot aria-hidden="true" size={16} /><strong>AI草稿</strong><span>{currentDraft.status}</span></div><p>{currentDraft.humanFinal ?? currentDraft.aiDraft}</p></article>}
-                <div ref={storeMessagesEndRef} />
               </div>
               <div className="live-store-composer"><textarea aria-label="店铺回复" placeholder={selectedConversation?.humanActive ? '输入人工回复…' : currentDraft ? '编辑并发送当前草稿…' : '人工接管后可直接回复'} rows={2} value={storeComposer} onChange={(event) => setStoreComposer(event.currentTarget.value)} /><button type="button" onClick={() => void sendStoreReply()} disabled={!storeCanSend || Boolean(busyAction)}><Send aria-hidden="true" size={15} />发送回复</button>{!selectedConversation?.humanActive && !currentDraft && <small>当前没有可发送草稿；可先人工接管。</small>}</div>
             </section>

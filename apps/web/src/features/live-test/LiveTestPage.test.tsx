@@ -28,6 +28,8 @@ describe('LiveTestPage', () => {
     const html = renderToStaticMarkup(<LiveTestPage activeShopId={shop.id} onShopChange={() => undefined} refreshKey={0} shops={[shop]} socketStatus="connected" token="token" />);
 
     expect(html).toContain('实时联调');
+    expect(html).toContain('<h2 id="live-test-title">实时联调</h2>');
+    expect(html).not.toContain('<h1');
     expect(html).toContain('role="tablist"');
     expect(html).toContain('aria-label="买家消息"');
     expect(html).toContain('aria-label="选择要发送的商品"');
