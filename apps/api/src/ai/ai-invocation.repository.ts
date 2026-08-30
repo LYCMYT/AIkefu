@@ -37,6 +37,8 @@ export type CompleteAIInvocationInput = {
   inputTokens?: number;
   outputTokens?: number;
   fallbackUsed?: boolean;
+  provider?: string;
+  model?: string;
 };
 
 export type RecordAIUsageInput = {
@@ -118,6 +120,8 @@ export class PrismaAIInvocationRepository implements AIInvocationRepository {
         ...(input.inputTokens === undefined ? {} : { inputTokens: input.inputTokens }),
         ...(input.outputTokens === undefined ? {} : { outputTokens: input.outputTokens }),
         ...(input.fallbackUsed === undefined ? {} : { fallbackUsed: input.fallbackUsed }),
+        ...(input.provider === undefined ? {} : { provider: input.provider }),
+        ...(input.model === undefined ? {} : { model: input.model }),
       },
     });
     if (changed.count !== 1) throw missingInvocation();

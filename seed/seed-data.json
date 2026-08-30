@@ -808,7 +808,7 @@
       "businessStatus": "ENABLED",
       "indexStatus": "READY",
       "question": "支持Windows吗？",
-      "answer": "大部分产品支持Windows，具体以商品说明为准。"
+      "answer": "是否支持 Windows 取决于具体商品和系统版本，请发送商品卡或商品名称后确认。"
     },
     {
       "key": "k020",
@@ -895,8 +895,8 @@
       "sourceType": "MANUAL",
       "businessStatus": "ENABLED",
       "indexStatus": "READY",
-      "question": "能开发票吗？",
-      "answer": "可否开票及票种需人工根据订单确认。"
+      "question": "支持增值税专用发票吗？",
+      "answer": "开票类型和所需抬头资料需结合订单与店铺规则，由人工确认。"
     },
     {
       "key": "k028",
@@ -1203,8 +1203,8 @@
       "sourceType": "MANUAL",
       "businessStatus": "ENABLED",
       "indexStatus": "READY",
-      "question": "还能买吗？",
-      "answer": "当前商品已下架，不参与推荐。"
+      "question": "下架商品的历史订单还能申请售后吗？",
+      "answer": "已购买订单仍可按订单页和店铺售后政策申请处理；是否可继续购买以实时商品状态为准。"
     },
     {
       "key": "k056",
@@ -1226,7 +1226,7 @@
       "businessStatus": "ENABLED",
       "indexStatus": "READY",
       "question": "连接方式有哪些？",
-      "answer": "支持蓝牙、2.4G和有线三模。"
+      "answer": "支持蓝牙、2.4G和有线三模连接。"
     },
     {
       "key": "k058",
@@ -1423,8 +1423,8 @@
       "sourceType": "MANUAL",
       "businessStatus": "ENABLED",
       "indexStatus": "READY",
-      "question": "有几个颜色？",
-      "answer": "当前有白色和黑色。"
+      "question": "有哪些颜色规格？",
+      "answer": "商品规格包含黑色和白色，具体可售颜色与库存以实时 SKU 信息为准。"
     },
     {
       "key": "k076",

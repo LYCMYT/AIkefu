@@ -100,5 +100,5 @@ export type ReplyEvidenceSnapshot = {
 
 export type KnowledgeRetrievalResult =
   | { status: 'EVIDENCE'; evidence: ReplyEvidenceSnapshot[]; conflictItemIds: string[] }
-  | { status: 'NO_EVIDENCE' | 'CONFLICTED'; evidence: []; conflictItemIds: string[] }
+  | { status: 'NO_EVIDENCE' | 'AMBIGUOUS' | 'CONFLICTED'; evidence: []; conflictItemIds: string[] }
   | { status: 'DYNAMIC_FACT_REQUIRED'; evidence: []; conflictItemIds: [] };

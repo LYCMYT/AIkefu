@@ -65,6 +65,9 @@ export function mergeExplicitIntentTasks(
   const explicitTasks = inferExplicitIntentTasks(text);
   const explicitRecommendation = explicitTasks.some((entry) => entry.intent === 'PRODUCT_RECOMMENDATION');
   const explicitProductQuery = explicitTasks.some((entry) => entry.intent === 'PRODUCT_QUERY');
+  const explicitInventory = explicitTasks.some((entry) => entry.intent === 'INVENTORY_QUERY');
+  const explicitShipping = explicitTasks.some((entry) => entry.intent === 'SHIPPING_POLICY');
+  const explicitOrder = explicitTasks.some((entry) => intentFamily(entry.intent) === 'ORDER');
   const merged = modelTasks
     .filter((entry) => entry.intent !== 'UNKNOWN')
     // “喜欢宽松版型的键盘” is a catalogue recommendation request, not a
@@ -72,6 +75,15 @@ export function mergeExplicitIntentTasks(
     // PRODUCT_QUERY would otherwise block the real recommendation Workflow
     // behind an unnecessary three-product clarification.
     .filter((entry) => !(entry.intent === 'PRODUCT_QUERY' && explicitRecommendation && !explicitProductQuery))
+    // A product card plus “黑色 XL 还有吗” identifies the entity but does not
+    // ask for a second generic product description. Keep the live inventory
+    // task and drop a model-added PRODUCT_QUERY that would require unrelated
+    // RAG evidence and unnecessarily downgrade AUTO to ASSIST.
+    .filter((entry) => !(entry.intent === 'PRODUCT_QUERY' && explicitInventory && !explicitProductQuery))
+    // “多久发货” asks for the Store shipping policy, not the buyer's order
+    // logistics. A model-added order task would force an unrelated order
+    // clarification and hide the grounded policy answer.
+    .filter((entry) => !(intentFamily(entry.intent) === 'ORDER' && explicitShipping && !explicitOrder))
     .map(cloneTask);
   for (const explicit of explicitTasks) {
     const existing = merged.find((entry) => intentFamily(entry.intent) === intentFamily(explicit.intent));

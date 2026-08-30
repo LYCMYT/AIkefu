@@ -78,7 +78,7 @@
 ### Phase 03 已知问题 / 环境复验项
 
 - Phase 03 Migration、pgvector/HNSW、PostgreSQL-backed 检索、MinIO 上传/签名下载/删除与 Redis 队列已在本机真实基础设施中复验通过；浏览器也已连接同一真实 Workspace API。
-- AI Runtime 与 Embedding 均提供显式服务器端 Provider 边界，并以确定性离线 Provider 做无凭据回退；已验证超时、重试、fallback、结构化修复、失败关闭、熔断、PII/Secret 清洗及 Invocation/Usage/Evidence 持久化。新增可审查的版本化 Prompt Registry、DeepSeek / OpenAI-compatible Chat / Responses 适配器与 `AI_API_KEY_FILE`。本阶段早期 Provider-only 报告为 3/36；2026-08-30 的 Q0 production runner 已提升为 Offline / DeepSeek 均 31/36。
+- AI Runtime 与 Embedding 均提供显式服务器端 Provider 边界，并以确定性离线 Provider 做无凭据回退；已验证超时、重试、fallback、结构化修复、失败关闭、熔断、PII/Secret 清洗及 Invocation/Usage/Evidence 持久化。新增可审查的版本化 Prompt Registry、DeepSeek / OpenAI-compatible Chat / Responses 适配器与 `AI_API_KEY_FILE`。2026-08-31 的 production runner 固定集 Offline / DeepSeek 均为 36/36，独立 AUTO 集均为 10/10。
 - 未接入任何真实电商平台私有接口、Cookie、Token、真实账号或原产品代码；商品、知识、图片与 Eval 数据全部为合成数据。
 - 独立审查登记 3 项非阻断 P2：pgvector SQL 前推 ENABLED / activeVersion 过滤、XLSX 解压炸弹资源限制、Memory DIRTY 扫描 lease / backoff / 稳定排序；不阻断 Phase 04，将在后续可靠性/发布硬化中处理。
 
@@ -149,7 +149,7 @@
 - 公开边界硬化已完成：Nest 全局 `ValidationPipe` 对全部 Body DTO 启用 transform/whitelist/forbidNonWhitelisted；文本、JSON、Knowledge topK、Workflow 图与普通请求体均有上限；环境变量启动时 fail-closed；API Helmet/安全响应头生效。
 - 附件对象存储已由手写 SigV4 改为官方 AWS SDK v3，并为 PUT/DELETE/CreateBucket 增加强制 Abort/deadline；真实 MinIO opt-in integration 随全套 47/47 通过。
 - AI Gateway 已按错误类型做有界重试：网络、超时、408、429 与选定 5xx 最多重试一次；400、401、403 与无效响应不重试。`AiRuntime` 内存 Usage 视图默认仅保留最近 1,000 条，持久化 Invocation / Usage 账本仍是事实源。
-- DeepSeek Chat endpoint / 模型 / 服务端 Key 文件已经配置；结构化风险分类探针及合成 Buyer→Intent/Risk/Reply→Workbench Draft→Human Final 的连接态浏览器链均通过。36 个固定 Case 已进入隔离 production runner，Offline / DeepSeek 均为 31/36；DeepSeek 持久化 usage 为 30,150 / 3,688 Token、平均 1,757 ms。剩余 5 项是统一 runner 尚未接入的 fault / approval context / restart 驱动。Judge、外部 Embedding 仍是复验项。
+- DeepSeek Chat endpoint / 模型 / 服务端 Key 文件已经配置；结构化风险分类探针及合成 Buyer→Intent/Risk/Reply→Workbench Draft→Human Final 的连接态浏览器链均通过。固定集 Offline / DeepSeek 均为 36/36；DeepSeek usage 为 21,463 / 2,540 Token、平均 2,326 ms。独立 AUTO 集 Offline / DeepSeek 均为 10/10；真实 AUTO usage 为 8,675 / 1,143 Token、平均 2,283 ms。Judge、外部 Embedding 仍是复验项。
 - `docs/16` 冻结的“公开 Demo 不做 Workspace Quota / Rate Limit / 超额 Fallback”保持不变并继续作为已知费用风险；未用外部审查建议擅自覆盖冻结决策。
 
 ## Release
@@ -157,7 +157,7 @@
 - [x] README 启动说明
 - [x] 当前环境自动测试通过
 - [ ] 在线部署
-- [ ] 3 分钟演示脚本验证
+- [x] 3 分钟 Guided Showcase 脚本与 7 条连接态浏览器验收
 
 ### Release 环境验证记录（2026-08-27）
 
@@ -167,7 +167,7 @@
 - 应用已常驻启动：Web `http://localhost:5173`、API `http://localhost:3000`；应用内浏览器确认 `API READY · 实时已连接`。
 - Scenario Lab 八个固定合成场景已从真实浏览器界面逐一运行并全部 `SUCCEEDED`。
 - 独立生产验证项目的 Web/API/PostgreSQL/pgvector/Redis/MinIO 5 容器全部 `healthy`；18 migrations、`/healthz`、SPA fallback、同源 REST Workspace 创建、Socket.IO heartbeat、Redis 密码与 Nginx 安全响应头实测通过。验证容器/网络/卷已定向清理，本地开发栈保留。
-- 当前总进度：44 / 46（95.7%）。剩余在线部署与完整 3 分钟人工走台；均不扩大 V1，也不接真实电商私有接口。
+- 当前总进度：45 / 46（97.8%）。剩余在线部署；最终 3 分钟视频仍需人工录制，不把自动化截图冒充视频。
 
 ## 前端产品化重构（2026-08-28）
 
@@ -198,7 +198,7 @@
 - [x] R3：连接态 Reset→Buyer 三连发→Workbench Draft→人工接管→Human Final→Buyer 可见 E2E。同时修复 Reset 500 与 WebSocket 刷新期静默丢发。
 - [x] R4 代码 Gate：模型错误分类、有界重试、RUNNING 账本、最近 1,000 条内存 Usage。
 - [x] R4 外部 Chat Gate：DeepSeek `deepseek-v4-flash` 风险探针与 Intent/Risk/Reply 合成浏览器主链通过，Key 仅从仓库外文件读取。
-- [ ] R4 完整 Eval Gate：生产 ReplyRuntime + DB Evidence runner 已完成并达到 Offline / DeepSeek 31/36；`E026`、`E027`、`E033`、`E035`、`E036` 的统一故障注入驱动及完整 Judge / 外部 Embedding Gate 尚未完成，不虚构 36/36、成本或准确率。
+- [x] R4 完整 Eval Gate：生产 ReplyRuntime + DB Evidence 固定集 Offline / DeepSeek 36/36，独立 AUTO 集 10/10；包含 provider fault、审批上下文变化、生成/外发恢复和消费者可见投影。结果只代表冻结合成用例，不虚构开放域准确率、成本或 SLA。
 - [x] R5 安全拆分基线：React Router、TanStack Query、`app/`、`features/`、`components/ui/`，Usage / Privacy 移出 `App.tsx`；三尺寸快照已视觉复核。
 - [x] R5 产品化拆分：Workbench / Buyer / Workflow、`api.ts` 与 `styles.css` 已按 feature / client / normalizer / endpoint / style domain 拆分，并由 69 条 Web unit 与真实连接态 E2E 回归。
 - [x] R6 本地/CI/容器交付：CI 现实跑非 skip 基础设施 integration 与连接态 Playwright；生产风格五容器验收通过。
@@ -232,3 +232,13 @@
 - [x] 可选模型凭据：DeepSeek Key 仅从仓库外服务端文件读取并已完成 production eval；Secret 不随仓库交付。真实电商平台凭据仍不在 V1 范围。
 
 以上状态为本轮最新发布记录，优先于本文中带日期的历史 Gate 计数。
+
+## Demo Knowledge + Guided Showcase（2026-08-31）
+
+- [x] Demo Knowledge 保持 2 店 / 4 买家 / 10 商品 / 10 订单 / 80 知识；两店各 40，动态事实泄漏 0，no-answer topics 无正向知识。
+- [x] `/showcase` 使用独立 SEEDED Workspace 和本地 token；Reset 不影响运营工作台或 Scenario Lab。
+- [x] 四场景真实经过 API/WebSocket：商品知识 AUTO、三消息聚合与 Draft、生成中补消息 Stale/Replan、图片 Fixture + 高风险人工接管。
+- [x] 连接态 Showcase Playwright 7 / 7；覆盖 Provider/Fixture 标签、隔离 Reset、390×844 无溢出和真实事件后的 Dashboard。
+- [x] 固定 Eval Offline / DeepSeek 36 / 36；独立 AUTO Suite Offline / DeepSeek 10 / 10。
+- [x] 最新截图与逐场景证据位于 `artifacts/showcase/`。
+- [ ] 公网 Preview 与最终三分钟录制视频仍未交付。

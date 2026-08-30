@@ -519,6 +519,7 @@ export class InMemoryMessageApplication implements MessageApplication {
         id: `buyer_${scope.workspaceId}_${index + 1}`,
         workspaceId: scope.workspaceId,
         tenantId: scope.tenantId,
+        externalBuyerId: `dy_buyer_${String(index + 1).padStart(3, '0')}`,
         displayName,
         avatar: null,
         tags: index === 0 ? ['新客'] : index === 1 ? ['尺码咨询'] : index === 2 ? ['多订单'] : ['图片咨询'],
@@ -540,6 +541,7 @@ export class InMemoryMessageApplication implements MessageApplication {
       const products = PRODUCT_TITLES.map((title, index) => ({
         id: `product_${shopId}_${index + 1}`,
         shopId,
+        externalProductId: `P-DEMO-${String(index + 1).padStart(3, '0')}`,
         title,
         description: `Synthetic product context for ${title}`,
         status: index === 4 ? 'OFF_SHELF' : 'ON_SHELF',

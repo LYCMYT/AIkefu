@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "scenarios": {
+    "SC-01-PRODUCT-CARE": {
+      "headline": "商品级知识而非全店猜测",
+      "mustShow": [
+        "product=fashion_hoodie",
+        "evidence=k033",
+        "scope=PRODUCT",
+        "send receipt"
+      ],
+      "screenshot": "01-product-care.png"
+    },
+    "SC-02-MULTI-TURN": {
+      "headline": "3条消息聚合为1个UserTurn",
+      "mustShow": [
+        "2s idle / 5s hard",
+        "INVENTORY_QUERY",
+        "SIZE_RECOMMENDATION",
+        "Recent Messages",
+        "ProductContext inventory"
+      ],
+      "screenshot": "02-multi-turn.png"
+    },
+    "SC-03-STALE-REPLAN": {
+      "headline": "旧回复未误发",
+      "mustShow": [
+        "contextVersion changed",
+        "old ReplyJob STALE",
+        "evidence=k002",
+        "SendGuard pass on new job"
+      ],
+      "screenshot": "03-stale-replan.png"
+    },
+    "SC-04-IMAGE-HUMAN": {
+      "headline": "高风险售后进入人工",
+      "mustShow": [
+        "image source label",
+        "order_004",
+        "risk HIGH",
+        "mode MANUAL",
+        "no false action claim"
+      ],
+      "screenshot": "04-image-human.png"
+    }
+  },
+  "global": {
+    "traceDefaultCollapsed": true,
+    "realProviderLabelRequired": true,
+    "fixtureLabelRequired": true,
+    "fakeMetricsForbidden": true
+  }
+}

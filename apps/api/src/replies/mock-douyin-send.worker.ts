@@ -82,7 +82,7 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
         }
         const externalMessageId = typeof delivery.receipt.externalMessageId === 'string' ? delivery.receipt.externalMessageId : undefined;
         const sentAt = typeof delivery.receipt.sentAt === 'string' ? delivery.receipt.sentAt : undefined;
-        if (await this.persistVisibleMessage(scope, delivery.conversationId, delivery.buyerId, delivery.text, delivery.senderRole, externalMessageId, sentAt)) {
+        if (await this.persistVisibleMessage(scope, claim.sendOutbox.id, delivery.conversationId, delivery.text, delivery.senderRole, externalMessageId, sentAt)) {
           this.publishRefresh(scope, delivery.conversationId);
           await this.recordReceiptTrace(scope, delivery.conversationId, externalMessageId, claim.sendOutbox.id, delivery.senderRole);
         }
@@ -100,20 +100,22 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
   /** Restarts repair the durable receipt → chat projection without re-sending. */
   async recoverReceiptProjections(): Promise<number> {
     const rows = await this.prisma.sendOutbox.findMany({
-      where: { status: 'SENT' }, orderBy: { updatedAt: 'asc' }, take: 100,
+      where: { status: 'SENT', projectedAt: null, projectionFailureCode: null }, orderBy: { updatedAt: 'asc' }, take: 100,
     });
     let repaired = 0;
     for (const row of rows) {
       const text = textPayload(row.payloadJson);
       const receipt = record(row.receiptJson);
       const externalMessageId = typeof receipt.externalMessageId === 'string' ? receipt.externalMessageId : undefined;
-      if (!text || !externalMessageId) continue;
+      if (!text || !externalMessageId) {
+        await this.prisma.sendOutbox.updateMany({
+          where: { id: row.id, status: 'SENT', projectedAt: null, projectionFailureCode: null },
+          data: { projectionFailureCode: 'INVALID_PROJECTION_PAYLOAD' },
+        });
+        continue;
+      }
       const scope = { workspaceId: row.workspaceId, tenantId: row.tenantId, shopId: row.shopId };
-      const conversation = await this.prisma.conversation.findFirst({
-        where: { id: row.conversationId, ...scope }, select: { buyerId: true },
-      });
-      if (!conversation) continue;
-      if (await this.persistVisibleMessage(scope, row.conversationId, conversation.buyerId, text, senderRolePayload(row.payloadJson), externalMessageId, typeof receipt.sentAt === 'string' ? receipt.sentAt : undefined)) {
+      if (await this.persistVisibleMessage(scope, row.id, row.conversationId, text, senderRolePayload(row.payloadJson), externalMessageId, typeof receipt.sentAt === 'string' ? receipt.sentAt : undefined)) {
         repaired += 1;
         this.publishRefresh(scope, row.conversationId);
         await this.recordReceiptTrace(scope, row.conversationId, externalMessageId, row.id, senderRolePayload(row.payloadJson));
@@ -123,7 +125,7 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   private async persistVisibleMessage(
-    scope: { workspaceId: string; tenantId: string; shopId: string }, conversationId: string, buyerId: string,
+    scope: { workspaceId: string; tenantId: string; shopId: string }, sendOutboxId: string, conversationId: string,
     text: string, senderRole: 'AI' | 'HUMAN', externalMessageId?: string, sentAt?: string,
   ): Promise<boolean> {
     const client = this.prisma as unknown as { $transaction?: Function };
@@ -132,21 +134,38 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
       // All message writers use the conversation id advisory key.  A receipt
       // replay therefore cannot race an inbound commit for the same sequence.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${conversationId}))`;
+      const pendingProjection = await tx.sendOutbox.findFirst({
+        where: { id: sendOutboxId, ...scope, status: 'SENT', projectedAt: null, projectionFailureCode: null },
+        select: { id: true },
+      });
+      if (!pendingProjection) return false;
       const projectionId = externalMessageId ?? `outbox:${conversationId}`;
       const existing = await tx.message.findFirst({
         where: { platform: 'DOUYIN_DEMO', shopId: scope.shopId, externalMessageId: projectionId },
         select: { id: true },
       });
-      if (existing) return false;
-      const conversation = await tx.conversation.findFirst({ where: { id: conversationId, ...scope }, select: { lastCommittedSequence: true } });
-      if (!conversation) return false;
+      if (existing) {
+        await tx.sendOutbox.updateMany({
+          where: { id: sendOutboxId, ...scope, status: 'SENT', projectedAt: null },
+          data: { projectedAt: new Date(), projectionFailureCode: null },
+        });
+        return false;
+      }
+      const conversation = await tx.conversation.findFirst({ where: { id: conversationId, ...scope }, select: { buyerId: true, lastCommittedSequence: true } });
+      if (!conversation) {
+        await tx.sendOutbox.updateMany({
+          where: { id: sendOutboxId, ...scope, status: 'SENT', projectedAt: null },
+          data: { projectionFailureCode: 'PROJECTION_CONVERSATION_NOT_FOUND' },
+        });
+        return false;
+      }
       const sequence = conversation.lastCommittedSequence + 1;
       await tx.message.create({
         data: {
           // SendOutbox's transport role intentionally has the compact AI/HUMAN
           // vocabulary.  Persisting it directly is invalid Prisma data: the
           // conversation Message enum uses ASSISTANT for automated replies.
-          ...scope, conversationId, buyerId, platform: 'DOUYIN_DEMO', role: senderRole === 'AI' ? 'ASSISTANT' : 'HUMAN', kind: 'TEXT', status: 'ACTIVE',
+          ...scope, conversationId, buyerId: conversation.buyerId, platform: 'DOUYIN_DEMO', role: senderRole === 'AI' ? 'ASSISTANT' : 'HUMAN', kind: 'TEXT', status: 'ACTIVE',
           externalMessageId: projectionId, sequence,
           contentJson: { text }, sentAt: sentAt ? new Date(sentAt) : new Date(), receivedAt: new Date(),
         },
@@ -156,6 +175,11 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
         data: { lastCommittedSequence: sequence, lastMessageAt: new Date() },
       });
       if (advanced.count !== 1) throw new Error('SEND_PROJECTION_CURSOR_CAS_LOST');
+      const marked = await tx.sendOutbox.updateMany({
+        where: { id: sendOutboxId, ...scope, status: 'SENT', projectedAt: null },
+        data: { projectedAt: new Date(), projectionFailureCode: null },
+      });
+      if (marked.count !== 1) throw new Error('SEND_PROJECTION_STATE_CAS_LOST');
       return true;
     });
   }
@@ -179,8 +203,9 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
 
 type PrismaLikeTransaction = {
   $executeRaw: { (query: TemplateStringsArray, ...values: unknown[]): Promise<unknown> };
-  conversation: { findFirst(input: unknown): Promise<{ lastCommittedSequence: number } | null>; updateMany(input: unknown): Promise<{ count: number }> };
+  conversation: { findFirst(input: unknown): Promise<{ buyerId: string; lastCommittedSequence: number } | null>; updateMany(input: unknown): Promise<{ count: number }> };
   message: { findFirst(input: unknown): Promise<{ id: string } | null>; create(input: unknown): Promise<unknown> };
+  sendOutbox: { findFirst(input: unknown): Promise<{ id: string } | null>; updateMany(input: unknown): Promise<{ count: number }> };
 };
 
 function textPayload(value: unknown): string | undefined {

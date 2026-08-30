@@ -25,7 +25,7 @@
 | API integration | 14 suites / 61 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
 | Contracts | 6 / 6 通过 |
 | 前端终态 Gate | Playwright 14 项：10 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0 |
-| Q0 生产回复评测 | Offline 31 / 36；DeepSeek 31 / 36（30,150 / 3,688 Token，平均 1,757 ms）；其余 5 项为尚未接入统一 runner 的故障注入场景 |
+| Q0 生产回复评测 | 固定集：Offline 36 / 36、DeepSeek 36 / 36（21,463 / 2,540 Token，平均 2,326 ms）；独立 AUTO 集：Offline 10 / 10、DeepSeek 10 / 10（8,675 / 1,143 Token，平均 2,283 ms） |
 | 公网部署 | 未完成；没有把本地服务或容器验收表述为在线 Preview |
 | 3 分钟演示视频 | 未完成；现有演示脚本不是已录制、已验收的视频 |
 | 真实外部凭据 | DeepSeek Key 仅从仓库外服务端文件读取并已完成真实评测；真实电商平台凭据仍不在 V1 范围，任何 Secret 都不随仓库交付 |
@@ -58,6 +58,8 @@ flowchart LR
 - `/buyer-simulator`：合成买家消息、商品卡和订单卡入口。
 - `/admin`：真实 Workspace 数据概览；子页包括 `/admin/shops`、`/admin/products`、`/admin/knowledge`、`/admin/workflows`、`/admin/quality`、`/admin/incidents`、`/admin/usage`、`/admin/privacy`。
 - `/scenario-lab`：固定 8 个 synthetic Scenario 的运行与重置。
+
+公开讲解和录屏的首选入口是 `/showcase`。它使用第三个独立的 `SEEDED` Showcase Workspace，会按顺序运行商品知识、多轮聚合、生成中补充信息和图片售后/人工接管四条真实 API/WebSocket 链路；不会改写运营 Workspace 或 Scenario Lab。页面明确标注模型 Provider、Mock 电商平台、合成数据和图片 Fixture 边界。
 
 Trace 默认隐藏。可直接打开 `/workbench?trace=1`，或在 Workbench 点击 Trace；只有显式开启时才请求 `trace=1` 的 Developer Trace 数据。Trace 面板只展示结构化、脱敏事件，不展示 prompt、私有推理或 Chain-of-Thought。
 
@@ -148,8 +150,10 @@ pnpm release:archive
 ```bash
 pnpm typecheck
 pnpm ai:eval:production:offline
+pnpm ai:eval:auto:offline
 # 配置真实服务端 Provider 后：
 pnpm ai:eval:production
+pnpm ai:eval:auto
 pnpm test:unit
 pnpm test:integration
 pnpm test:e2e
@@ -197,7 +201,7 @@ OpenAPI 与 WebSocket JSON schema 的引用、数组 items、discriminator 和 P
 
 ## 3 分钟演示
 
-**未完成：**仓库有人工演示脚本，但尚未交付或验收 3 分钟录制视频；不能将脚本、截图或本地页面当作已完成的视频交付。
+仓库已提供 `/showcase` 引导页、四个可重复场景、真实运行截图和证据清单；尚未交付或验收最终 3 分钟录制视频，不能把脚本或截图表述为已录制视频。
 
 人工演示顺序、输入文本、预期状态和每一步的验证边界见 [`docs/18_DEMO_SCRIPT.md`](docs/18_DEMO_SCRIPT.md)。演示前至少执行：
 
@@ -207,7 +211,7 @@ pnpm --filter @ai-customer-service/web test:unit
 pnpm --filter @ai-customer-service/web build
 ```
 
-演示前使用 Reset demo 获取干净的当前 Workspace，并确认 API/WS 已连接。脚本是可重复的人工验收清单；默认浏览器门禁只验证四入口和故障态，不替代 opt-in 真实 infra integration / E2E。不要用截图、静态 UI、假消息或未运行的 Scenario 证明业务链路通过。
+演示前打开 `/showcase`，确认 API/WS 已连接并点击“重置演示”。Showcase 与运营/Scenario 会话隔离；截图与 `artifacts/showcase/SHOWCASE_EVIDENCE.md` 是自动化验收证据，但仍不等同于最终录制视频或公网部署。
 
 ## 安全与已知限制
 

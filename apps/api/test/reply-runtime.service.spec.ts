@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { ReplyRuntimeService, explicitOrderMatches } from '../src/replies/reply-runtime.service';
+import { ReplyRuntimeService, customerFacingHandoffText, explicitOrderMatches, explicitProductMatches, explicitSkuMatches } from '../src/replies/reply-runtime.service';
 
 describe('explicitOrderMatches', () => {
   const orders = [
@@ -13,7 +13,40 @@ describe('explicitOrderMatches', () => {
   });
 });
 
+describe('customer-facing resolver copy', () => {
+  it('uses an explicit product phrase to exclude unrelated same-color SKUs', () => {
+    const rows = [
+      { externalSkuId: 'P-T-001-BLACK', attributesJson: { color: '黑色', switch: '静音轴' }, product: { title: 'SilentKey 84 静音键盘' } },
+      { externalSkuId: 'P-T-004-BLACK', attributesJson: { color: '黑色' }, product: { title: 'AirMouse 轻量无线鼠标' } },
+    ];
+
+    expect(explicitSkuMatches(rows, '黑色静音键盘有吗？')).toEqual([rows[0]]);
+  });
+
+  it('separates customer handoff copy from internal reasons without claiming an action completed', () => {
+    expect(customerFacingHandoffText(['HUMAN_REQUEST'], 'USER_REQUESTED_HUMAN')).toContain('人工客服');
+    expect(customerFacingHandoffText(['COMPLAINT'], 'HIGH_RISK_TASK')).toContain('投诉');
+    expect(customerFacingHandoffText(['REFUND_REQUEST'], 'HIGH_RISK_TASK')).toContain('退款');
+    expect(customerFacingHandoffText(['FAQ_QUERY'], 'NO_EVIDENCE')).toContain('暂时没有找到可靠依据');
+    for (const text of [
+      customerFacingHandoffText(['HUMAN_REQUEST'], 'USER_REQUESTED_HUMAN'),
+      customerFacingHandoffText(['COMPLAINT'], 'HIGH_RISK_TASK'),
+      customerFacingHandoffText(['REFUND_REQUEST'], 'HIGH_RISK_TASK'),
+    ]) {
+      expect(text).not.toBe('请人工处理此会话。');
+      expect(text).not.toMatch(/已退款|退款成功|已赔付|已补偿/);
+    }
+  });
+});
+
 describe('ReplyRuntimeService', () => {
+  it('selects an explicitly named product beyond the three most recently updated products', () => {
+    const rows = [
+      { title: 'CodeBoard 75 机械键盘' }, { title: 'AirMouse 轻量无线鼠标' },
+      { title: 'GaN 100W 三口充电器' }, { title: 'SilentKey 84 静音键盘' },
+    ];
+    expect(explicitProductMatches(rows, 'SilentKey 84支持什么连接方式？')).toEqual([rows[3]]);
+  });
   const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' };
 
   it('treats a draft persistence race with a newly stale job as an idempotent stale result', async () => {
@@ -54,7 +87,7 @@ describe('ReplyRuntimeService', () => {
           sourceLastMessageId: 'message-8', sourceSequence: 8, sourceContextVersion: 5,
           evidences: [],
           conversation: { id: 'conversation-a', buyerId: 'buyer-a', contextVersion: 5, humanActive: false, state: 'ACTIVE' },
-          userTurn: { normalizedText: '新疆多久发货？' },
+          userTurn: { normalizedText: '请结合之前的对话说明新疆发货安排。' },
         }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
@@ -96,7 +129,7 @@ describe('ReplyRuntimeService', () => {
 
     await expect(service.process(scope, 'reply-a')).resolves.toMatchObject({ status: 'WAITING_HUMAN', draftId: 'draft-a' });
 
-    expect(knowledge.search).toHaveBeenCalledWith(scope, { shopId: 'shop-a', query: '新疆多久发货？', scope: 'STORE', topK: 3 });
+    expect(knowledge.search).toHaveBeenCalledWith(scope, { shopId: 'shop-a', query: '请结合之前的对话说明新疆发货安排。', scope: 'STORE', topK: 3 });
     expect(prisma.replyEvidence.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
       workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', replyJobId: 'reply-a',
       knowledgeItemId: 'knowledge-a', knowledgeVersionId: 'version-a',
@@ -105,7 +138,7 @@ describe('ReplyRuntimeService', () => {
     expect(runtime.runStructured).toHaveBeenCalledWith(scope, expect.objectContaining({
       purpose: 'REPLY_GENERATION', schema: 'ReplyGeneration', allowedDataClasses: ['turn', 'tasks', 'realtimeFacts', 'evidence', 'recentMessages', 'structuredFacts', 'summary', 'customerMemory', 'shopSettings', 'channel'],
       evidence: expect.arrayContaining([expect.objectContaining({ itemId: 'knowledge-a', versionId: 'version-a' })]),
-      context: expect.objectContaining({ turn: { text: '新疆多久发货？' } }),
+      context: expect.objectContaining({ turn: { text: '请结合之前的对话说明新疆发货安排。' } }),
     }));
     const composer = runtime.runStructured.mock.calls.find(([, input]) => input.purpose === 'REPLY_GENERATION')![1];
     expect(composer.context).toMatchObject({
@@ -510,6 +543,9 @@ describe('ReplyRuntimeService', () => {
 
     await expect(service.process(scope, 'reply-runtime-failed')).resolves.toMatchObject({ status: 'WAITING_HUMAN', draftId: 'draft-fallback', reason: 'AI_RUNTIME_FAILED' });
     expect(drafts.createWaitingHuman).toHaveBeenCalledWith(scope, expect.objectContaining({ replyJobId: 'reply-runtime-failed', aiDraft: expect.stringContaining('人工') }));
+    expect(prisma.task.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({ intent: 'SHIPPING_POLICY', status: 'FAILED', errorCode: 'AI_RUNTIME_FAILED' })],
+    }));
     expect(outboxes.enqueue).not.toHaveBeenCalled();
   });
 
@@ -755,6 +791,9 @@ describe('ReplyRuntimeService', () => {
       { id: 'order-a', label: 'SilentKey 84 静音键盘（订单 A）' },
       { id: 'order-b', label: 'ViewGo 便携屏（订单 B）' },
     ] } } } }));
+    expect(first.tx.task.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.arrayContaining([expect.objectContaining({ requiredKnowledgeJson: [] })]),
+    }));
     expect(first.outboxes.enqueueInTransaction).toHaveBeenCalledWith(first.tx, scope, expect.objectContaining({ text: expect.stringContaining('哪笔订单'), idempotencyKey: expect.stringContaining('clarification:reply-clarify:') }));
     expect(first.runtime.runStructured).toHaveBeenCalledTimes(2);
 

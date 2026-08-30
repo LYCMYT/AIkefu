@@ -123,6 +123,7 @@ enum AttachmentStatus {
 
 enum AIInvocationStatus {
   PENDING
+  RUNNING
   SUCCEEDED
   FAILED
   ABORTED
@@ -975,7 +976,7 @@ model AIInvocation {
   durationMs              Int?
   inputTokens             Int                @default(0)
   outputTokens            Int                @default(0)
-  status                  AIInvocationStatus @default(PENDING)
+  status                  AIInvocationStatus @default(RUNNING)
   includedDataClassesJson Json
   excludedPIIJson         Json
   createdAt               DateTime           @default(now())
@@ -1339,6 +1340,8 @@ model SendOutbox {
   status                 SendOutboxStatus @default(PENDING)
   transportStartedAt     DateTime?
   receiptJson            Json?
+  projectedAt            DateTime?
+  projectionFailureCode  String?
   failureCode            String?
   failureReason          String?
   createdAt              DateTime         @default(now())
@@ -1352,6 +1355,7 @@ model SendOutbox {
 
   @@index([workspaceId, tenantId, shopId, status, createdAt])
   @@index([workspaceId, tenantId, shopId, conversationId, status])
+  @@index([status, projectedAt, projectionFailureCode, updatedAt])
   @@index([createdAt])
 }
 

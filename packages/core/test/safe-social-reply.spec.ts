@@ -37,6 +37,8 @@ describe('resolveSafeKnowledgeIntent', () => {
     '支持指定快递吗',
     '是否包邮',
     '有运费险吗',
+    '偏远地区多久发货',
+    '新疆多久发货',
   ])('recognizes an exact static shipping-policy question: %s', (text) => {
     expect(resolveSafeKnowledgeIntent(text)).toBe('SHIPPING_POLICY');
   });
@@ -47,8 +49,6 @@ describe('resolveSafeKnowledgeIntent', () => {
     '改地址后多久发货',
     '我要退款，多久发货',
     '你好，请问多久发货，另外能退款吗',
-    '偏远地区多久发货',
-    '新疆多久发货',
   ])('never downgrades an operational or mixed-risk question: %s', (text) => {
     expect(resolveSafeKnowledgeIntent(text)).toBeUndefined();
   });

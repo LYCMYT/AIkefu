@@ -55,6 +55,25 @@ describe('explicit customer-service intent inference', () => {
     ]);
   });
 
+  it('does not let a generic model product-query downgrade an explicit inventory read', () => {
+    const result = mergeExplicitIntentTasks('黑色XL还有吗？', [
+      { intent: 'PRODUCT_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT'], requiredKnowledge: ['PRODUCT'], requiredTools: ['GET_PRODUCT'] },
+    ]);
+
+    expect(result).toEqual([
+      { intent: 'INVENTORY_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'], requiredTools: ['GET_INVENTORY'] },
+    ]);
+  });
+
+  it('does not turn an explicit shipping-policy question into order logistics', () => {
+    const result = mergeExplicitIntentTasks('黑色XL有吗？今天买多久发？', [
+      { intent: 'INVENTORY_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'], requiredTools: ['GET_INVENTORY'] },
+      { intent: 'LOGISTICS_QUERY', riskLevel: 'LOW', requiredContext: ['ORDER'], requiredTools: ['GET_ORDER'] },
+    ]);
+
+    expect(result.map((task) => task.intent)).toEqual(['INVENTORY_QUERY', 'SHIPPING_POLICY']);
+  });
+
   it('maps sanitized image-analysis markers to conservative assist intents', () => {
     expect(inferExplicitIntentTasks('[图片 PRODUCT_DAMAGE] 疑似商品破损\n收到就是这样的')).toEqual([
       { intent: 'AFTER_SALES_QUERY', riskLevel: 'MEDIUM', requiredContext: [], requiredTools: [] },

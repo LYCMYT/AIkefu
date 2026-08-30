@@ -7,6 +7,10 @@ import type { KnowledgeService } from '../knowledge/knowledge.service';
 import type { ContextInvalidationService } from '../replies/context-invalidation.service';
 import type { ConversationReplyControlService } from '../replies/conversation-reply-control.service';
 import type { ReplyDraftService } from '../replies/reply-draft.service';
+import type { AiEvalFaultRegistry } from './ai-eval-fault-registry';
+import type { WorkflowProposalService } from '../workflow/workflow-proposal.service';
+import type { ReplyRecoveryService } from '../replies/reply-recovery.service';
+import type { SendOutboxService } from '../replies/send-outbox.service';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -31,6 +35,10 @@ export type ProductionReplyEvalProjection = {
     id: string;
     knowledgeItemId: string;
     knowledgeVersionId: string;
+    sourceType: string;
+    scope: string;
+    productId: string | null;
+    retrievalScore: number | null;
     retrievedContentSnapshotJson: unknown;
   }>;
   traceEvents: Array<{ id: string; stage: string; payloadJson: unknown }>;
@@ -69,6 +77,7 @@ type EvalMessageInput = {
 export type ProductionReplyEvalPort = {
   createIsolatedWorkspace(): Promise<ProductionReplyEvalFixture>;
   deleteIsolatedWorkspace(workspaceId: string): Promise<void>;
+  setShopAiMode?(input: EvalMessageInput & { mode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY' }): Promise<void>;
   sendText(input: EvalMessageInput & { text: string }): Promise<{ conversationId: string }>;
   sendProductCard(input: EvalMessageInput & { productId: string }): Promise<{ conversationId: string }>;
   sendOrderCard(input: EvalMessageInput & { orderId: string }): Promise<{ conversationId: string }>;
@@ -80,6 +89,11 @@ export type ProductionReplyEvalPort = {
   changeOrderStatus?(input: EvalMessageInput & { orderId: string; status: string }): Promise<void>;
   applyHumanEdit?(input: EvalMessageInput & { conversationId: string; editType: string; projection: ProductionReplyEvalProjection }): Promise<void>;
   advanceDraftTime?(input: EvalMessageInput & { conversationId: string; minutes: number }): Promise<void>;
+  configureProviderScenario?(input: EvalMessageInput & { primaryProvider: string; fallback: string }): Promise<void>;
+  prepareRestart?(input: EvalMessageInput & { phase: string }): Promise<void>;
+  resumeAfterRestart?(input: EvalMessageInput & { conversationId: string; phase: string; projection?: ProductionReplyEvalProjection }): Promise<void>;
+  staleWorkflowBeforeApproval?(input: EvalMessageInput & { conversationId: string }): Promise<void>;
+  prepareWorkflowApproval?(input: EvalMessageInput): Promise<void>;
   waitForProjection(input: {
     workspaceId: string;
     tenantId: string;
@@ -105,6 +119,11 @@ export class ProductionReplyEvalExecutor {
         'changeOrderDuringGeneration',
         'humanEditType',
         'advanceTimeMinutes',
+        'primaryProvider',
+        'fallback',
+        'changeContextBeforeApproval',
+        'restartDuring',
+        'shopAiMode',
       ]);
       const setupKeys = Object.entries(contextSetup)
         .filter(([, value]) => value !== undefined && value !== false && value !== null)
@@ -116,6 +135,31 @@ export class ProductionReplyEvalExecutor {
       const shopId = required(fixture.shops[shopKey], `SHOP_FIXTURE_NOT_FOUND:${shopKey}`);
       const buyerId = required(fixture.buyers[buyerKey], `BUYER_FIXTURE_NOT_FOUND:${buyerKey}`);
       const scope = { workspaceId: fixture.workspaceId, tenantId: fixture.tenantId, shopId, buyerId };
+      const shopAiMode = stringField(contextSetup, 'shopAiMode');
+      if (shopAiMode) {
+        if (!['AUTO_ALLOWED', 'ASSIST_ONLY', 'MANUAL_ONLY'].includes(shopAiMode) || !this.port.setShopAiMode) {
+          throw new Error(`EXECUTOR_UNSUPPORTED:shopAiMode:${shopAiMode}`);
+        }
+        await this.port.setShopAiMode({
+          ...scope,
+          mode: shopAiMode as 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY',
+        });
+      }
+      const primaryProvider = stringField(contextSetup, 'primaryProvider');
+      const fallback = stringField(contextSetup, 'fallback');
+      if (primaryProvider || fallback) {
+        if (!primaryProvider || !fallback || !this.port.configureProviderScenario) throw new Error('EXECUTOR_UNSUPPORTED:providerScenario');
+        await this.port.configureProviderScenario({ ...scope, primaryProvider, fallback });
+      }
+      const restartDuring = stringField(contextSetup, 'restartDuring');
+      if (restartDuring) {
+        if (!this.port.prepareRestart) throw new Error('EXECUTOR_UNSUPPORTED:restartDuring');
+        await this.port.prepareRestart({ ...scope, phase: restartDuring });
+      }
+      if (contextSetup.changeContextBeforeApproval === true) {
+        if (!this.port.prepareWorkflowApproval) throw new Error('EXECUTOR_UNSUPPORTED:changeContextBeforeApproval');
+        await this.port.prepareWorkflowApproval(scope);
+      }
       if (conflictFixture) {
         if (!this.port.activateConflict) throw new Error('EXECUTOR_UNSUPPORTED:activateConflict');
         await this.port.activateConflict({ ...scope, fixture: conflictFixture });
@@ -170,6 +214,10 @@ export class ProductionReplyEvalExecutor {
         throw new Error(`EXECUTOR_UNSUPPORTED:message:${type ?? 'UNKNOWN'}`);
       }
       if (!conversationId) throw new Error('CONVERSATION_NOT_CREATED');
+      if (restartDuring === 'GENERATING') {
+        if (!this.port.resumeAfterRestart) throw new Error('EXECUTOR_UNSUPPORTED:restartDuring');
+        await this.port.resumeAfterRestart({ ...scope, conversationId, phase: restartDuring });
+      }
       const inventoryChange = record(contextSetup.changeInventoryDuringGeneration);
       if (Object.keys(inventoryChange).length) {
         if (!this.port.changeSkuInventory) throw new Error('EXECUTOR_UNSUPPORTED:changeInventoryDuringGeneration');
@@ -198,6 +246,16 @@ export class ProductionReplyEvalExecutor {
         conversationId,
       };
       let projection = await this.port.waitForProjection(projectionInput);
+      if (contextSetup.changeContextBeforeApproval === true) {
+        if (!this.port.staleWorkflowBeforeApproval) throw new Error('EXECUTOR_UNSUPPORTED:changeContextBeforeApproval');
+        await this.port.staleWorkflowBeforeApproval({ ...scope, conversationId });
+        projection = await this.port.waitForProjection(projectionInput);
+      }
+      if (restartDuring === 'SEND_OUTBOX_SENDING') {
+        if (!this.port.resumeAfterRestart) throw new Error('EXECUTOR_UNSUPPORTED:restartDuring');
+        await this.port.resumeAfterRestart({ ...scope, conversationId, phase: restartDuring, projection });
+        projection = await this.port.waitForProjection(projectionInput);
+      }
       const humanEditType = stringField(contextSetup, 'humanEditType');
       if (humanEditType) {
         if (!this.port.applyHumanEdit) throw new Error('EXECUTOR_UNSUPPORTED:humanEditType');
@@ -234,6 +292,10 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
     private readonly invalidation?: ContextInvalidationService,
     private readonly controls?: ConversationReplyControlService,
     private readonly drafts?: ReplyDraftService,
+    private readonly evalFaults?: AiEvalFaultRegistry,
+    private readonly workflowProposals?: WorkflowProposalService,
+    private readonly recovery?: ReplyRecoveryService,
+    private readonly sendOutboxes?: SendOutboxService,
   ) {
     this.timeoutMs = options.timeoutMs ?? 45_000;
     this.pollMs = options.pollMs ?? 200;
@@ -258,7 +320,49 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
   }
 
   async deleteIsolatedWorkspace(workspaceId: string): Promise<void> {
+    this.evalFaults?.clear(workspaceId);
     await this.prisma.workspace.deleteMany({ where: { id: workspaceId } });
+  }
+
+  async setShopAiMode(input: EvalMessageInput & { mode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY' }): Promise<void> {
+    await this.workspaces.setShopAiMode(evalScope(input), input.shopId, input.mode);
+  }
+
+  async configureProviderScenario(input: EvalMessageInput & { primaryProvider: string; fallback: string }): Promise<void> {
+    if (!this.evalFaults) throw new Error('EXECUTOR_PROVIDER_FAULTS_UNAVAILABLE');
+    if (input.primaryProvider !== 'TIMEOUT') throw new Error(`EXECUTOR_PROVIDER_SCENARIO_UNSUPPORTED:${input.primaryProvider}`);
+    if (input.fallback === 'SUCCESS') this.evalFaults.configure(input.workspaceId, 'PRIMARY_TIMEOUT_FALLBACK_SUCCESS');
+    else if (input.fallback === 'TIMEOUT') this.evalFaults.configure(input.workspaceId, 'TOTAL_TIMEOUT');
+    else throw new Error(`EXECUTOR_PROVIDER_SCENARIO_UNSUPPORTED:${input.fallback}`);
+  }
+
+  async prepareRestart(input: EvalMessageInput & { phase: string }): Promise<void> {
+    if (input.phase === 'GENERATING') {
+      if (!this.evalFaults) throw new Error('EXECUTOR_PROVIDER_FAULTS_UNAVAILABLE');
+      this.evalFaults.configure(input.workspaceId, 'CRASH_ONCE');
+      return;
+    }
+    if (input.phase !== 'SEND_OUTBOX_SENDING') throw new Error(`EXECUTOR_RESTART_PHASE_UNSUPPORTED:${input.phase}`);
+  }
+
+  async prepareWorkflowApproval(input: EvalMessageInput): Promise<void> {
+    const scope = evalScope(input);
+    await this.prisma.$transaction(async (tx) => {
+      const workflow = await tx.workflow.findFirst({
+        where: { ...scope, seedKey: 'wf_after_sales_template' },
+        include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+      });
+      const version = workflow?.versions[0];
+      if (!workflow || !version) throw new Error('EXECUTOR_AFTER_SALES_WORKFLOW_FIXTURE_MISSING');
+      await tx.workflowVersion.updateMany({
+        where: { id: version.id, workflowId: workflow.id, ...scope },
+        data: { immutable: true, publishedAt: new Date() },
+      });
+      await tx.workflow.updateMany({
+        where: { id: workflow.id, ...scope },
+        data: { status: 'PUBLISHED', activeVersionId: version.id },
+      });
+    });
   }
 
   async sendText(input: EvalMessageInput & { text: string }): Promise<{ conversationId: string }> {
@@ -398,6 +502,90 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
     );
   }
 
+  async staleWorkflowBeforeApproval(input: EvalMessageInput & { conversationId: string }): Promise<void> {
+    if (!this.workflowProposals) throw new Error('EXECUTOR_WORKFLOW_PROPOSAL_UNAVAILABLE');
+    const deadline = Date.now() + this.timeoutMs;
+    while (Date.now() < deadline) {
+      const proposal = await this.prisma.workflowProposal.findFirst({
+        where: { ...evalScope(input), shopId: input.shopId, conversationId: input.conversationId, status: 'WAITING_APPROVAL' },
+        orderBy: { createdAt: 'desc' }, select: { id: true, contextVersion: true },
+      });
+      if (proposal) {
+        const advanced = await this.prisma.conversation.updateMany({
+          where: { id: input.conversationId, ...evalScope(input), shopId: input.shopId, contextVersion: proposal.contextVersion },
+          data: { contextVersion: { increment: 1 }, needsReplan: true },
+        });
+        if (advanced.count !== 1) throw new Error('EXECUTOR_CONTEXT_MUTATION_CAS_LOST');
+        const result = await this.workflowProposals.approve(
+          { ...evalScope(input), shopId: input.shopId }, proposal.id,
+          { approvedBy: 'production-eval', expectedContextVersion: proposal.contextVersion },
+        );
+        if (result.status !== 'STALE') throw new Error(`EXECUTOR_WORKFLOW_EXPECTED_STALE:${result.status}`);
+        const run = await this.prisma.workflowRun.findFirst({
+          where: { ...evalScope(input), shopId: input.shopId, conversationId: input.conversationId, status: 'STALE' },
+          select: { id: true },
+        });
+        if (!run) throw new Error('EXECUTOR_WORKFLOW_STALE_NOT_DURABLE');
+        return;
+      }
+      await delay(this.pollMs);
+    }
+    throw new Error('EXECUTOR_WORKFLOW_PROPOSAL_TIMEOUT');
+  }
+
+  async resumeAfterRestart(input: EvalMessageInput & { conversationId: string; phase: string; projection?: ProductionReplyEvalProjection }): Promise<void> {
+    if (!this.recovery) throw new Error('EXECUTOR_RECOVERY_SERVICE_UNAVAILABLE');
+    const scope = { ...evalScope(input), shopId: input.shopId };
+    if (input.phase === 'GENERATING') {
+      const deadline = Date.now() + this.timeoutMs;
+      while (Date.now() < deadline) {
+        const job = await this.prisma.replyJob.findFirst({
+          where: { ...scope, conversationId: input.conversationId, status: 'GENERATING' },
+          orderBy: { createdAt: 'desc' }, select: { id: true },
+        });
+        if (job) {
+          const now = new Date();
+          await this.prisma.replyJob.updateMany({
+            where: { id: job.id, ...scope, status: 'GENERATING' },
+            data: { updatedAt: new Date(now.getTime() - 4 * 60_000) },
+          });
+          const recovered = await this.recovery.recoverOnce(now);
+          if (recovered.recoveryPending < 1) throw new Error('EXECUTOR_GENERATING_RECOVERY_NOT_CLAIMED');
+          return;
+        }
+        await delay(this.pollMs);
+      }
+      throw new Error('EXECUTOR_GENERATING_STATE_TIMEOUT');
+    }
+    if (input.phase === 'SEND_OUTBOX_SENDING') {
+      if (!this.controls || !this.sendOutboxes || !input.projection?.replyJob.draft) {
+        throw new Error('EXECUTOR_SEND_RECOVERY_BOUNDARY_UNAVAILABLE');
+      }
+      const draft = input.projection.replyJob.draft;
+      const final = await this.controls.saveHumanFinal(scope, input.conversationId, {
+        text: draft.aiDraft, sourceDraftId: draft.id, editType: 'STYLE_EDIT',
+      });
+      const claim = await this.sendOutboxes.claim(scope, final.sendOutboxId);
+      if (!claim.claimed) throw new Error(`EXECUTOR_SEND_CLAIM_FAILED:${claim.failureCode}`);
+      if (!(await this.sendOutboxes.fenceBeforeTransport(scope, final.sendOutboxId))) {
+        throw new Error('EXECUTOR_SEND_TRANSPORT_FENCE_FAILED');
+      }
+      const now = new Date();
+      await this.prisma.sendOutbox.updateMany({
+        where: { id: final.sendOutboxId, ...scope, status: 'SENDING', transportStartedAt: { not: null } },
+        data: { updatedAt: new Date(now.getTime() - 60_000) },
+      });
+      const recovered = await this.recovery.recoverOnce(now);
+      if (recovered.uncertain < 1) throw new Error('EXECUTOR_SEND_UNCERTAIN_NOT_RECOVERED');
+      const durable = await this.prisma.sendOutbox.findFirst({
+        where: { id: final.sendOutboxId, ...scope }, select: { status: true },
+      });
+      if (durable?.status !== 'UNCERTAIN') throw new Error(`EXECUTOR_SEND_EXPECTED_UNCERTAIN:${durable?.status ?? 'MISSING'}`);
+      return;
+    }
+    throw new Error(`EXECUTOR_RESTART_PHASE_UNSUPPORTED:${input.phase}`);
+  }
+
   async waitForProjection(input: {
     workspaceId: string;
     tenantId: string;
@@ -440,11 +628,21 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
             select: { id: true, provider: true, model: true, inputTokens: true, outputTokens: true, durationMs: true },
           }),
           this.prisma.message.findMany({
-            where: { ...input, role: 'ASSISTANT', createdAt: { gte: replyJob.createdAt } },
+            where: { ...input, role: { in: ['ASSISTANT', 'HUMAN'] }, createdAt: { gte: replyJob.createdAt } },
             orderBy: { sequence: 'asc' },
             select: { id: true, externalMessageId: true, contentJson: true },
           }),
         ]);
+        const receiptExternalMessageId = stringField(record(replyJob.sendOutbox?.receiptJson), 'externalMessageId');
+        if (
+          replyJob.sendOutbox?.status === 'SENT'
+          && (!receiptExternalMessageId || !assistantMessages.some((message) => message.externalMessageId === receiptExternalMessageId))
+        ) {
+          // A provider receipt and its buyer-visible Message projection are
+          // separate durable commits. AUTO evaluation must observe both.
+          await delay(this.pollMs);
+          continue;
+        }
         return {
           workspaceId: input.workspaceId,
           conversationId: input.conversationId,
@@ -470,6 +668,10 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
             id: entry.id,
             knowledgeItemId: entry.knowledgeItemId,
             knowledgeVersionId: entry.knowledgeVersionId,
+            sourceType: entry.sourceType,
+            scope: entry.scope,
+            productId: entry.productId,
+            retrievalScore: entry.retrievalScore,
             retrievedContentSnapshotJson: entry.retrievedContentSnapshotJson,
           })),
           traceEvents,
@@ -562,6 +764,13 @@ export function projectProductionReplyExecution(
     tasks: unique(projection.tasks.map((task) => task.intent)),
     mode: policyMode ?? projectedMode(projection.replyJob),
     evidence: unique(projection.evidences.map((entry) => textFromJson(entry.retrievedContentSnapshotJson)).filter(Boolean)),
+    evidenceDetails: projection.evidences.map((entry) => ({
+      scope: entry.scope,
+      productId: entry.productId,
+      sourceType: entry.sourceType,
+      text: textFromJson(entry.retrievedContentSnapshotJson),
+      retrievalScore: entry.retrievalScore,
+    })),
     provider: uniformValue(linkedInvocations.map((invocation) => invocation.provider)),
     model: uniformValue(linkedInvocations.map((invocation) => invocation.model)),
     inputTokens: sum(linkedInvocations.map((invocation) => invocation.inputTokens)),

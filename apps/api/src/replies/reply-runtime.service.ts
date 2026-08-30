@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { ReplyEvidenceSnapshot } from '@ai-customer-service/contracts';
-import { buildReply, buildReplyContext, checkForbiddenTerms, createTaskBundle, decideReplyPolicy, executeTaskBundle, guardReplyOutput, isTaskBlocking, mergeExplicitIntentTasks, renderCustomerFactReply, renderImageObservationReply, resolveContext, resolveSafeKnowledgeIntent, resolveSafeSocialReply, sanitizeContext, type PlannedTask, type TaskBundleExecution, type TaskState } from '@ai-customer-service/core';
+import { buildReply, buildReplyContext, checkForbiddenTerms, createTaskBundle, decideReplyPolicy, executeTaskBundle, guardReplyOutput, inferExplicitIntentTasks, isTaskBlocking, mergeExplicitIntentTasks, renderCustomerFactReply, renderImageObservationReply, resolveContext, resolveSafeKnowledgeIntent, resolveSafeSocialReply, sanitizeContext, type PlannedTask, type TaskBundleExecution, type TaskState } from '@ai-customer-service/core';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { AiRuntimeApplicationService } from '../ai/ai-runtime-application.service';
@@ -14,6 +14,7 @@ import { ConversationTransportMutex, localConversationTransportMutex, transportS
 import { TraceService } from '../trace/trace.service';
 import { WorkflowRouterService } from '../workflow/workflow-router.service';
 import { autoReplyReady } from '../shops/shop-ai-readiness';
+import { AiEvalSimulatedCrash } from '../eval/ai-eval-fault-registry';
 
 type ReplyGeneration = { text: string; requiresHuman: boolean };
 type IntentPlanTask = {
@@ -101,24 +102,61 @@ export class ReplyRuntimeService {
           customerMemory: contextSupport.customerMemory,
         });
         void this.recordTrace(scope, job, 'CONTEXT_BUDGET', { purpose: 'INTENT_PLANNER', characters: plannerContext.characterCount, omittedSections: plannerContext.omittedSections, truncatedSections: plannerContext.truncatedSections });
-        const intent = await this.runtime.runStructured<{ tasks: IntentPlanTask[] }>(scope, {
-          purpose: 'INTENT_PLANNER', schema: 'IntentPlan', context: plannerContext.context,
-          allowedDataClasses: ['turn', 'recentMessages', 'structuredFacts', 'summary', 'customerMemory'], promptVersion: 'reply-intent-plan-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
-        });
-        const modelPlannedTasks = augmentExplicitIntentTasks(job.userTurn.normalizedText, intent.output.tasks);
-        const safeKnowledgeAuto = Boolean(safeKnowledgeIntent && modelPlannedTasks.every((task) =>
-          task.intent === 'UNKNOWN' || task.intent === safeKnowledgeIntent));
+        const explicitTasks = inferExplicitIntentTasks(job.userTurn.normalizedText);
+        let intentInvocation: { invocationId: string; provider: string; model: string; fallbackUsed: boolean } | undefined;
+        let modelPlannedTasks: IntentPlanTask[];
+        try {
+          const intent = await this.runtime.runStructured<{ tasks: IntentPlanTask[] }>(scope, {
+            purpose: 'INTENT_PLANNER', schema: 'IntentPlan', context: plannerContext.context,
+            allowedDataClasses: ['turn', 'recentMessages', 'structuredFacts', 'summary', 'customerMemory'], promptVersion: 'reply-intent-plan-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
+          });
+          intentInvocation = intent;
+          modelPlannedTasks = augmentExplicitIntentTasks(job.userTurn.normalizedText, intent.output.tasks);
+        } catch (error) {
+          if (!safeKnowledgeIntent && explicitTasks.length === 0) throw error;
+          // Structured model output is advisory for lexically unambiguous
+          // customer-service requests. The fallback identifies only the Task;
+          // live resolvers and frozen Evidence remain the sole fact sources.
+          modelPlannedTasks = explicitTasks;
+          void this.recordTrace(scope, job, 'DETERMINISTIC_INTENT_FALLBACK', {
+            reason: error instanceof Error ? error.name : 'INTENT_PLANNER_FAILED',
+            explicitIntents: explicitTasks.map((task) => task.intent),
+            safeKnowledgeIntent: safeKnowledgeIntent ?? null,
+          });
+        }
+        // The allow-list matcher rejects mixed action/order text, so a model
+        // cannot turn an exact store-policy question into an order lookup.
+        const safeKnowledgeAuto = Boolean(safeKnowledgeIntent);
         plannedTasks = safeKnowledgeAuto
           ? [{ intent: safeKnowledgeIntent!, riskLevel: 'LOW', requiredContext: [], requiredKnowledge: ['STORE'], requiredTools: [] }]
           : modelPlannedTasks;
-        const risk = await this.runtime.runStructured<{ riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; reasons: string[]; recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' }>(scope, {
-          purpose: 'RISK_CLASSIFIER', schema: 'RiskResult',
-          context: { tasks: plannedTasks.map((task) => ({ intent: task.intent, riskLevel: task.riskLevel })) },
-          allowedDataClasses: ['tasks'], promptVersion: 'reply-risk-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
-        });
-        classifierRisk = safeKnowledgeAuto ? 'LOW' : risk.output.riskLevel;
-        recommendedMode = safeKnowledgeAuto ? 'AUTO' : conservativeRecommendation(risk.output.recommendedMode);
-        void this.recordTrace(scope, job, 'AI_USAGE', { invocations: [intent, risk].map((result) => ({ invocationId: result.invocationId, provider: result.provider, model: result.model, fallbackUsed: result.fallbackUsed })) });
+        let riskOutput: { riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; reasons: string[]; recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' } | undefined;
+        let riskInvocation: { invocationId: string; provider: string; model: string; fallbackUsed: boolean } | undefined;
+        try {
+          const risk = await this.runtime.runStructured<{ riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; reasons: string[]; recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' }>(scope, {
+            purpose: 'RISK_CLASSIFIER', schema: 'RiskResult',
+            context: { tasks: plannedTasks.map((task) => ({ intent: task.intent, riskLevel: task.riskLevel })) },
+            allowedDataClasses: ['tasks'], promptVersion: 'reply-risk-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
+          });
+          riskOutput = risk.output;
+          riskInvocation = risk;
+        } catch (error) {
+          if (!safeKnowledgeAuto && explicitTasks.length === 0) throw error;
+          void this.recordTrace(scope, job, 'DETERMINISTIC_RISK_FALLBACK', {
+            reason: error instanceof Error ? error.name : 'RISK_CLASSIFIER_FAILED',
+            explicitIntents: explicitTasks.map((task) => task.intent),
+          });
+        }
+        const deterministicRisk = plannedTasks.reduce<'LOW' | 'MEDIUM' | 'HIGH'>((current, task) => maxRisk(current, task.riskLevel), 'LOW');
+        if (safeKnowledgeAuto || explicitTasks.length > 0) {
+          classifierRisk = deterministicRisk;
+          recommendedMode = riskModeFor(deterministicRisk);
+        } else {
+          if (!riskOutput) throw new Error('RISK_CLASSIFIER_RESULT_MISSING');
+          classifierRisk = riskOutput.riskLevel;
+          recommendedMode = conservativeRecommendation(riskOutput.recommendedMode);
+        }
+        void this.recordTrace(scope, job, 'AI_USAGE', { invocations: [intentInvocation, riskInvocation].filter((result): result is NonNullable<typeof result> => Boolean(result)).map((result) => ({ invocationId: result.invocationId, provider: result.provider, model: result.model, fallbackUsed: result.fallbackUsed })) });
       }
       const taskBundle = createTaskBundle({
         tasks: plannedTasks.slice(0, 4).map((task, index) => ({
@@ -132,7 +170,7 @@ export class ReplyRuntimeService {
       // this critical section: only live read -> selection CAS is serialized.
       const resolvedContexts = await this.transportMutex.runMany([transportShopMutexKey(scope)], async () => {
         const taskContexts = await this.resolveTaskContexts(scope, job, taskBundle.tasks);
-        const clarification = clarificationText(taskContexts);
+        const clarification = clarificationText(taskContexts, taskBundle.tasks);
         if (!clarification) await this.persistResolvedContexts(scope, job, taskContexts);
         return { taskContexts, clarification };
       });
@@ -230,8 +268,22 @@ export class ReplyRuntimeService {
       });
       const persistedTaskIds = await this.persistTasks(scope, job.id, job.conversationId, job.userTurnId, execution.tasks);
       const workflow = await this.resolveWorkflowTasks(scope, job.conversationId, persistedTaskIds, execution);
-      if (workflow.waitingApproval) return this.waitForHuman(scope, job, 'WORKFLOW_APPROVAL_REQUIRED');
-      if (workflow.failed) return this.waitForHuman(scope, job, 'WORKFLOW_FAILED');
+      if (workflow.waitingApproval) {
+        await this.recordTrace(scope, job, 'REPLY_POLICY', {
+          mode: 'MANUAL',
+          reasons: ['WORKFLOW_APPROVAL_REQUIRED'],
+          evidenceCount: evidence.length,
+        });
+        return this.waitForHuman(scope, job, 'WORKFLOW_APPROVAL_REQUIRED');
+      }
+      if (workflow.failed) {
+        await this.recordTrace(scope, job, 'REPLY_POLICY', {
+          mode: 'MANUAL',
+          reasons: ['WORKFLOW_FAILED'],
+          evidenceCount: evidence.length,
+        });
+        return this.waitForHuman(scope, job, 'WORKFLOW_FAILED');
+      }
       execution = workflow.execution;
       void this.recordTrace(scope, job, 'TASKS', { tasks: execution.tasks.map((task) => ({ id: task.id, status: task.status, riskLevel: task.riskLevel, errorCode: task.errorCode ?? null })) });
       const [shop, settings] = await Promise.all([
@@ -275,7 +327,23 @@ export class ReplyRuntimeService {
       });
       void this.recordTrace(scope, job, 'REPLY_POLICY', { mode: policy.mode, reasons: policy.reasons, evidenceCount: evidence.length, taskStatuses: execution.tasks.map((task) => task.status) });
       if (policy.mode === 'MANUAL') {
-        return this.waitForHuman(scope, job, policy.reasons.join(',') || 'MANUAL_REQUIRED');
+        const reason = policy.reasons.join(',') || 'MANUAL_REQUIRED';
+        return this.waitForHuman(scope, job, reason, customerFacingHandoffText(
+          execution.tasks.map((task) => task.intent),
+          reason,
+        ));
+      }
+      if (execution.tasks.length > 0 && execution.tasks.every((task) => task.status === 'FAILED' && task.errorCode === 'NO_EVIDENCE')) {
+        // With no grounded fact there is nothing safe for a Composer to
+        // paraphrase. A fixed customer-facing handoff prevents the model from
+        // turning absence of evidence into an unsupported positive or
+        // negative business claim.
+        return this.waitForHuman(
+          scope,
+          job,
+          'NO_EVIDENCE',
+          noEvidenceHandoffText(job.userTurn.normalizedText),
+        );
       }
       const composeFinalReply = async () => {
           const taskResults = execution.tasks.map((task) => ({
@@ -341,8 +409,24 @@ export class ReplyRuntimeService {
       output = output ?? { text: checked.text, requiresHuman: policy.mode === 'ASSIST' };
       output.text = checked.text;
       output.requiresHuman = output.requiresHuman || policy.mode === 'ASSIST';
-    } catch {
-      return this.waitForHuman(scope, job, 'AI_RUNTIME_FAILED');
+    } catch (error) {
+      if (error instanceof AiEvalSimulatedCrash) throw error;
+      const inferred = inferExplicitIntentTasks(job.userTurn.normalizedText);
+      const failedTasks = (inferred.length ? inferred : [{
+        intent: 'UNKNOWN', riskLevel: 'MEDIUM' as const, requiredContext: [], requiredKnowledge: [], requiredTools: [],
+      }]).map((task, index) => ({
+        id: `${job.id}:runtime-failure:${index}`, intent: task.intent, operation: 'READ' as const,
+        riskLevel: task.riskLevel, requiredContext: task.requiredContext,
+        requiredKnowledge: task.requiredKnowledge, requiredTools: task.requiredTools,
+        status: 'FAILED', errorCode: 'AI_RUNTIME_FAILED', blocking: isTaskBlocking(task.requiredTools, task.riskLevel),
+      }));
+      await this.persistTasks(scope, job.id, job.conversationId, job.userTurnId, failedTasks, false);
+      void this.recordTrace(scope, job, 'TASKS', { tasks: failedTasks.map((task) => ({ intent: task.intent, status: task.status, errorCode: task.errorCode })) });
+      void this.recordTrace(scope, job, 'REPLY_POLICY', { mode: 'ASSIST', reasons: ['AI_RUNTIME_FAILED'] });
+      return this.waitForHuman(
+        scope, job, 'AI_RUNTIME_FAILED',
+        customerFacingHandoffText(failedTasks.map((task) => task.intent), 'AI_RUNTIME_FAILED'),
+      );
     }
 
     const current = await this.prisma.replyJob.findFirst({
@@ -583,7 +667,7 @@ export class ReplyRuntimeService {
     const repository = this.prisma as unknown as {
       message?: { findMany(input: unknown): Promise<Array<{ kind: string; contentJson: unknown }>> };
       product?: { findMany(input: unknown): Promise<Array<{ id: string; title: string }>>; findFirst?: (input: unknown) => Promise<{ id: string; title: string } | null> };
-      productSku?: { findMany(input: unknown): Promise<Array<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown }>>; findFirst?: (input: unknown) => Promise<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown } | null> };
+      productSku?: { findMany(input: unknown): Promise<Array<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown; product?: { title: string } }>>; findFirst?: (input: unknown) => Promise<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown; product?: { title: string } } | null> };
       order?: { findMany(input: unknown): Promise<Array<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } }>>; findFirst?: (input: unknown) => Promise<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } } | null> };
     };
     const cards = sourceMessageIds.length && repository.message
@@ -645,10 +729,10 @@ export class ReplyRuntimeService {
     }
     if (kind === 'SKU' && repository.productSku) {
       if (exactId && repository.productSku.findFirst) {
-        const row = await repository.productSku.findFirst({ where: { id: exactId, ...scope }, select: { id: true, productId: true, externalSkuId: true, inventory: true, price: true, attributesJson: true } });
+        const row = await repository.productSku.findFirst({ where: { id: exactId, ...scope }, select: { id: true, productId: true, externalSkuId: true, inventory: true, price: true, attributesJson: true, product: { select: { title: true } } } });
         return row ? [skuCandidate(row)] : [];
       }
-      const select = { id: true, productId: true, externalSkuId: true, inventory: true, price: true, attributesJson: true };
+      const select = { id: true, productId: true, externalSkuId: true, inventory: true, price: true, attributesJson: true, product: { select: { title: true } } };
       // Textual attributes (for example “黑色 XL”) are a current-turn
       // selection.  Match them across the scoped SKU set before falling back
       // to the conversation's older product.  `preferredId` is a product id,
@@ -671,8 +755,10 @@ export class ReplyRuntimeService {
         const row = await repository.product.findFirst({ where: { id: exactId, ...scope }, select: { id: true, title: true } });
         return row ? [{ id: row.id, kind, label: row.title }] : [];
       }
-      const rows = await repository.product.findMany({ where: { ...scope, ...(exactId ? { id: exactId } : {}) }, orderBy: { updatedAt: 'desc' }, take: exactId ? 1 : 3, select: { id: true, title: true } });
-      return rows.map((row) => ({ id: row.id, kind, label: row.title }));
+      const rows = await repository.product.findMany({ where: { ...scope, ...(exactId ? { id: exactId } : {}) }, orderBy: { updatedAt: 'desc' }, take: exactId ? 1 : 25, select: { id: true, title: true } });
+      const textMatches = explicitProductMatches(rows, options.text);
+      const selected = textMatches.length ? textMatches : rows.slice(0, 3);
+      return selected.map((row) => ({ id: row.id, kind, label: row.title }));
     }
     return [];
   }
@@ -726,25 +812,39 @@ export class ReplyRuntimeService {
       });
       if (!persisted.count) return { committed: false, reason: 'CLARIFICATION_CAS_LOST' } as const;
       const taskRepository = tx as unknown as { task?: { createMany(input: unknown): Promise<unknown> } };
-      const plannedById = new Map(plannedTasks.map((task) => [task.id, task]));
-      const clarificationTasks = [...contexts.entries()].flatMap(([taskId, context], index) => {
-        if (!context.clarification) return [];
-        const planned = plannedById.get(taskId);
-        return [{
-          id: planned ? `reply-task:${job.id}:${planned.id}` : `reply-task:${job.id}:clarification:${index}`,
+      const clarificationTasks = plannedTasks.map((planned) => {
+        const context = contexts.get(planned.id);
+        const resolvedReply = context?.status === 'RESOLVED' && context.entity
+          ? dynamicReply(planned.intent, context.entity as unknown as Record<string, unknown>)
+          : undefined;
+        const status = context?.clarification
+          ? 'AMBIGUOUS'
+          : context?.status === 'RESOLVED'
+            ? 'RESOLVED'
+            : context
+              ? 'FAILED'
+              : 'OPEN';
+        return {
+          id: `reply-task:${job.id}:${planned.id}`,
           ...scope,
           conversationId: job.conversationId,
           userTurnId: job.userTurnId,
-          intent: planned?.intent ?? 'CLARIFICATION',
-          operation: planned?.operation ?? 'READ',
-          riskLevel: planned?.riskLevel ?? 'LOW',
-          requiredContextJson: planned?.requiredContext ?? context.clarification.requests.map((request) => request.kind),
-          requiredKnowledgeJson: planned?.requiredKnowledge ?? [],
-          requiredToolsJson: planned?.requiredTools ?? [],
-          status: 'AMBIGUOUS',
-          blocking: planned?.blocking ?? false,
-          resultJson: cloneJson({ clarification: context.clarification }),
-        }];
+          intent: planned.intent,
+          operation: planned.operation,
+          riskLevel: planned.riskLevel,
+          requiredContextJson: planned.requiredContext,
+          requiredKnowledgeJson: planned.requiredKnowledge ?? [],
+          requiredToolsJson: planned.requiredTools,
+          status,
+          blocking: planned.blocking,
+          ...(context?.clarification
+            ? { resultJson: cloneJson({ clarification: context.clarification }) }
+            : resolvedReply
+              ? { resultJson: cloneJson({ facts: { reply: resolvedReply } }) }
+              : context
+                ? { errorCode: `CONTEXT_${context.status}` }
+                : {}),
+        };
       });
       if (clarificationTasks.length && taskRepository.task) await taskRepository.task.createMany({ data: clarificationTasks, skipDuplicates: true });
       // ASSIST_ONLY and not-yet-ready AUTO shops may retain the useful
@@ -809,7 +909,7 @@ export class ReplyRuntimeService {
     scope: ReplyJobScope,
     job: { id: string; conversationId: string; sourceContextVersion: number; sourceLastMessageId?: string | null; sourceSequence: number },
     reason: string,
-    draftText = '请人工处理此会话。',
+    draftText?: string,
   ): Promise<{ status: 'WAITING_HUMAN'; draftId: string; reason: string } | { status: 'STALE'; reason: string }> {
     // ReplyDraftService owns the atomic GENERATING/PENDING -> WAITING_HUMAN
     // transition.  Updating it first would make the draft deliberately reject
@@ -817,7 +917,7 @@ export class ReplyRuntimeService {
     let draft: { id: string };
     try {
       draft = await this.drafts.createWaitingHuman(scope, {
-        replyJobId: job.id, aiDraft: draftText, sourceContextVersion: job.sourceContextVersion,
+        replyJobId: job.id, aiDraft: draftText ?? customerFacingHandoffText([], reason), sourceContextVersion: job.sourceContextVersion,
         sourceLastMessageId: job.sourceLastMessageId ?? undefined, sourceSequence: job.sourceSequence,
       });
     } catch (error) {
@@ -1033,6 +1133,10 @@ function augmentExplicitIntentTasks(text: string, tasks: IntentPlanTask[]): Inte
   return mergeExplicitIntentTasks(text, tasks);
 }
 
+function riskModeFor(risk: 'LOW' | 'MEDIUM' | 'HIGH'): 'AUTO' | 'ASSIST' | 'MANUAL' {
+  return risk === 'HIGH' ? 'MANUAL' : risk === 'MEDIUM' ? 'ASSIST' : 'AUTO';
+}
+
 function stringValues(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0).map((entry) => entry.trim());
   if (!value || typeof value !== 'object') return [];
@@ -1094,11 +1198,12 @@ function selectSkuMatches<T extends { attributesJson: unknown }>(rows: T[], text
 }
 
 /** Unlike the fallback selector, only return a current-turn explicit match. */
-function explicitSkuMatches<T extends { externalSkuId: string; attributesJson: unknown }>(rows: T[], text: string): T[] {
+export function explicitSkuMatches<T extends { externalSkuId: string; attributesJson: unknown; product?: { title: string } }>(rows: T[], text: string): T[] {
   const normalized = text.toLocaleLowerCase();
   const scored = rows.map((row) => {
     const attributes = jsonRecord(row.attributesJson);
     const score = (row.externalSkuId.trim().length > 0 && normalized.includes(row.externalSkuId.trim().toLocaleLowerCase()) ? 1 : 0)
+      + productTitleMentionScore(normalized, row.product?.title)
       + (attributes
         ? Object.entries(attributes).filter(([key, value]) => typeof value === 'string' && attributeValueMentioned(normalized, key, value)).length
         : 0);
@@ -1106,6 +1211,55 @@ function explicitSkuMatches<T extends { externalSkuId: string; attributesJson: u
   });
   const maximum = Math.max(0, ...scored.map((entry) => entry.score));
   return maximum > 0 ? scored.filter((entry) => entry.score === maximum).map((entry) => entry.row) : [];
+}
+
+/** A current-turn product name beats recency and prior conversation context. */
+export function explicitProductMatches<T extends { title: string }>(rows: T[], text: string): T[] {
+  const normalized = text.toLocaleLowerCase();
+  const scored = rows.map((row) => ({ row, score: productTitleMentionScore(normalized, row.title) }));
+  const maximum = Math.max(0, ...scored.map((entry) => entry.score));
+  return maximum > 0 ? scored.filter((entry) => entry.score === maximum).map((entry) => entry.row) : [];
+}
+
+function productTitleMentionScore(normalizedText: string, title?: string): number {
+  if (!title?.trim()) return 0;
+  const normalizedTitle = title.trim().toLocaleLowerCase();
+  const latin = normalizedTitle.match(/[a-z0-9]+/g) ?? [];
+  const han = [...normalizedTitle.replace(/[^\u3400-\u9fff]/g, '')];
+  const bigrams = Array.from({ length: Math.max(0, han.length - 1) }, (_, index) => `${han[index]}${han[index + 1]}`);
+  return [...new Set([...latin, ...bigrams])].filter((token) => token.length > 1 && normalizedText.includes(token)).length;
+}
+
+export function customerFacingHandoffText(intents: readonly string[], reason: string): string {
+  if (intents.some((intent) => /COMPLAINT/i.test(intent))) {
+    return '很抱歉给您带来不好的体验，我已为本次投诉转入人工核实，请稍候。';
+  }
+  if (intents.some((intent) => /REFUND|RETURN|COMPENSATION/i.test(intent))) {
+    return '退款或售后处理需要人工核实订单与规则，已为您转入人工确认，请稍候。';
+  }
+  if (intents.some((intent) => /HUMAN_REQUEST/i.test(intent)) || reason.includes('USER_REQUESTED_HUMAN')) {
+    return '好的，已为您转入人工客服队列，请稍候。';
+  }
+  if (reason.includes('NO_EVIDENCE') || reason.includes('CONTEXT_NOT_FOUND')) {
+    return '暂时没有找到可靠依据，我已转入人工确认，避免给您错误答复。';
+  }
+  if (reason.includes('AI_RUNTIME_FAILED')) {
+    return '当前智能回复暂时不可用，我已转入人工处理，请稍候。';
+  }
+  return '这个问题需要人工进一步确认，我已转入人工处理，请稍候。';
+}
+
+function noEvidenceHandoffText(turnText: string): string {
+  const subject = /线下试穿/u.test(turnText)
+    ? '线下试穿'
+    : /(?:实体店|到店)/u.test(turnText)
+      ? '到店服务'
+      : /营业时间/u.test(turnText)
+        ? '营业时间'
+        : undefined;
+  return subject
+    ? `关于${subject}，暂时没有找到可靠依据，我已转入人工确认，避免给您错误答复。`
+    : customerFacingHandoffText([], 'NO_EVIDENCE');
 }
 
 /** Size tokens must match as whole ASCII tokens: `L` is not a mention of `XL`. */
@@ -1164,14 +1318,23 @@ function clarificationChoiceId(value: unknown, kind: 'PRODUCT' | 'SKU' | 'ORDER'
   return matches.length === 1 ? matches[0]!.id : undefined;
 }
 
-function clarificationText(contexts: Map<string, ReturnType<typeof resolveContext>>): string | undefined {
+function clarificationText(
+  contexts: Map<string, ReturnType<typeof resolveContext>>,
+  tasks: ReadonlyArray<{ id: string; intent: string }> = [],
+): string | undefined {
   const requests = [...contexts.values()].flatMap((context) => context.clarification?.requests ?? []);
   if (!requests.length) return undefined;
+  const resolvedReplies = tasks.flatMap((task) => {
+    const context = contexts.get(task.id);
+    if (context?.status !== 'RESOLVED' || !context.entity) return [];
+    const reply = dynamicReply(task.intent, context.entity as unknown as Record<string, unknown>);
+    return reply ? [reply] : [];
+  });
   const lines = requests.map((request) => {
     const choices = request.choices.map((choice) => choice.label).filter(Boolean).join('、');
     return choices ? `${request.question} 可选：${choices}。` : request.question;
   });
-  return lines.join('\n');
+  return [...new Set([...resolvedReplies, ...lines])].join('\n');
 }
 
 export function explicitOrderMatches<T extends { externalOrderId: string; product?: { title: string } }>(rows: T[], text: string): T[] {

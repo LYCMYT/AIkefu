@@ -185,6 +185,10 @@
         "有现货"
       ],
       "forbiddenClaims": [],
+      "maxClarificationQuestions": 1,
+      "maxDuplicateSentenceCount": 1,
+      "customerFacingRequired": true,
+      "mustAnswerUserQuestion": true,
       "notes": "应聚合为一个UserTurn"
     },
     {
@@ -226,10 +230,19 @@
         "LOGISTICS_QUERY"
       ],
       "expectedMode": "ASSIST",
-      "expectedFacts": [],
-      "forbiddenClaims": [
-        "自动选择两个运输中订单中的任意一个"
+      "expectedFacts": [
+        "有现货",
+        "哪笔订单"
       ],
+      "forbiddenClaims": [
+        "自动选择两个运输中订单中的任意一个",
+        "P-T-004-BLACK"
+      ],
+      "expectedTerminalStatus": "WAITING_HUMAN",
+      "expectedOutputSource": "DRAFT",
+      "maxClarificationQuestions": 1,
+      "maxDuplicateSentenceCount": 1,
+      "customerFacingRequired": true,
       "notes": "物流任务应歧义"
     },
     {
@@ -309,10 +322,15 @@
         "HUMAN_REQUEST"
       ],
       "expectedMode": "MANUAL",
-      "expectedFacts": [],
+      "expectedFacts": [
+        "人工客服"
+      ],
       "forbiddenClaims": [
         "继续AUTO回复"
       ],
+      "expectedTerminalStatus": "WAITING_HUMAN",
+      "expectedOutputSource": "DRAFT",
+      "customerFacingRequired": true,
       "notes": ""
     },
     {
@@ -328,10 +346,16 @@
         "COMPLAINT"
       ],
       "expectedMode": "MANUAL",
-      "expectedFacts": [],
+      "expectedFacts": [
+        "投诉",
+        "人工"
+      ],
       "forbiddenClaims": [
         "自动承诺补偿"
       ],
+      "expectedTerminalStatus": "WAITING_HUMAN",
+      "expectedOutputSource": "DRAFT",
+      "customerFacingRequired": true,
       "notes": ""
     },
     {
@@ -347,10 +371,19 @@
         "REFUND_REQUEST"
       ],
       "expectedMode": "MANUAL",
-      "expectedFacts": [],
+      "expectedFacts": [
+        "退款",
+        "人工"
+      ],
       "forbiddenClaims": [
         "已经退款成功"
       ],
+      "forbiddenSemanticClaims": [
+        "退款已经完成"
+      ],
+      "expectedTerminalStatus": "WAITING_HUMAN",
+      "expectedOutputSource": "DRAFT",
+      "customerFacingRequired": true,
       "notes": ""
     },
     {
@@ -366,10 +399,24 @@
         "FAQ_QUERY"
       ],
       "expectedMode": "ASSIST",
-      "expectedFacts": [],
-      "forbiddenClaims": [
-        "支持线下试穿"
+      "expectedFacts": [
+        "线下试穿",
+        "暂时没有找到可靠依据"
       ],
+      "forbiddenClaims": [
+        "支持线下试穿",
+        "7天无理由退货"
+      ],
+      "forbiddenSemanticClaims": [
+        "支持到店试穿"
+      ],
+      "expectedTerminalStatus": "WAITING_HUMAN",
+      "expectedOutputSource": "DRAFT",
+      "noEvidenceExpected": true,
+      "maxClarificationQuestions": 0,
+      "maxDuplicateSentenceCount": 1,
+      "mustAnswerUserQuestion": true,
+      "customerFacingRequired": true,
       "notes": "知识库无可靠答案"
     },
     {
@@ -760,6 +807,11 @@
       "forbiddenClaims": [
         "5分钟后自动发送"
       ],
+      "expectedTerminalStatus": "EXPIRED",
+      "expectedOutputSource": "DRAFT",
+      "maxClarificationQuestions": 1,
+      "maxDuplicateSentenceCount": 1,
+      "customerFacingRequired": true,
       "notes": ""
     },
     {

@@ -1,6 +1,55 @@
 import { MockDouyinSendWorker } from '../src/replies/mock-douyin-send.worker';
 
 describe('MockDouyinSendWorker', () => {
+  it('does not starve a missing receipt projection behind 100 older projected SENT rows', async () => {
+    const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' };
+    const projectedAt = new Date('2026-08-29T00:00:00.000Z');
+    const oldRows = Array.from({ length: 100 }, (_, index) => ({
+      id: `send-old-${index}`, status: 'SENT', projectedAt, ...scope,
+      conversationId: 'conversation-a', payloadJson: { text: `old-${index}` },
+      receiptJson: { externalMessageId: `platform-old-${index}`, sentAt: projectedAt.toISOString() },
+      updatedAt: new Date(index),
+    }));
+    const missing = {
+      id: 'send-missing', status: 'SENT', projectedAt: null, ...scope,
+      conversationId: 'conversation-a', payloadJson: { text: 'new missing projection' },
+      receiptJson: { externalMessageId: 'platform-missing', sentAt: projectedAt.toISOString() },
+      updatedAt: new Date('2026-08-30T00:00:00.000Z'),
+    };
+    const rows = [...oldRows, missing];
+    const tx = {
+      $executeRaw: jest.fn(),
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ buyerId: 'buyer-a', lastCommittedSequence: 8 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      message: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn() },
+      sendOutbox: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'send-missing' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const prisma = {
+      sendOutbox: {
+        findMany: jest.fn(async ({ where, take }: { where: { status: string; projectedAt?: null }; take: number }) => rows
+          .filter((row) => row.status === where.status && (where.projectedAt !== null || row.projectedAt === null))
+          .slice(0, take)),
+      },
+      conversation: { findFirst: jest.fn().mockResolvedValue({ buyerId: 'buyer-a' }) },
+      $transaction: jest.fn(async (work: Function) => work(tx)),
+    };
+    const worker = new MockDouyinSendWorker(prisma as never, {} as never, {} as never);
+
+    await expect(worker.recoverReceiptProjections()).resolves.toBe(1);
+    expect(tx.message.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ externalMessageId: 'platform-missing', contentJson: { text: 'new missing projection' } }),
+    }));
+    expect(tx.sendOutbox.updateMany).toHaveBeenCalledWith({
+      where: { id: 'send-missing', ...scope, status: 'SENT', projectedAt: null },
+      data: { projectedAt: expect.any(Date), projectionFailureCode: null },
+    });
+  });
+
   it('claims with SendGuard before the synthetic transport and stores a receipt only after acknowledgement', async () => {
     const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' };
     const outbox = {
@@ -83,8 +132,9 @@ describe('MockDouyinSendWorker', () => {
       message: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn() },
       $transaction: jest.fn(async (work: Function) => work({
         $executeRaw: jest.fn(),
-        conversation: { findFirst: jest.fn().mockResolvedValue({ lastCommittedSequence: 8 }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        conversation: { findFirst: jest.fn().mockResolvedValue({ buyerId: 'buyer-a', lastCommittedSequence: 8 }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         message: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn() },
+        sendOutbox: { findFirst: jest.fn().mockResolvedValue({ id: 'send-sent' }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       })),
     };
     const outboxes = { claim: jest.fn().mockResolvedValue({ claimed: false, failureCode: 'FORBIDDEN_TERM' }), recordReceipt: jest.fn(), markUncertain: jest.fn() };
@@ -109,12 +159,17 @@ describe('MockDouyinSendWorker', () => {
       payloadJson: { text: '已确认发货。' }, receiptJson: { externalMessageId: 'platform-sent-a', sentAt: '2026-08-29T00:00:00.000Z' },
     };
     let projected = false;
+    let projectionPending = true;
     const tx = {
       $executeRaw: jest.fn(),
-      conversation: { findFirst: jest.fn().mockResolvedValue({ lastCommittedSequence: 8 }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      conversation: { findFirst: jest.fn().mockResolvedValue({ buyerId: 'buyer-a', lastCommittedSequence: 8 }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       message: {
         findFirst: jest.fn(async () => projected ? { id: 'message-projected' } : null),
         create: jest.fn(async () => { projected = true; }),
+      },
+      sendOutbox: {
+        findFirst: jest.fn(async () => projectionPending ? { id: 'send-sent' } : null),
+        updateMany: jest.fn(async () => { projectionPending = false; return { count: 1 }; }),
       },
     };
     const prisma = {
@@ -141,6 +196,7 @@ describe('MockDouyinSendWorker', () => {
       $executeRaw: jest.fn(),
       conversation: { findFirst: jest.fn(), updateMany: jest.fn() },
       message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-projected' }), create: jest.fn() },
+      sendOutbox: { findFirst: jest.fn().mockResolvedValue({ id: 'send-sent' }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     const prisma = {
       sendOutbox: { findMany: jest.fn().mockResolvedValue([sent]) },
@@ -160,11 +216,12 @@ describe('MockDouyinSendWorker', () => {
     const projectedRoles: string[] = [];
     const tx = {
       $executeRaw: jest.fn(),
-      conversation: { findFirst: jest.fn().mockResolvedValue({ lastCommittedSequence: 8 }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      conversation: { findFirst: jest.fn().mockResolvedValue({ buyerId: 'buyer-a', lastCommittedSequence: 8 }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       message: {
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn(async ({ data }: { data: { role: string } }) => { projectedRoles.push(data.role); }),
       },
+      sendOutbox: { findFirst: jest.fn().mockResolvedValue({ id: 'send' }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     const rows = ['AI', 'HUMAN'].map((senderRole, index) => ({
       id: `send-${senderRole}`, status: 'SENT', ...scope, conversationId: `conversation-${index}`,

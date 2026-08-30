@@ -35,6 +35,9 @@ import type {
   ReplyJob as ReplyJobContract,
   Scenario as ScenarioContract,
   ScenarioKey,
+  ShowcaseCatalog,
+  ShowcaseScenario,
+  ShowcaseRunStatus,
   SendOutbox as SendOutboxContract,
   TaskBundle,
   SeedCounts,
@@ -442,4 +445,4 @@ export interface BuyerCardInput {
   orderId?: string;
 }
 
-export type { BootstrapPayload, SeedCounts, ShopSummary };
+export type { BootstrapPayload, SeedCounts, ShopSummary, ShowcaseCatalog, ShowcaseScenario, ShowcaseRunStatus };

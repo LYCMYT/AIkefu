@@ -174,6 +174,7 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
       id: buyer.id,
       workspaceId: buyer.workspaceId,
       tenantId: buyer.tenantId,
+      externalBuyerId: buyer.externalBuyerId,
       displayName: buyer.displayName,
       avatar: buyer.avatar,
       tags: this.stringArray(buyer.tagsJson),
@@ -190,6 +191,7 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
     return products.map((product) => ({
       id: product.id,
       shopId: product.shopId,
+      externalProductId: product.externalProductId,
       title: product.title,
       description: product.description,
       status: product.status,
@@ -334,7 +336,10 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
           }
         : { activeReplyJobId: null, activeReplyJob: null, currentDraft: null }),
       sendOutbox: conversation.sendOutboxes?.[0] ? this.toSendOutbox(conversation.sendOutboxes[0]) : null,
-      taskBundle: this.toTaskBundle(conversation.tasks ?? [], conversation.replyJobs?.[0]?.userTurnId),
+      taskBundle: this.toTaskBundle(
+        conversation.tasks ?? [],
+        conversation.replyJobs?.[0]?.userTurnId ?? conversation.tasks?.at(-1)?.userTurnId,
+      ),
     };
   }
 

@@ -12,7 +12,8 @@ export type StaticAppPath =
   | '/admin/usage'
   | '/admin/privacy'
   | '/buyer-simulator'
-  | '/scenario-lab';
+  | '/scenario-lab'
+  | '/showcase';
 
 export type AppPath = StaticAppPath
   | `/workbench/shops/${string}`
@@ -46,6 +47,7 @@ export const navIcons: Record<StaticAppPath, string> = {
   '/admin/usage': '▦',
   '/admin/privacy': '⌁',
   '/scenario-lab': '◌',
+  '/showcase': '▶',
 };
 
 const canonicalPaths = new Set<StaticAppPath>([
@@ -60,6 +62,7 @@ const canonicalPaths = new Set<StaticAppPath>([
   '/admin/incidents',
   '/admin/usage',
   '/admin/privacy',
+  '/showcase',
 ]);
 
 export function resolveAppPath(pathname: string): AppPath {

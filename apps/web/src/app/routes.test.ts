@@ -5,6 +5,7 @@ describe('application routes', () => {
   it('keeps aliases canonical and unknown paths fail closed to Workbench', () => {
     expect(resolveAppPath('/admin/overview')).toBe('/admin');
     expect(resolveAppPath('/products')).toBe('/admin/products');
+    expect(resolveAppPath('/showcase')).toBe('/showcase');
     expect(resolveAppPath('/not-a-route')).toBe('/workbench');
   });
 

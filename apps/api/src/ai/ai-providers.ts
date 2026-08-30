@@ -10,7 +10,12 @@ import {
   type AiPurpose,
 } from '@ai-customer-service/core';
 
-type FetchLike = (input: string, init?: RequestInit) => Promise<{ ok: boolean; status?: number; json(): Promise<unknown> }>;
+type FetchLike = (input: string, init?: RequestInit) => Promise<{
+  ok: boolean;
+  status?: number;
+  headers?: { get(name: string): string | null };
+  json(): Promise<unknown>;
+}>;
 
 export type JsonModelGatewayOptions = {
   endpoint: string;
@@ -38,7 +43,9 @@ type ServerAiRuntimeOptions = Partial<JsonModelGatewayOptions> & Partial<Record<
   | 'AI_MODEL_GATEWAY_URL'
   | 'AI_MODEL_GATEWAY_SECRET'
   | 'AI_MODEL_NAME'
-  | 'AI_RUNTIME_TIMEOUT_MS',
+  | 'AI_OFFLINE_MODE'
+  | 'AI_RUNTIME_TIMEOUT_MS'
+  | 'NODE_ENV',
   string
 >>;
 
@@ -101,7 +108,9 @@ export class JsonModelGatewayProvider implements AiProvider {
     }
     if (!response.ok) {
       const status = response.status ?? 0;
-      throw new AiProviderFailure('HTTP', isRetryableHttpStatus(status), `AI_GATEWAY_HTTP_${status}`, { status });
+      throw new AiProviderFailure('HTTP', isRetryableHttpStatus(status), `AI_GATEWAY_HTTP_${status}`, {
+        status, retryAfterMs: retryAfterMilliseconds(response.headers?.get('retry-after')),
+      });
     }
     let payload: unknown;
     try {
@@ -177,7 +186,9 @@ export class OpenAICompatibleProvider implements AiProvider {
     }
     if (!response.ok) {
       const status = response.status ?? 0;
-      throw new AiProviderFailure('HTTP', isRetryableHttpStatus(status), `AI_PROVIDER_HTTP_${status}`, { status });
+      throw new AiProviderFailure('HTTP', isRetryableHttpStatus(status), `AI_PROVIDER_HTTP_${status}`, {
+        status, retryAfterMs: retryAfterMilliseconds(response.headers?.get('retry-after')),
+      });
     }
     let payload: DeepSeekChatCompletion | OpenAIResponsesPayload;
     try {
@@ -259,7 +270,9 @@ export class DeepSeekJsonProvider implements AiProvider {
     }
     if (!response.ok) {
       const status = response.status ?? 0;
-      throw new AiProviderFailure('HTTP', isRetryableHttpStatus(status), `AI_GATEWAY_HTTP_${status}`, { status });
+      throw new AiProviderFailure('HTTP', isRetryableHttpStatus(status), `AI_GATEWAY_HTTP_${status}`, {
+        status, retryAfterMs: retryAfterMilliseconds(response.headers?.get('retry-after')),
+      });
     }
     let payload: DeepSeekChatCompletion;
     try {
@@ -320,11 +333,12 @@ export function createServerAiRuntime(options: ServerAiRuntimeOptions = process.
     || options.AI_MODEL_GATEWAY_SECRET?.trim()
     || readSecretFile(options.AI_API_KEY_FILE);
   const explicitModel = options.model?.trim() || options.AI_MODEL_NAME?.trim();
+  const allowOffline = options.AI_OFFLINE_MODE === '1' || options.NODE_ENV !== 'production';
   const fallback = new OfflineStructuredProvider();
   const purposes: AiPurpose[] = [
     'INTENT_PLANNER', 'RISK_CLASSIFIER', 'SUMMARY', 'KNOWLEDGE_EXTRACT', 'REPLY_GENERATION', 'IMAGE_ANALYSIS', 'QUALITY_JUDGE',
   ];
-  const providers: Record<string, AiProvider> = { fallback };
+  const providers: Record<string, AiProvider> = allowOffline ? { fallback } : {};
   const routes: Partial<Record<AiPurpose, string[]>> = {};
   for (const purpose of purposes) {
     const model = explicitModel || modelForPurpose(options, purpose);
@@ -345,14 +359,12 @@ export function createServerAiRuntime(options: ServerAiRuntimeOptions = process.
         // and AIkefu's custom structured gateway have different wire formats.
         throw new Error('AI_PROVIDER_REQUIRED_FOR_CONFIGURED_ENDPOINT');
       }
-      // Intent and risk decide whether the system may act automatically. Once
-      // an operator has configured their primary decision provider, silently
-      // falling back to the demo's permissive synthetic result is unsafe.
-      // Offline output remains available only when no primary route exists.
-      routes[purpose] = purpose === 'INTENT_PLANNER' || purpose === 'RISK_CLASSIFIER'
-        ? [key]
-        : [key, 'fallback'];
+      // A configured real provider never falls back to a synthetic answer.
+      // A second provider may be added explicitly in the future, but it must
+      // be another audited real provider rather than the demo fixture.
+      routes[purpose] = [key];
     } else {
+      if (!allowOffline) throw new Error('AI_PROVIDER_CONFIGURATION_REQUIRED');
       routes[purpose] = ['fallback'];
     }
   }
@@ -370,6 +382,15 @@ function normalizeDeepSeekEndpoint(rawEndpoint: string): string {
   }
   if (endpoint.pathname === '/' || endpoint.pathname === '') endpoint.pathname = '/chat/completions';
   return endpoint.toString();
+}
+
+function retryAfterMilliseconds(value: string | null | undefined): number | undefined {
+  if (!value?.trim()) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1_000);
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return undefined;
+  return Math.max(0, timestamp - Date.now());
 }
 
 function normalizeOpenAICompatibleEndpoint(rawEndpoint: string, style: 'chat-completions' | 'responses'): string {
@@ -444,8 +465,8 @@ function exampleForPurpose(purpose: AiPurpose): Record<string, unknown> {
 }
 
 function modelForPurpose(options: ServerAiRuntimeOptions, purpose: AiPurpose): string | undefined {
-  if (purpose === 'IMAGE_ANALYSIS') return options.AI_MULTIMODAL_MODEL?.trim();
-  if (purpose === 'QUALITY_JUDGE') return options.AI_JUDGE_MODEL?.trim() || options.AI_QUALITY_MODEL?.trim();
+  if (purpose === 'IMAGE_ANALYSIS') return options.AI_MULTIMODAL_MODEL?.trim() || options.AI_QUALITY_MODEL?.trim() || options.AI_FAST_MODEL?.trim();
+  if (purpose === 'QUALITY_JUDGE') return options.AI_JUDGE_MODEL?.trim() || options.AI_QUALITY_MODEL?.trim() || options.AI_FAST_MODEL?.trim();
   if (purpose === 'REPLY_GENERATION') return options.AI_QUALITY_MODEL?.trim() || options.AI_FAST_MODEL?.trim();
   return options.AI_FAST_MODEL?.trim() || options.AI_QUALITY_MODEL?.trim();
 }
@@ -509,7 +530,11 @@ function offlineReplyGeneration(input: unknown): { text: string; requiresHuman: 
     if (product && typeof product.title === 'string') {
       return { text: `为你推荐 ${product.title.trim()}。`, requiresHuman: false };
     }
-    return { text: '', requiresHuman: true };
+    const topic = customerQuestionTopic(readString(input, ['turn', 'text']) ?? '');
+    return {
+      text: `关于“${topic}”，暂时没有找到可靠依据，已转入人工确认。`,
+      requiresHuman: true,
+    };
   }
   if (!unresolved.length) return { text: replies.join('\n'), requiresHuman: false };
   const unresolvedLabels = [...new Set(unresolved.map((task) => offlineIntentLabel(typeof task.intent === 'string' ? task.intent : 'UNKNOWN')))];
@@ -517,6 +542,17 @@ function offlineReplyGeneration(input: unknown): { text: string; requiresHuman: 
     text: [...replies, `${unresolvedLabels.join('、')}还需要人工确认。`].join('\n'),
     requiresHuman: true,
   };
+}
+
+function customerQuestionTopic(value: string): string {
+  const sanitized = value.normalize('NFKC')
+    .replace(/[\r\n\t]+/gu, ' ')
+    .replace(/(?:system\s*prompt|developer\s*message|系统提示词|开发者消息)/giu, '')
+    .replace(/^(?:(?:你好|您好|请问|想问一下|问一下|你们|这里|是否|可以|支持|有没有)[，,\s]*)+/u, '')
+    .replace(/[吗呢呀啊？?!！。．]+$/gu, '')
+    .trim();
+  if (!sanitized || /(?:^|\D)1[3-9]\d{9}(?:\D|$)|\b\d{17}[\dXx]\b|@/u.test(sanitized)) return '这个问题';
+  return sanitized.slice(0, 32);
 }
 
 function offlineWorkflowProducts(input: unknown): Record<string, unknown>[] {

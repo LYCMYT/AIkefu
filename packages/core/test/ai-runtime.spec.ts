@@ -127,12 +127,49 @@ describe('AI Runtime', () => {
         model: 'synthetic-model',
         fallbackUsed: false,
         status: 'FAILED',
-        tokenUsage: { inputTokens: 10, outputTokens: 5 },
+        tokenUsage: { inputTokens: 20, outputTokens: 10 },
       },
     });
 
     expect(provider.calls).toHaveLength(2);
     expect(provider.calls[1]?.repair).toBe(true);
+  });
+
+  it('accumulates token usage across invalid output and its repair', async () => {
+    const provider = new ScriptedProvider('primary', [
+      { output: { bad: true }, model: 'synthetic-model', usage: { inputTokens: 7, outputTokens: 3 } },
+      { output: { riskLevel: 'LOW' }, model: 'synthetic-model', usage: { inputTokens: 11, outputTokens: 5 } },
+    ]);
+    const runtime = new AiRuntime({ providers: { primary: provider }, routes: { RISK_CLASSIFIER: ['primary'] } });
+
+    const result = await runtime.runStructured({
+      purpose: 'RISK_CLASSIFIER', input: {},
+      validate: (value): value is { riskLevel: string } => typeof value === 'object' && value !== null && 'riskLevel' in value,
+    });
+
+    expect(result.usage).toEqual({ inputTokens: 18, outputTokens: 8 });
+    expect(runtime.usageLog().at(-1)?.tokenUsage).toEqual({ inputTokens: 18, outputTokens: 8 });
+  });
+
+  it('honours bounded Retry-After before retrying a transient provider failure', async () => {
+    const waits: number[] = [];
+    const provider = new ScriptedProvider('primary', [
+      new AiProviderFailure('HTTP', true, 'AI_PROVIDER_HTTP_429', { status: 429, retryAfterMs: 9_000 }),
+      ok({ tasks: ['RETRIED'] }),
+    ]);
+    const runtime = new AiRuntime({
+      providers: { primary: provider }, routes: { INTENT_PLANNER: ['primary'] },
+      retryMaxDelayMs: 2_000,
+      random: () => 0.5,
+      sleep: async (milliseconds) => { waits.push(milliseconds); },
+    });
+
+    await runtime.runStructured({
+      purpose: 'INTENT_PLANNER', input: {},
+      validate: (value): value is { tasks: string[] } => typeof value === 'object' && value !== null && Array.isArray((value as { tasks?: unknown }).tasks),
+    });
+
+    expect(waits).toEqual([2_000]);
   });
 
   it('does not retain full prompts in usage logs and propagates caller abort', async () => {

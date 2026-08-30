@@ -37,6 +37,7 @@ const ScenarioLabPage = lazy(() => import('../features/scenario-lab/ScenarioLabP
 const ShopSettingsPage = lazy(() => import('../features/settings/ShopSettingsPage').then((module) => ({ default: module.ShopSettingsPage })));
 const KnowledgeImportPage = lazy(() => import('../features/knowledge/KnowledgeImportPage').then((module) => ({ default: module.KnowledgeImportPage })));
 const LiveTestPage = lazy(() => import('../features/live-test/LiveTestPage').then((module) => ({ default: module.LiveTestPage })));
+const ShowcasePage = lazy(() => import('../features/showcase/ShowcasePage').then((module) => ({ default: module.ShowcasePage })));
 
 function PendingRoute({ path, bootstrap }: { path: AppPath; bootstrap?: BootstrapPayload }) {
   const item = navigationItems.find((entry) => entry.path === path) ?? defaultNavigationItem;
@@ -66,7 +67,7 @@ export default function Application() {
   const navigate = useNavigate();
   const path = resolveAppPath(location.pathname);
   const workbenchRoute = matchWorkbenchRoute(location.pathname);
-  const sessionKind: WorkspaceSessionKind = path === '/scenario-lab' ? 'scenario' : 'operational';
+  const sessionKind: WorkspaceSessionKind = path === '/scenario-lab' ? 'scenario' : path === '/showcase' ? 'showcase' : 'operational';
   const [foundation, setFoundation] = useState<FoundationState>({ status: 'loading' });
   const [socketStatus, setSocketStatus] = useState<WorkspaceSocketStatus>('idle');
   const [snapshotVersion, setSnapshotVersion] = useState(0);
@@ -141,6 +142,10 @@ export default function Application() {
       const bootstrap = await getBootstrap(token);
       if (!isCurrentRequest()) return;
       setFoundation((current) => ({ ...current, status: 'ready', bootstrap, error: undefined }));
+      // A foundation refresh may follow a destructive workspace reset. The
+      // last socket event can reference an entity that no longer exists, so
+      // never replay it into the fresh snapshot.
+      setRealtimeEvent(undefined);
       setSnapshotVersion((value) => value + 1);
     } catch (error) {
       if (!isCurrentRequest()) return;
@@ -270,6 +275,7 @@ export default function Application() {
       const profile = workspaceSessionResetProfile(requestedKind);
       await resetCurrentWorkspace(token, profile ? { profile } : undefined);
       if (!isCurrentRequest()) return;
+      setRealtimeEvent(undefined);
       setSnapshotVersion((value) => value + 1);
       await loadFoundation();
     } catch (error) {
@@ -354,6 +360,8 @@ export default function Application() {
                   ? '买家模拟器'
                   : path === '/scenario-lab'
                     ? '场景实验室'
+                    : path === '/showcase'
+                      ? '引导演示'
                     : activeNav.label;
   const token = readWorkspaceSessionToken(sessionKind) ?? '';
   const liveTestShopId = path.startsWith('/live-test/') ? decodeURIComponent(path.slice('/live-test/'.length)) : '';
@@ -362,7 +370,7 @@ export default function Application() {
   return (
     <AppShell activePath={path} activeShopId={activeShopId} isResetting={isResetting || foundation.status === 'loading'} onNavigate={guardedNavigate} onReset={guardedReset} onShopChange={guardedShopChange} onTraceToggle={() => setTraceOpen((value) => !value)} routeTitle={routeTitle} shops={shops} socketLabel={socketLabel} socketReady={socketStatus === 'connected'} traceOpen={traceOpen} workspaceId={workspace?.id}>
       {foundation.status === 'error' ? <FoundationError message={foundation.error} onRetry={() => void loadFoundation()} /> : foundation.status !== 'ready' || !token ? <section className="loading-screen panel-surface"><span className="loading-spinner" /><h2>正在准备 Workspace</h2><p>读取店铺、权限与实时连接…</p></section> : <Suspense fallback={<RouteLoading />}>
-        {workbenchRoute.kind === 'settings' ? <ShopSettingsPage onDirtyChange={handleSettingsDirtyChange} onNavigate={guardedNavigate} token={token} shops={shops} shopId={workbenchRoute.shopId} refreshKey={snapshotVersion} /> : workbenchRoute.kind === 'knowledge-import' ? <KnowledgeImportPage token={token} shops={shops} shopId={workbenchRoute.shopId} /> : path.startsWith('/workbench') ? <WorkbenchPage token={token} shops={shops} activeShopId={workbenchRoute.kind === 'shop' ? workbenchRoute.shopId : activeShopId} onShopChange={setActiveShopId} onFoundationRefresh={refreshFoundation} refreshKey={snapshotVersion} realtimeEvent={realtimeEvent} traceOpen={traceOpen} onTraceOpen={() => setTraceOpen(true)} onTraceClose={() => setTraceOpen(false)} /> : path.startsWith('/live-test/') ? <LiveTestPage token={token} shops={shops} activeShopId={activeShopId} requestedShopId={liveTestShopId} onShopChange={(shopId) => { setActiveShopId(shopId); navigate(`/live-test/${encodeURIComponent(shopId)}`); }} refreshKey={snapshotVersion} realtimeEvent={realtimeEvent} socketStatus={socketStatus} onOpenWorkbench={(shopId) => navigate(shopId ? `/workbench/shops/${encodeURIComponent(shopId)}` : '/workbench')} /> : path === '/buyer-simulator' ? <BuyerSimulatorPage token={token} shops={shops} activeShopId={activeShopId} onShopChange={setActiveShopId} refreshKey={snapshotVersion} /> : path === '/admin' ? <DashboardPage token={token} shops={shops} refreshKey={snapshotVersion} /> : path === '/admin/shops' ? <ShopsAdminPage token={token} shops={shops} activeShopId={activeShopId} onShopChange={setActiveShopId} onFoundationRefresh={refreshFoundation} /> : path === '/admin/products' ? <ProductLearningPage token={token} shops={shops} activeShopId={activeShopId} onShopChange={setActiveShopId} refreshKey={snapshotVersion} /> : path === '/admin/knowledge' || path === '/admin/knowledge/candidates' || path === '/admin/knowledge/conflicts' ? <KnowledgePage initialView={path === '/admin/knowledge/candidates' ? 'candidates' : path === '/admin/knowledge/conflicts' ? 'conflicts' : 'formal'} token={token} shops={shops} activeShopId={activeShopId} onShopChange={setActiveShopId} refreshKey={snapshotVersion} /> : path === '/admin/workflows' ? <WorkflowAdminPage token={token} refreshKey={snapshotVersion} /> : path === '/admin/quality' ? <QualityPage token={token} refreshKey={snapshotVersion} /> : path === '/admin/incidents' ? <IncidentPage token={token} refreshKey={snapshotVersion} /> : path === '/admin/usage' ? <UsageAdminPage token={token} refreshKey={snapshotVersion} /> : path === '/admin/privacy' ? <DataPrivacyPage token={token} /> : path === '/scenario-lab' ? <ScenarioLabPage token={token} refreshKey={snapshotVersion} /> : <PendingRoute path={path} bootstrap={foundation.bootstrap} />}
+        {workbenchRoute.kind === 'settings' ? <ShopSettingsPage onDirtyChange={handleSettingsDirtyChange} onNavigate={guardedNavigate} token={token} shops={shops} shopId={workbenchRoute.shopId} refreshKey={snapshotVersion} /> : workbenchRoute.kind === 'knowledge-import' ? <KnowledgeImportPage token={token} shops={shops} shopId={workbenchRoute.shopId} /> : path.startsWith('/workbench') ? <WorkbenchPage token={token} shops={shops} activeShopId={workbenchRoute.kind === 'shop' ? workbenchRoute.shopId : activeShopId} onShopChange={setActiveShopId} onFoundationRefresh={refreshFoundation} refreshKey={snapshotVersion} realtimeEvent={realtimeEvent} traceOpen={traceOpen} onTraceOpen={() => setTraceOpen(true)} onTraceClose={() => setTraceOpen(false)} /> : path === '/showcase' ? <ShowcasePage token={token} shops={shops} activeShopId={activeShopId} onShopChange={setActiveShopId} onFoundationRefresh={refreshFoundation} onNavigateProduct={(shopId) => guardedNavigate(shopId ? `/workbench/shops/${encodeURIComponent(shopId)}` : '/workbench')} onResetWorkspace={guardedReset} refreshKey={snapshotVersion} realtimeEvent={realtimeEvent} socketStatus={socketStatus} /> : path.startsWith('/live-test/') ? <LiveTestPage token={token} shops={shops} activeShopId={activeShopId} requestedShopId={liveTestShopId} onShopChange={(shopId) => { setActiveShopId(shopId); navigate(`/live-test/${encodeURIComponent(shopId)}`); }} refreshKey={snapshotVersion} realtimeEvent={realtimeEvent} socketStatus={socketStatus} onOpenWorkbench={(shopId) => navigate(shopId ? `/workbench/shops/${encodeURIComponent(shopId)}` : '/workbench')} /> : path === '/buyer-simulator' ? <BuyerSimulatorPage token={token} shops={shops} activeShopId={activeShopId} onShopChange={setActiveShopId} refreshKey={snapshotVersion} /> : path === '/admin' ? <DashboardPage token={token} shops={shops} refreshKey={snapshotVersion} /> : path === '/admin/shops' ? <ShopsAdminPage token={token} shops={shops} activeShopId={activeShopId} onShopChange={setActiveShopId} onFoundationRefresh={refreshFoundation} /> : path === '/admin/products' ? <ProductLearningPage token={token} shops={shops} activeShopId={activeShopId} onShopChange={setActiveShopId} refreshKey={snapshotVersion} /> : path === '/admin/knowledge' || path === '/admin/knowledge/candidates' || path === '/admin/knowledge/conflicts' ? <KnowledgePage initialView={path === '/admin/knowledge/candidates' ? 'candidates' : path === '/admin/knowledge/conflicts' ? 'conflicts' : 'formal'} token={token} shops={shops} activeShopId={activeShopId} onShopChange={setActiveShopId} refreshKey={snapshotVersion} /> : path === '/admin/workflows' ? <WorkflowAdminPage token={token} refreshKey={snapshotVersion} /> : path === '/admin/quality' ? <QualityPage token={token} refreshKey={snapshotVersion} /> : path === '/admin/incidents' ? <IncidentPage token={token} refreshKey={snapshotVersion} /> : path === '/admin/usage' ? <UsageAdminPage token={token} refreshKey={snapshotVersion} /> : path === '/admin/privacy' ? <DataPrivacyPage token={token} /> : path === '/scenario-lab' ? <ScenarioLabPage token={token} refreshKey={snapshotVersion} /> : <PendingRoute path={path} bootstrap={foundation.bootstrap} />}
       </Suspense>}
     </AppShell>
   );

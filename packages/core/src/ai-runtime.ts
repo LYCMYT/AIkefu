@@ -36,16 +36,18 @@ export interface AiProvider {
 
 export class AiProviderFailure extends Error {
   readonly status: number | undefined;
+  readonly retryAfterMs: number | undefined;
 
   constructor(
     readonly kind: 'NETWORK' | 'HTTP' | 'RESPONSE' | 'ABORTED',
     readonly retryable: boolean,
     message: string,
-    options?: ErrorOptions & { status?: number },
+    options?: ErrorOptions & { status?: number; retryAfterMs?: number },
   ) {
     super(message, options);
     this.name = 'AiProviderFailure';
     this.status = options?.status;
+    this.retryAfterMs = options?.retryAfterMs;
   }
 }
 
@@ -110,6 +112,10 @@ export class AiRuntime {
       circuitFailureThreshold?: number;
       circuitResetMs?: number;
       usageLogLimit?: number;
+      retryBaseDelayMs?: number;
+      retryMaxDelayMs?: number;
+      random?: () => number;
+      sleep?: (milliseconds: number) => Promise<void>;
     },
   ) {
     this.usageLogLimit = Number.isSafeInteger(options.usageLogLimit) && (options.usageLogLimit ?? -1) >= 0
@@ -141,6 +147,13 @@ export class AiRuntime {
     let usedModel: string | null = null;
     let fallbackUsed = false;
     let tokenUsage: AiProviderResponse['usage'];
+    const addUsage = (usage: AiProviderResponse['usage']) => {
+      if (!usage) return;
+      tokenUsage = {
+        inputTokens: (tokenUsage?.inputTokens ?? 0) + usage.inputTokens,
+        outputTokens: (tokenUsage?.outputTokens ?? 0) + usage.outputTokens,
+      };
+    };
     let finalStatus: AiRuntimeUsage['status'] = 'FAILED';
     let terminalFailure: AiRuntimeFailure | undefined;
     try {
@@ -159,7 +172,7 @@ export class AiRuntime {
           this.assertCircuit(providerName);
           let response = await this.invokeWithRetry(provider, request, request.timeoutMs);
           usedModel = response.model;
-          tokenUsage = response.usage;
+          addUsage(response.usage);
           if (!request.validate(response.output)) {
             response = await this.invokeOnce(
               provider,
@@ -172,7 +185,7 @@ export class AiRuntime {
               request.timeoutMs,
             );
             usedModel = response.model;
-            tokenUsage = response.usage;
+            addUsage(response.usage);
             if (!request.validate(response.output)) {
               throw new AiRuntimeFailure('SCHEMA_INVALID', `${request.purpose} output failed schema validation after repair`);
             }
@@ -184,7 +197,7 @@ export class AiRuntime {
             provider: provider.name,
             model: response.model,
             fallbackUsed,
-            usage: response.usage,
+            usage: tokenUsage,
           };
         } catch (error) {
           const failure = this.normalizeFailure(error, request.signal);
@@ -229,6 +242,10 @@ export class AiRuntime {
       } catch (error) {
         failure = error;
         if (!this.shouldRetry(error, request.signal)) throw error;
+        if (attempt < 2) {
+          await (this.options.sleep ?? sleep)(this.retryDelayMs(error, attempt));
+          if (request.signal?.aborted) throw new AiRuntimeFailure('ABORTED', 'AI call aborted because its context became stale');
+        }
       }
     }
     throw failure;
@@ -296,6 +313,16 @@ export class AiRuntime {
     return error instanceof AiRuntimeFailure && error.code === 'TIMEOUT';
   }
 
+  private retryDelayMs(error: unknown, attempt: number): number {
+    const maximum = positiveDelay(this.options.retryMaxDelayMs, 2_000);
+    if (error instanceof AiProviderFailure && error.retryAfterMs !== undefined) {
+      return Math.min(Math.max(Math.round(error.retryAfterMs), 0), maximum);
+    }
+    const base = positiveDelay(this.options.retryBaseDelayMs, 100);
+    const jitter = Math.max(0, Math.min(1, (this.options.random ?? Math.random)())) * base;
+    return Math.min(Math.round(base * 2 ** Math.max(attempt - 1, 0) + jitter), maximum);
+  }
+
   private recordUsage(audit: AiRuntimeUsage): void {
     if (this.usageLogLimit === 0) return;
     this.logs.push(audit);
@@ -323,4 +350,12 @@ export class AiRuntime {
   private recordSuccess(providerName: string): void {
     this.circuits.delete(providerName);
   }
+}
+
+function positiveDelay(value: number | undefined, fallback: number): number {
+  return Number.isFinite(value) && Number(value) >= 0 ? Number(value) : fallback;
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

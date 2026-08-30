@@ -79,6 +79,10 @@ describe('projectProductionReplyExecution', () => {
           id: 'evidence-e001',
           knowledgeItemId: 'knowledge-e001',
           knowledgeVersionId: 'version-e001',
+          sourceType: 'MANUAL',
+          scope: 'STORE',
+          productId: null,
+          retrievalScore: 0.91,
           retrievedContentSnapshotJson: { question: '多久发货？', answer: '普通现货商品通常24小时内发出。' },
         },
       ],
@@ -163,6 +167,78 @@ describe('projectProductionReplyExecution', () => {
 });
 
 describe('ProductionReplyEvalExecutor', () => {
+  it('raises the scoped shop ceiling before an AUTO evaluation turn', async () => {
+    const calls: string[] = [];
+    const port = {
+      createIsolatedWorkspace: async () => ({
+        workspaceId: 'workspace-auto', tenantId: 'tenant-auto', shops: { shop_mia_fashion: 'shop-mia' },
+        buyers: { buyer_001: 'buyer-1' }, products: {}, orders: {},
+      }),
+      setShopAiMode: async (input: { mode: string }) => { calls.push(`mode:${input.mode}`); },
+      sendText: async () => { calls.push('send'); return { conversationId: 'conversation-auto' }; },
+      sendProductCard: async () => { throw new Error('not expected'); },
+      sendOrderCard: async () => { throw new Error('not expected'); },
+      sendImageFixture: async () => { throw new Error('not expected'); },
+      editPreviousBuyerMessage: async () => undefined,
+      recallPreviousBuyerMessage: async () => undefined,
+      waitForProjection: async () => ({
+        workspaceId: 'workspace-auto', conversationId: 'conversation-auto',
+        replyJob: {
+          id: 'reply-auto', userTurnId: 'turn-auto', status: 'FAST_PATH_READY', mode: 'AUTO', draft: null,
+          sendOutbox: { id: 'send-auto', status: 'SENT', payloadJson: { text: '默认使用顺丰或中通。' }, receiptJson: { externalMessageId: 'external-auto' } },
+        },
+        tasks: [{ id: 'task-auto', intent: 'SHIPPING_POLICY', status: 'RESOLVED', resultJson: null }],
+        evidences: [], traceEvents: [{ id: 'trace-auto', stage: 'REPLY_POLICY', payloadJson: { mode: 'AUTO' } }], invocations: [],
+        assistantMessages: [{ id: 'message-auto', externalMessageId: 'external-auto', contentJson: { text: '默认使用顺丰或中通。' } }],
+      }),
+      deleteIsolatedWorkspace: async () => { calls.push('delete'); },
+    } satisfies ProductionReplyEvalPort;
+
+    const result = await new ProductionReplyEvalExecutor(port).execute({
+      id: 'A001', shopKey: 'shop_mia_fashion', buyerKey: 'buyer_001', messages: ['发什么快递？'],
+      contextSetup: { shopAiMode: 'AUTO_ALLOWED' }, expectedTasks: ['SHIPPING_POLICY'], expectedMode: 'AUTO',
+      expectedFacts: ['顺丰或中通'], forbiddenClaims: [], expectedAutoSend: true,
+    });
+
+    expect(calls).toEqual(['mode:AUTO_ALLOWED', 'send', 'delete']);
+    expect(result).toMatchObject({ mode: 'AUTO', outputSource: 'SENT_MESSAGE', terminalStatus: 'SENT' });
+  });
+
+  it('arms provider and restart faults before sending, then resumes through production ports', async () => {
+    const calls: string[] = [];
+    const projection = {
+      workspaceId: 'workspace-fault', conversationId: 'conversation-fault',
+      replyJob: { id: 'reply-fault', userTurnId: 'turn-fault', status: 'WAITING_HUMAN', mode: 'ASSIST', draft: null, sendOutbox: null },
+      tasks: [{ id: 'task-fault', intent: 'PRODUCT_QUERY', status: 'FAILED', resultJson: null }],
+      evidences: [], traceEvents: [], invocations: [], assistantMessages: [],
+    };
+    const port = {
+      createIsolatedWorkspace: async () => ({
+        workspaceId: 'workspace-fault', tenantId: 'tenant-fault', shops: { shop_pixel_tech: 'shop-pixel' },
+        buyers: { buyer_001: 'buyer-1' }, products: {}, orders: {},
+      }),
+      configureProviderScenario: async () => { calls.push('provider'); },
+      prepareRestart: async () => { calls.push('prepare'); },
+      resumeAfterRestart: async () => { calls.push('resume'); },
+      sendText: async () => { calls.push('send'); return { conversationId: 'conversation-fault' }; },
+      sendProductCard: async () => { throw new Error('not expected'); },
+      sendOrderCard: async () => { throw new Error('not expected'); },
+      sendImageFixture: async () => { throw new Error('not expected'); },
+      editPreviousBuyerMessage: async () => undefined,
+      recallPreviousBuyerMessage: async () => undefined,
+      waitForProjection: async () => projection,
+      deleteIsolatedWorkspace: async () => { calls.push('delete'); },
+    } as unknown as ProductionReplyEvalPort;
+
+    await new ProductionReplyEvalExecutor(port).execute({
+      id: 'E-FAULT', shopKey: 'shop_pixel_tech', buyerKey: 'buyer_001', messages: ['介绍一下便携屏'],
+      contextSetup: { primaryProvider: 'TIMEOUT', fallback: 'TIMEOUT', restartDuring: 'GENERATING' },
+      expectedTasks: ['PRODUCT_QUERY'], expectedMode: 'ASSIST', expectedFacts: [], forbiddenClaims: [],
+    });
+
+    expect(calls).toEqual(['provider', 'prepare', 'send', 'resume', 'delete']);
+  });
+
   it('activates a frozen knowledge conflict through the production setup port before sending the turn', async () => {
     const calls: string[] = [];
     const port = {
@@ -227,7 +303,7 @@ describe('ProductionReplyEvalExecutor', () => {
             draft: { id: 'draft-1', aiDraft: '不建议使用烘干机。', status: 'WAITING_HUMAN' }, sendOutbox: null,
           },
           tasks: [{ id: 'task-1', intent: 'PRODUCT_QUERY', status: 'RESOLVED', resultJson: null }],
-          evidences: [{ id: 'evidence-1', knowledgeItemId: 'knowledge-1', knowledgeVersionId: 'version-1', retrievedContentSnapshotJson: { answer: '不建议使用烘干机。' } }],
+          evidences: [{ id: 'evidence-1', knowledgeItemId: 'knowledge-1', knowledgeVersionId: 'version-1', sourceType: 'HUMAN_REVIEWED', scope: 'PRODUCT', productId: 'product-1', retrievalScore: 0.96, retrievedContentSnapshotJson: { answer: '不建议使用烘干机。' } }],
           traceEvents: [{ id: 'trace-1', stage: 'REPLY_POLICY', payloadJson: { mode: 'ASSIST' } }],
           invocations: [], assistantMessages: [],
         };

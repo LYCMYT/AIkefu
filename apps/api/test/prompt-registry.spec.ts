@@ -1,4 +1,15 @@
 import { getPromptDefinition, listPromptDefinitions } from '../src/ai/prompt-registry';
+import { validateStructuredOutput, type StructuredOutputSchemaName } from '@ai-customer-service/core';
+
+const schemaForPurpose: Record<string, StructuredOutputSchemaName> = {
+  INTENT_PLANNER: 'IntentPlan',
+  RISK_CLASSIFIER: 'RiskResult',
+  SUMMARY: 'ConversationSummary',
+  KNOWLEDGE_EXTRACT: 'KnowledgeCandidate',
+  REPLY_GENERATION: 'ReplyGeneration',
+  IMAGE_ANALYSIS: 'ImageAnalysis',
+  QUALITY_JUDGE: 'QualityReview',
+};
 
 describe('versioned prompt registry', () => {
   it('keeps every AI purpose reviewable in the repository', () => {
@@ -20,5 +31,21 @@ describe('versioned prompt registry', () => {
       purpose: 'REPLY_GENERATION', version: 'reply-composer-v1',
     });
     expect(() => getPromptDefinition('RISK_CLASSIFIER', 'reply-composer-v1')).toThrow('PROMPT_NOT_REGISTERED');
+  });
+
+  it('keeps every Output exactly example valid against the runtime structured-output validator', () => {
+    for (const definition of listPromptDefinitions()) {
+      const matched = definition.instructions.match(/Output exactly:\s*(\{.*\})\./);
+      expect(matched?.[1]).toBeDefined();
+      const example = JSON.parse(matched![1]!);
+      if (!validateStructuredOutput(schemaForPurpose[definition.purpose]!, example)) {
+        throw new Error(`INVALID_PROMPT_EXAMPLE: ${definition.purpose}/${definition.version}`);
+      }
+      if (definition.purpose === 'SUMMARY') {
+        expect(example.resolvedFacts).toEqual([
+          { key: 'preferred_fit', value: '宽松', sourceMessageId: 'message-example', status: 'ACTIVE' },
+        ]);
+      }
+    }
   });
 });

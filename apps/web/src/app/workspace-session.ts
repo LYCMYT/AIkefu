@@ -7,7 +7,7 @@ import type { DemoWorkspaceProfile } from '@ai-customer-service/contracts';
  * token stored there, but the re-architecture must never read, overwrite, or
  * clear it implicitly.
  */
-export type WorkspaceSessionKind = 'operational' | 'scenario';
+export type WorkspaceSessionKind = 'operational' | 'scenario' | 'showcase';
 
 export type WorkspaceSessionRequest = Readonly<{
   kind: WorkspaceSessionKind;
@@ -55,6 +55,7 @@ export class WorkspaceSessionRequestGate {
 export const WORKSPACE_SESSION_STORAGE_KEYS: Readonly<Record<WorkspaceSessionKind, string>> = {
   operational: 'aikefu_operational_workspace_token_v2',
   scenario: 'aikefu_scenario_workspace_token',
+  showcase: 'aikefu_showcase_workspace_token',
 };
 
 export const LEGACY_WORKSPACE_TOKEN_STORAGE_KEY = 'ai-customer-service-demo.workspace-token';
@@ -67,16 +68,18 @@ const inMemorySessionTokens: Partial<Record<WorkspaceSessionKind, string>> = {};
 export const WORKSPACE_SESSION_PROFILES: Readonly<Record<WorkspaceSessionKind, DemoWorkspaceProfile>> = {
   operational: 'EMPTY',
   scenario: 'SEEDED',
+  showcase: 'SEEDED',
 };
 
 /** Resetting a session follows the same data-isolation profile as creating it. */
 export const WORKSPACE_SESSION_RESET_PROFILES: Readonly<Record<WorkspaceSessionKind, DemoWorkspaceProfile>> = {
   operational: 'EMPTY',
   scenario: 'SEEDED',
+  showcase: 'SEEDED',
 };
 
 function isWorkspaceSessionKind(value: unknown): value is WorkspaceSessionKind {
-  return value === 'operational' || value === 'scenario';
+  return value === 'operational' || value === 'scenario' || value === 'showcase';
 }
 
 /** Returns null for an invalid runtime value instead of indexing to undefined. */

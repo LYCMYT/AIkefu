@@ -35,6 +35,11 @@ export class AIInvocationService {
   async complete(scope: AIInvocationScope, invocationId: string, input: CompleteAIInvocationInput) {
     this.assertScope(scope);
     this.assertNonNegativeNumbers([input.durationMs, input.inputTokens, input.outputTokens]);
+    for (const value of [input.provider, input.model]) {
+      if (value !== undefined && (!value.trim() || value.length > 160)) {
+        throw invalid('AI_INVOCATION_METADATA_INVALID', 'provider and model must be stable non-empty metadata');
+      }
+    }
     return this.repository.complete(scope, invocationId, input);
   }
 

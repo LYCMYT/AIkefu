@@ -1,0 +1,280 @@
+{
+  "version": "1.0",
+  "rules": {
+    "resultsMustComeFromRuntime": true,
+    "hardcodedReplyForbidden": true,
+    "evalAssertionsMustNotEnterRag": true
+  },
+  "scenarios": [
+    {
+      "id": "SC-01-PRODUCT-CARE",
+      "order": 1,
+      "title": "商品知识有据回答",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_002",
+      "aiMode": "AUTO_ALLOWED",
+      "objective": "证明商品卡先解析 product，再检索 ProductKnowledge，并自动发送低风险有据回复。",
+      "steps": [
+        {
+          "actor": "SYSTEM",
+          "action": "RESET_SHOWCASE"
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_GOODS_CARD",
+          "productKey": "fashion_hoodie"
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_TEXT",
+          "text": "这个可以放烘干机吗？"
+        },
+        {
+          "actor": "SYSTEM",
+          "action": "WAIT_FOR_BUYER_VISIBLE_REPLY",
+          "timeoutMs": 60000
+        }
+      ],
+      "expected": {
+        "tasks": [
+          "PRODUCT_QUERY"
+        ],
+        "context": {
+          "productKey": "fashion_hoodie"
+        },
+        "knowledgeKeys": [
+          "k033"
+        ],
+        "knowledgeScope": "PRODUCT",
+        "terminalMode": "AUTO",
+        "mustContainSemantic": [
+          "不建议烘干"
+        ],
+        "forbiddenSemanticClaims": [
+          "可以高温烘干"
+        ],
+        "trace": [
+          "USER_TURN",
+          "TASK_BUNDLE",
+          "CONTEXT_RESOLVER",
+          "KNOWLEDGE_EVIDENCE",
+          "REPLY_POLICY",
+          "SEND_GUARD",
+          "SEND_RECEIPT"
+        ]
+      }
+    },
+    {
+      "id": "SC-02-MULTI-TURN",
+      "order": 2,
+      "title": "连续消息与多轮上下文",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_002",
+      "aiMode": "ASSIST_ONLY",
+      "objective": "证明短消息聚合、库存实时查询、尺码建议和后续指代继承。",
+      "steps": [
+        {
+          "actor": "SYSTEM",
+          "action": "RESET_SHOWCASE"
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_GOODS_CARD",
+          "productKey": "fashion_hoodie"
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_TEXT",
+          "text": "黑色有吗？",
+          "delayMs": 0
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_TEXT",
+          "text": "XL呢？",
+          "delayMs": 500
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_TEXT",
+          "text": "我165，55公斤，想穿宽松一点。",
+          "delayMs": 1000
+        },
+        {
+          "actor": "SYSTEM",
+          "action": "WAIT_FOR_REPLY_DRAFT",
+          "timeoutMs": 60000
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_TEXT",
+          "text": "那白色呢？"
+        },
+        {
+          "actor": "SYSTEM",
+          "action": "WAIT_FOR_REPLY_DRAFT",
+          "timeoutMs": 60000
+        }
+      ],
+      "expected": {
+        "tasks": [
+          "INVENTORY_QUERY",
+          "SIZE_RECOMMENDATION"
+        ],
+        "dynamicContext": [
+          "SKU_INVENTORY"
+        ],
+        "supportingKnowledgeKeys": [
+          "k011",
+          "k032"
+        ],
+        "customerMemoryKey": "preferred_fit",
+        "rawMessageCountBeforeFirstTurn": 3,
+        "userTurnCountBeforeFirstReply": 1,
+        "mustUseRecentMessages": true,
+        "mustNotRepeatSupersededBlackQuestion": true,
+        "trace": [
+          "TURN_BUFFER",
+          "TASK_BUNDLE",
+          "PRODUCT_CONTEXT",
+          "RECENT_MESSAGES",
+          "REPLY_DRAFT"
+        ]
+      }
+    },
+    {
+      "id": "SC-03-STALE-REPLAN",
+      "order": 3,
+      "title": "生成中补充信息",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_001",
+      "aiMode": "AUTO_ALLOWED",
+      "objective": "证明上下文变化会使旧回复失效，旧答案不会误发。",
+      "preferredDriver": "scenario_lab:message_during_generation",
+      "steps": [
+        {
+          "actor": "SYSTEM",
+          "action": "RESET_SHOWCASE"
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_TEXT",
+          "text": "今天下单什么时候发货？"
+        },
+        {
+          "actor": "SYSTEM",
+          "action": "WAIT_FOR_REPLY_JOB_STATUS",
+          "status": "GENERATING",
+          "timeoutMs": 30000
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_TEXT",
+          "text": "我是新疆的。"
+        },
+        {
+          "actor": "SYSTEM",
+          "action": "WAIT_FOR_BUYER_VISIBLE_REPLY",
+          "timeoutMs": 60000
+        }
+      ],
+      "expected": {
+        "staleReason": [
+          "NEW_MESSAGE",
+          "CONTEXT_CHANGED"
+        ],
+        "oldReplyMustNotBeSent": true,
+        "knowledgeKeys": [
+          "k002"
+        ],
+        "mustContainSemantic": [
+          "偏远地区",
+          "实际物流"
+        ],
+        "forbiddenSemanticClaims": [
+          "保证24小时到达"
+        ],
+        "trace": [
+          "CONTEXT_VERSION_CHANGED",
+          "REPLY_JOB_STALE",
+          "ABORT_OR_DISCARD",
+          "REPLAN",
+          "SEND_GUARD"
+        ]
+      }
+    },
+    {
+      "id": "SC-04-IMAGE-HUMAN",
+      "order": 4,
+      "title": "图片售后与人工接管",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_004",
+      "aiMode": "AUTO_ALLOWED",
+      "objective": "证明图片管线、订单上下文、高风险分流和未执行动作不被虚假声明。",
+      "steps": [
+        {
+          "actor": "SYSTEM",
+          "action": "RESET_SHOWCASE"
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_ORDER_CARD",
+          "orderKey": "order_004"
+        },
+        {
+          "actor": "BUYER",
+          "action": "UPLOAD_IMAGE",
+          "fixture": "AICS_FIXTURE:DAMAGED_SLEEVE",
+          "displayLabel": "PIPELINE_FIXTURE"
+        },
+        {
+          "actor": "BUYER",
+          "action": "SEND_TEXT",
+          "text": "收到就是这样的，我要退款并投诉。"
+        },
+        {
+          "actor": "SYSTEM",
+          "action": "WAIT_FOR_CONVERSATION_MODE",
+          "mode": "MANUAL",
+          "timeoutMs": 60000
+        }
+      ],
+      "expected": {
+        "tasks": [
+          "AFTER_SALES_QUERY",
+          "REFUND_REQUEST",
+          "COMPLAINT"
+        ],
+        "orderKey": "order_004",
+        "knowledgeKeys": [
+          "k008",
+          "k015"
+        ],
+        "terminalMode": "MANUAL",
+        "requiresHuman": true,
+        "forbiddenSemanticClaims": [
+          "已经退款",
+          "退款已完成",
+          "已经处理好"
+        ],
+        "trace": [
+          "IMAGE_ANALYSIS",
+          "ORDER_CONTEXT",
+          "RISK_POLICY",
+          "ACTION_POLICY",
+          "MANUAL"
+        ]
+      }
+    }
+  ],
+  "optionalScenario": {
+    "id": "SC-05-KNOWLEDGE-GROWTH",
+    "title": "人工回答形成候选知识",
+    "shopKey": "shop_mia_fashion",
+    "buyerKey": "buyer_001",
+    "question": "支持学校统一采购吗？",
+    "expectedInitialGate": "NO_EVIDENCE",
+    "humanReply": "支持，具体数量和报价需要联系人工客服确认。",
+    "mustRequireReviewBeforePublish": true
+  }
+}

@@ -21,6 +21,6 @@
 19. 本交付不声称在线部署已完成；本地基础设施和生产风格 Compose 已实跑，但没有公网主机、域名或 TLS 终止点。
 20. 不虚构商业 KPI、转化率、准确率或成本收益；Usage 页面只展示服务端返回的 Demo 运行快照。
 21. 本地匿名 Workspace token 仍存在浏览器 localStorage；已有严格 CSP，但公网部署前仍应升级为 HttpOnly + SameSite Cookie 或受控的一次性会话。
-22. 本机 DeepSeek Chat JSON 适配器已完成结构化探针、合成浏览器主链及隔离生产评测。Production Offline 与 Production DeepSeek 均为 31/36；DeepSeek 持久化统计为 30,150 / 3,688 Token、平均 1,757 ms。Embedding 仍为本地 1536 维 fallback，外部图片分析只允许服务端显式 opt-in，Judge 尚未形成完整外部 Gate。
-23. 当前 production Eval CLI 已接入真实 AppModule、ReplyRuntime、PostgreSQL Knowledge/Evidence、动态工具与 durable Draft/SendOutbox/Message 投影。剩余 `E026`、`E027`、`E033`、`E035`、`E036` 是统一 runner 尚未接入 provider fault、审批上下文变化及进程重启驱动；这些案例保持失败，不记作 PASS。
+22. 本机 DeepSeek Chat 适配器已完成结构化探针、合成浏览器主链及隔离生产评测。固定集 Offline / DeepSeek 均为 36/36，独立 AUTO 集两种模式均为 10/10。Embedding 仍为本地 1536 维 fallback，外部图片分析只允许服务端显式 opt-in，Judge 尚未形成完整外部 Gate。
+23. Production Eval CLI 已接入真实 AppModule、ReplyRuntime、PostgreSQL Knowledge/Evidence、动态工具、provider fault、审批上下文变化、恢复驱动以及 durable Draft/SendOutbox/Receipt/Message 投影。36/36 是当前固定合成用例结果，不代表开放域准确率或生产 SLA。
 24. 前端已引入 React Router、TanStack Query 和 feature 目录，但 Workbench / Buyer / Workflow 以及 `api.ts` / `styles.css` 仍较大，需按功能渐进拆分，不适合一次性无测试重写。

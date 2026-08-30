@@ -1,0 +1,550 @@
+{
+  "sourceVersion": "1.0",
+  "executionBoundary": "APP_MODULE_PRISMA_REPLY_RUNTIME",
+  "generatedAt": "2026-08-30T17:36:22.117Z",
+  "mode": "PRODUCTION_OFFLINE",
+  "provider": "offline-structured-demo",
+  "model": "offline-structured-v1",
+  "summary": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0,
+    "technicalPathPassed": 10,
+    "deterministicSafetyPassed": 10,
+    "humanReviewRequired": 0,
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "totalCost": null,
+    "averageLatencyMs": 26
+  },
+  "cases": [
+    {
+      "id": "A001",
+      "text": "默认使用顺丰或中通，具体承运方以订单物流信息为准。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [
+        "默认使用顺丰或中通，具体承运方以订单物流信息为准。",
+        "是否支持指定快递需要人工确认，AI不做确定承诺。"
+      ],
+      "evidenceDetails": [
+        {
+          "scope": "STORE",
+          "productId": null,
+          "sourceType": "MANUAL",
+          "text": "默认使用顺丰或中通，具体承运方以订单物流信息为准。",
+          "retrievalScore": 0.938148
+        },
+        {
+          "scope": "STORE",
+          "productId": null,
+          "sourceType": "MANUAL",
+          "text": "是否支持指定快递需要人工确认，AI不做确定承诺。",
+          "retrievalScore": 0.59199
+        }
+      ],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 29,
+      "cost": null,
+      "outputSource": "SENT_MESSAGE",
+      "terminalStatus": "SENT",
+      "trace": {
+        "workspaceId": "cmtg3bnna0000uz6wln3ulbcg",
+        "conversationId": "cmtg3bohd00f0uz6wb2xofbxi",
+        "replyJobId": "cmtg3bqef00imuz6wi8g5qc44",
+        "userTurnId": "cmtg3bq5w00iguz6w8vhrhtwx",
+        "taskIds": [
+          "reply-task:cmtg3bqef00imuz6wi8g5qc44:cmtg3bqef00imuz6wi8g5qc44:0"
+        ],
+        "evidenceIds": [
+          "cmtg3bqkr00j7uz6wwzl0c65z",
+          "cmtg3bqkr00j8uz6wbo1rrh8h"
+        ],
+        "knowledgeVersionIds": [
+          "cmtg3bnt9003auz6wtco56ql9",
+          "cmtg3bnti003euz6wy3gk0w96"
+        ],
+        "sendOutboxId": "cmtg3bqmp00jkuz6wd8hh2xe8",
+        "sentMessageId": "cmtg3bqrt00k4uz6wp8xcwfej",
+        "invocationIds": [
+          "cmtg3bqfo00iwuz6w786e6l1u",
+          "cmtg3bqh000j0uz6wp37ij380"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    },
+    {
+      "id": "A002",
+      "text": "数码商品通常在48小时内发出；预售或定制商品以商品页说明为准。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [
+        "数码商品通常在48小时内发出；预售或定制商品以商品页说明为准。",
+        "保修期限以商品说明和订单凭证为准。"
+      ],
+      "evidenceDetails": [
+        {
+          "scope": "STORE",
+          "productId": null,
+          "sourceType": "MANUAL",
+          "text": "数码商品通常在48小时内发出；预售或定制商品以商品页说明为准。",
+          "retrievalScore": 0.92274
+        },
+        {
+          "scope": "STORE",
+          "productId": null,
+          "sourceType": "MANUAL",
+          "text": "保修期限以商品说明和订单凭证为准。",
+          "retrievalScore": 0.604381
+        }
+      ],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 22,
+      "cost": null,
+      "outputSource": "SENT_MESSAGE",
+      "terminalStatus": "SENT",
+      "trace": {
+        "workspaceId": "cmtg3bqw200kpuz6wn6no26ia",
+        "conversationId": "cmtg3brqs010juz6w3ie7ixxa",
+        "replyJobId": "cmtg3btid013juz6wszs5ha9f",
+        "userTurnId": "cmtg3btfe013duz6wstp2o4io",
+        "taskIds": [
+          "reply-task:cmtg3btid013juz6wszs5ha9f:cmtg3btid013juz6wszs5ha9f:0"
+        ],
+        "evidenceIds": [
+          "cmtg3btmz0144uz6wzz95rkd9",
+          "cmtg3btmz0145uz6ws90c16u1"
+        ],
+        "knowledgeVersionIds": [
+          "cmtg3br4k00pnuz6wfztzn8wx",
+          "cmtg3br6s00qruz6wwi4gy9hz"
+        ],
+        "sendOutboxId": "cmtg3btop014huz6wfv1ay334",
+        "sentMessageId": "cmtg3btuq014zuz6wlu2q3cms",
+        "invocationIds": [
+          "cmtg3btjf013tuz6wtcxlpqlw",
+          "cmtg3btkg013xuz6wibsatk89"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    },
+    {
+      "id": "A003",
+      "text": "不建议使用烘干机。",
+      "tasks": [
+        "PRODUCT_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [
+        "不建议使用烘干机。"
+      ],
+      "evidenceDetails": [
+        {
+          "scope": "PRODUCT",
+          "productId": "cmtg3btyx0162uz6w4g4w46vi",
+          "sourceType": "HUMAN_REVIEWED",
+          "text": "不建议使用烘干机。",
+          "retrievalScore": 0.971144
+        }
+      ],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 20,
+      "cost": null,
+      "outputSource": "SENT_MESSAGE",
+      "terminalStatus": "SENT",
+      "trace": {
+        "workspaceId": "cmtg3btxu015euz6wrwkggtio",
+        "conversationId": "cmtg3buty01lguz6w9zoqasac",
+        "replyJobId": "cmtg3bwzz01oyuz6w11jgn5bh",
+        "userTurnId": "cmtg3bwlv01o8uz6w3c6squbv",
+        "taskIds": [
+          "reply-task:cmtg3bwzz01oyuz6w11jgn5bh:cmtg3bwzz01oyuz6w11jgn5bh:0"
+        ],
+        "evidenceIds": [
+          "cmtg3bx5j01q1uz6weobxv6cf"
+        ],
+        "knowledgeVersionIds": [
+          "cmtg3buay01cguz6wobj38qs2"
+        ],
+        "sendOutboxId": "cmtg3bx7s01qbuz6wn4wdlvld",
+        "sentMessageId": "cmtg3bxlh01qjuz6wzkd37ssj",
+        "invocationIds": [
+          "cmtg3bx1101pcuz6witkp07gw",
+          "cmtg3bx2001pkuz6we6rglch4"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    },
+    {
+      "id": "A004",
+      "text": "支持Windows和macOS。",
+      "tasks": [
+        "PRODUCT_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [
+        "支持Windows和macOS。"
+      ],
+      "evidenceDetails": [
+        {
+          "scope": "PRODUCT",
+          "productId": "cmtg3bxs901ssuz6wct20809u",
+          "sourceType": "HUMAN_REVIEWED",
+          "text": "支持Windows和macOS。",
+          "retrievalScore": 0.996563
+        }
+      ],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 18,
+      "cost": null,
+      "outputSource": "SENT_MESSAGE",
+      "terminalStatus": "SENT",
+      "trace": {
+        "workspaceId": "cmtg3bxpp01quuz6wo36xosu9",
+        "conversationId": "cmtg3byl2026wuz6w6h1ll8nl",
+        "replyJobId": "cmtg3c0hw02a8uz6wwzg396hf",
+        "userTurnId": "cmtg3c0ci02a2uz6wkjo0d4v7",
+        "taskIds": [
+          "reply-task:cmtg3c0hw02a8uz6wwzg396hf:cmtg3c0hw02a8uz6wwzg396hf:0"
+        ],
+        "evidenceIds": [
+          "cmtg3c0n702atuz6w7wqsgouv"
+        ],
+        "knowledgeVersionIds": [
+          "cmtg3bya40212uz6wp5swszqe"
+        ],
+        "sendOutboxId": "cmtg3c0p102b3uz6wm2i18bmb",
+        "sentMessageId": "cmtg3c10f02cduz6w0qhzqigl",
+        "invocationIds": [
+          "cmtg3c0j102aiuz6whv6c179l",
+          "cmtg3c0k202amuz6wfg9tyr30"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    },
+    {
+      "id": "A005",
+      "text": "这个规格目前有现货，可以正常下单。",
+      "tasks": [
+        "INVENTORY_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "evidenceDetails": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 34,
+      "cost": null,
+      "outputSource": "SENT_MESSAGE",
+      "terminalStatus": "SENT",
+      "trace": {
+        "workspaceId": "cmtg3c13t02cguz6wfbzvdtqt",
+        "conversationId": "cmtg3c1xk02s4uz6whdvjw9uk",
+        "replyJobId": "cmtg3c3zn02vmuz6wr7013v8r",
+        "userTurnId": "cmtg3c3ov02uuuz6waoifdp64",
+        "taskIds": [
+          "reply-task:cmtg3c3zn02vmuz6wr7013v8r:cmtg3c3zn02vmuz6wr7013v8r:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "sendOutboxId": "cmtg3c46b02wwuz6w1cawz76k",
+        "sentMessageId": "cmtg3c4g202x4uz6w36z0as6r",
+        "invocationIds": [
+          "cmtg3c40q02vyuz6wfehmgmuh",
+          "cmtg3c42d02w8uz6w1ki9lnxz"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    },
+    {
+      "id": "A006",
+      "text": "这笔订单已经发货，最新物流到达广州分拨中心。",
+      "tasks": [
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "AUTO",
+      "evidence": [],
+      "evidenceDetails": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 23,
+      "cost": null,
+      "outputSource": "SENT_MESSAGE",
+      "terminalStatus": "SENT",
+      "trace": {
+        "workspaceId": "cmtg3c4jg02x7uz6wfes2x8zn",
+        "conversationId": "cmtg3c5cl03cvuz6wll4chh2d",
+        "replyJobId": "cmtg3c7hp03gtuz6wd4sws7ay",
+        "userTurnId": "cmtg3c74903g5uz6wuqz4c0zx",
+        "taskIds": [
+          "reply-task:cmtg3c7hp03gtuz6wd4sws7ay:cmtg3c7hp03gtuz6wd4sws7ay:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "sendOutboxId": "cmtg3c7me03hnuz6whc924k4m",
+        "sentMessageId": "cmtg3c7wc03iduz6w2tokwpnb",
+        "invocationIds": [
+          "cmtg3c7im03h3uz6wmhmgonml",
+          "cmtg3c7jn03h7uz6wystedme5"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    },
+    {
+      "id": "A007",
+      "text": "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "AUTO",
+      "evidence": [
+        "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
+        "普通现货商品通常在24小时内发出；预售商品以商品说明为准。"
+      ],
+      "evidenceDetails": [
+        {
+          "scope": "STORE",
+          "productId": null,
+          "sourceType": "MANUAL",
+          "text": "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
+          "retrievalScore": 0.919194
+        },
+        {
+          "scope": "STORE",
+          "productId": null,
+          "sourceType": "MANUAL",
+          "text": "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+          "retrievalScore": 0.783152
+        }
+      ],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 28,
+      "cost": null,
+      "outputSource": "SENT_MESSAGE",
+      "terminalStatus": "SENT",
+      "trace": {
+        "workspaceId": "cmtg3c84103j0uz6wz7an0kga",
+        "conversationId": "cmtg3c91p03youz6w9oksny7g",
+        "replyJobId": "cmtg3cazr042auz6w3bkm0m4h",
+        "userTurnId": "cmtg3card041guz6wttallo5h",
+        "taskIds": [
+          "reply-task:cmtg3cazr042auz6w3bkm0m4h:cmtg3cazr042auz6w3bkm0m4h:0"
+        ],
+        "evidenceIds": [
+          "cmtg3cb4k0439uz6wn3gchmow",
+          "cmtg3cb4k043auz6weschhtsc"
+        ],
+        "knowledgeVersionIds": [
+          "cmtg3c8ad03m6uz6w59j87gb8",
+          "cmtg3c89w03m2uz6w2n8e8h4j"
+        ],
+        "sendOutboxId": "cmtg3cb6t043kuz6wfycfllh0",
+        "sentMessageId": "cmtg3cbk4043suz6w60yx74u0",
+        "invocationIds": [
+          "cmtg3cb12042muz6wmbdwnp0m",
+          "cmtg3cb2f042wuz6wr2ehs1kf"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    },
+    {
+      "id": "A008",
+      "text": "关于“线下试穿”，暂时没有找到可靠依据，已转入人工确认。",
+      "tasks": [
+        "FAQ_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "evidenceDetails": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 26,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtg3cbnd043zuz6wifxx3hcd",
+        "conversationId": "cmtg3ccih04jzuz6wucyvktmf",
+        "replyJobId": "cmtg3cehh04njuz6wng0emrrn",
+        "userTurnId": "cmtg3ce6k04nduz6wkopaih0e",
+        "taskIds": [
+          "reply-task:cmtg3cehh04njuz6wng0emrrn:cmtg3cehh04njuz6wng0emrrn:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtg3cemu04oluz6wpjpm9tt1",
+        "invocationIds": [
+          "cmtg3ceic04ntuz6wcen9exv9",
+          "cmtg3cej404nxuz6ww32s8yo9",
+          "cmtg3celf04ofuz6wqmpjddu0"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    },
+    {
+      "id": "A009",
+      "text": "这个问题需要人工进一步确认，我已转入人工处理，请稍候。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "evidenceDetails": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 18,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtg3ceq804oouz6wktmxi59r",
+        "conversationId": "cmtg3cfnx055cuz6wn79aj390",
+        "replyJobId": "cmtg3chl8058muz6whms6ch1u",
+        "userTurnId": "cmtg3chd7058guz6wv3gdjzaa",
+        "taskIds": [
+          "reply-task:cmtg3chl8058muz6whms6ch1u:cmtg3chl8058muz6whms6ch1u:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtg3chpa059euz6w0o1blhh1",
+        "invocationIds": [
+          "cmtg3chm4058wuz6w5du9pfcv",
+          "cmtg3chn20590uz6wlz3pz23n"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    },
+    {
+      "id": "A010",
+      "text": "退款或售后处理需要人工核实订单与规则，已为您转入人工确认，请稍候。",
+      "tasks": [
+        "REFUND_REQUEST"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "evidenceDetails": [],
+      "provider": "offline-structured-demo",
+      "model": "offline-structured-v1",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 42,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtg3chrk059fuz6wd18excmw",
+        "conversationId": "cmtg3cij305p3uz6w1q7mc23a",
+        "replyJobId": "cmtg3ckc105spuz6wgkups82z",
+        "userTurnId": "cmtg3ck8x05s9uz6wglfr7gb0",
+        "taskIds": [
+          "reply-task:cmtg3ckc105spuz6wgkups82z:cmtg3ckc105spuz6wgkups82z:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtg3ckhr05txuz6wgu9h7nl3",
+        "invocationIds": [
+          "cmtg3ckdc05t3uz6weo1jn6va",
+          "cmtg3ckeu05tbuz6w8o83vqwq"
+        ]
+      },
+      "passed": true,
+      "failureReasons": [],
+      "checks": {
+        "technicalPathPass": true,
+        "deterministicSafetyPass": true,
+        "judgeScore": null,
+        "humanReviewStatus": "NOT_REQUIRED"
+      }
+    }
+  ]
+}

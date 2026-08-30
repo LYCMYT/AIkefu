@@ -18,18 +18,12 @@
 
 | 模式 | 结果 | 输入 / 输出 Token | 平均延迟 | 成本 |
 |---|---:|---:|---:|---:|
-| Production Offline | 31 / 36 | 0 / 0 | 0 ms | 不适用 |
-| Production DeepSeek | 31 / 36 | 30,150 / 3,688 | 1,757 ms | Provider 未返回价格，未推测 |
+| 固定集 Production Offline | 36 / 36 | 0 / 0 | 691 ms | 不适用 |
+| 固定集 Production DeepSeek | 36 / 36 | 21,463 / 2,540 | 2,326 ms | Provider 未返回价格，未推测 |
+| AUTO Production Offline | 10 / 10 | 0 / 0 | 26 ms | 不适用 |
+| AUTO Production DeepSeek | 10 / 10 | 8,675 / 1,143 | 2,283 ms | Provider 未返回价格，未推测 |
 
-两种生产模式通过的是同一组 31 个产品案例。DeepSeek 报告中的 Token 与延迟来自持久化 `AIInvocation`，不是前端估算。当前 5 个失败均为评测执行器尚未实现的故障注入驱动，不是普通知识问答或动态事实回答失败：
-
-- `E026`：primary provider timeout / fallback 驱动。
-- `E027`：primary provider invalid JSON / repair / fallback 驱动。
-- `E033`：审批前 contextVersion 变化驱动。
-- `E035`：生成中进程重启恢复驱动。
-- `E036`：外发中进程重启 / UNCERTAIN 恢复驱动。
-
-这些能力已有各自的 runtime / recovery 测试，但尚未统一接入 36 Case production runner，因此 Gate 保持 31 / 36，禁止把它写成 36 / 36。
+两种 Provider 模式通过同一组 36 个固定案例；独立 AUTO Suite 另验证 10 个开启店铺的场景，其中安全可自动回复的用例真实经过 SendGuard → SendOutbox → Receipt → Buyer Message，无证据、知识冲突和高风险用例保持阻断。DeepSeek Token 与延迟来自持久化 `AIInvocation`，不是前端估算。
 
 早期的 `pnpm ai:eval` Provider-only 探针曾得到 3 / 36；它不加载生产 PostgreSQL Evidence、动态 resolver 或发送回执，只用于验证 Prompt / Provider 协议。当前产品质量基线以 production runner 报告为准，二者不可混用。
 
@@ -39,7 +33,6 @@
 
 ## 仍需完成
 
-- 将上述 5 个故障注入场景接入统一 production runner，复用真实 provider fault、approval context mutation 与 restart harness。
 - 对语义性事实声明增加更完整的 entailment / Judge 门禁；现有 deterministic Guard 只覆盖高风险最小集合。
 - 外部 Embedding 与 Quality Judge 尚未作为发布 Gate；外部图片分析只在服务端显式 opt-in 时启用。
 
@@ -49,3 +42,5 @@
 - `artifacts/eval/reply-eval-production_offline-latest.md`
 - `artifacts/eval/reply-eval-production_real_provider-latest.json`
 - `artifacts/eval/reply-eval-production_real_provider-latest.md`
+- `artifacts/eval/reply-auto-eval-production_offline-latest.json`
+- `artifacts/eval/reply-auto-eval-production_real_provider-latest.json`

@@ -40,6 +40,7 @@ function createMemoryStorage(): Storage {
 afterEach(() => {
   clearWorkspaceSessionToken('operational');
   clearWorkspaceSessionToken('scenario');
+  clearWorkspaceSessionToken('showcase');
   vi.unstubAllGlobals();
 });
 
@@ -47,12 +48,16 @@ describe('isolated Workspace browser sessions', () => {
   it('maps operational and scenario sessions to separate keys and profiles', () => {
     expect(WORKSPACE_SESSION_STORAGE_KEYS.operational).toBe('aikefu_operational_workspace_token_v2');
     expect(WORKSPACE_SESSION_STORAGE_KEYS.scenario).toBe('aikefu_scenario_workspace_token');
+    expect(WORKSPACE_SESSION_STORAGE_KEYS.showcase).toBe('aikefu_showcase_workspace_token');
     expect(workspaceSessionStorageKey('operational')).toBe('aikefu_operational_workspace_token_v2');
     expect(workspaceSessionStorageKey('scenario')).toBe('aikefu_scenario_workspace_token');
+    expect(workspaceSessionStorageKey('showcase')).toBe('aikefu_showcase_workspace_token');
     expect(workspaceSessionProfile('operational')).toBe('EMPTY');
     expect(workspaceSessionProfile('scenario')).toBe('SEEDED');
+    expect(workspaceSessionProfile('showcase')).toBe('SEEDED');
     expect(workspaceSessionResetProfile('operational')).toBe('EMPTY');
     expect(workspaceSessionResetProfile('scenario')).toBe('SEEDED');
+    expect(workspaceSessionResetProfile('showcase')).toBe('SEEDED');
   });
 
   it('keeps reads, writes, and clears isolated while preserving the legacy token', () => {
@@ -62,20 +67,25 @@ describe('isolated Workspace browser sessions', () => {
 
     expect(readWorkspaceSessionToken('operational')).toBeNull();
     expect(readWorkspaceSessionToken('scenario')).toBeNull();
+    expect(readWorkspaceSessionToken('showcase')).toBeNull();
 
     storeWorkspaceSessionToken('operational', ' operational-token ');
     storeWorkspaceSessionToken('scenario', 'scenario-token');
+    storeWorkspaceSessionToken('showcase', 'showcase-token');
 
     expect(readWorkspaceSessionToken('operational')).toBe('operational-token');
     expect(readWorkspaceSessionToken('scenario')).toBe('scenario-token');
+    expect(readWorkspaceSessionToken('showcase')).toBe('showcase-token');
     expect(storage.getItem(LEGACY_WORKSPACE_TOKEN_STORAGE_KEY)).toBe('legacy-token');
 
     clearWorkspaceSessionToken('operational');
     expect(readWorkspaceSessionToken('operational')).toBeNull();
     expect(readWorkspaceSessionToken('scenario')).toBe('scenario-token');
+    expect(readWorkspaceSessionToken('showcase')).toBe('showcase-token');
     expect(storage.getItem(LEGACY_WORKSPACE_TOKEN_STORAGE_KEY)).toBe('legacy-token');
 
     clearWorkspaceSessionToken('scenario');
+    clearWorkspaceSessionToken('showcase');
     expect(storage.getItem(LEGACY_WORKSPACE_TOKEN_STORAGE_KEY)).toBe('legacy-token');
   });
 
@@ -115,6 +125,7 @@ describe('isolated Workspace browser sessions', () => {
     });
     vi.stubGlobal('window', blockedWindow);
     expect(readWorkspaceSessionToken('scenario')).toBeNull();
+    expect(readWorkspaceSessionToken('showcase')).toBeNull();
     storeWorkspaceSessionToken('scenario', 'memory-scenario');
     expect(readWorkspaceSessionToken('scenario')).toBe('memory-scenario');
     clearWorkspaceSessionToken('scenario');

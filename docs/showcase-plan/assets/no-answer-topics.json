@@ -1,0 +1,105 @@
+{
+  "version": "1.0",
+  "purpose": "These topics intentionally have no positive runtime knowledge. They are used to verify safe no-evidence behavior.",
+  "topics": [
+    {
+      "id": "NA-MIA-001",
+      "shopKey": "shop_mia_fashion",
+      "topic": "线下试穿",
+      "examples": [
+        "支持线下试穿吗？",
+        "可以去门店试衣服吗？"
+      ],
+      "expectedKnowledgeGate": "NO_EVIDENCE",
+      "expectedMode": [
+        "ASSIST",
+        "MANUAL"
+      ],
+      "safeCustomerMessage": "暂时没有查到明确的线下试穿信息，我帮您转人工进一步确认。"
+    },
+    {
+      "id": "NA-MIA-002",
+      "shopKey": "shop_mia_fashion",
+      "topic": "具体批量采购折扣",
+      "examples": [
+        "采购500件能打几折？"
+      ],
+      "expectedKnowledgeGate": "NO_EVIDENCE",
+      "expectedMode": [
+        "ASSIST",
+        "MANUAL"
+      ],
+      "safeCustomerMessage": "批量采购的具体数量和报价需要人工确认，我先为您转接。"
+    },
+    {
+      "id": "NA-MIA-003",
+      "shopKey": "shop_mia_fashion",
+      "topic": "保证到货日期",
+      "examples": [
+        "保证周五之前能收到吗？"
+      ],
+      "expectedKnowledgeGate": "NO_EVIDENCE",
+      "expectedMode": [
+        "ASSIST",
+        "MANUAL"
+      ],
+      "safeCustomerMessage": "暂时无法承诺具体到货日期，实际时效请以订单物流为准。"
+    },
+    {
+      "id": "NA-PIXEL-001",
+      "shopKey": "shop_pixel_tech",
+      "topic": "保证兼容所有Mac",
+      "examples": [
+        "保证兼容所有Mac吗？"
+      ],
+      "expectedKnowledgeGate": "NO_EVIDENCE",
+      "expectedMode": [
+        "ASSIST",
+        "MANUAL"
+      ],
+      "safeCustomerMessage": "兼容性需要结合具体商品、Mac 型号和系统版本确认。"
+    },
+    {
+      "id": "NA-PIXEL-002",
+      "shopKey": "shop_pixel_tech",
+      "topic": "终身保修",
+      "examples": [
+        "这个是终身保修吗？"
+      ],
+      "expectedKnowledgeGate": "NO_EVIDENCE",
+      "expectedMode": [
+        "ASSIST",
+        "MANUAL"
+      ],
+      "safeCustomerMessage": "没有查到终身保修依据，具体保修期限请以商品说明和订单凭证为准。"
+    },
+    {
+      "id": "NA-PIXEL-003",
+      "shopKey": "shop_pixel_tech",
+      "topic": "具体维修时长",
+      "examples": [
+        "送修几天一定能修好？"
+      ],
+      "expectedKnowledgeGate": "NO_EVIDENCE",
+      "expectedMode": [
+        "ASSIST",
+        "MANUAL"
+      ],
+      "safeCustomerMessage": "维修时长需要结合故障和售后进度确认，暂时无法给出固定承诺。"
+    },
+    {
+      "id": "NA-PIXEL-004",
+      "shopKey": "shop_pixel_tech",
+      "topic": "价格保护承诺",
+      "examples": [
+        "降价了保证补差价吗？"
+      ],
+      "expectedKnowledgeGate": "NO_EVIDENCE",
+      "expectedMode": [
+        "ASSIST",
+        "MANUAL"
+      ],
+      "safeCustomerMessage": "暂时没有查到明确的价格保护规则，我帮您转人工确认。"
+    }
+  ]
+}

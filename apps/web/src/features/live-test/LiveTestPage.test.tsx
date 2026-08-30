@@ -24,6 +24,19 @@ describe('LiveTestPage', () => {
     expect(html).toContain('真实店铺、买家、商品和消息管线');
   });
 
+  it('does not fall back to a deleted shop while a reset foundation snapshot is changing', () => {
+    const html = renderToStaticMarkup(<LiveTestPage
+      activeShopId={shop.id}
+      onShopChange={() => undefined}
+      refreshKey={1}
+      requestedShopId="replacement-shop"
+      shops={[shop]}
+      token="token"
+    />);
+    expect(html).toContain('添加店铺后开始实时联调');
+    expect(html).not.toContain('青云数码演示店 · 同一服务端快照');
+  });
+
   it('exposes buyer/store mobile tabs, one shared pipeline, and accessible event controls', () => {
     const html = renderToStaticMarkup(<LiveTestPage activeShopId={shop.id} onShopChange={() => undefined} refreshKey={0} shops={[shop]} socketStatus="connected" token="token" />);
 

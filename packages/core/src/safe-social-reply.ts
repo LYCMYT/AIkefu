@@ -63,14 +63,14 @@ export function resolveSafeSocialReply(input: string): SafeSocialReply | undefin
  */
 export function resolveSafeKnowledgeIntent(input: string): SafeKnowledgeIntent | undefined {
   const normalized = normalizeTurn(input);
-  if (!normalized || /(?:订单|这单|我的|催|退款|退货|换货|改地址|修改地址|取消|赔偿|投诉|支付|付款|人工|偏远|新疆|西藏)/u.test(normalized)) {
+  if (!normalized || /(?:订单|这单|我的|催|退款|退货|换货|改地址|修改地址|取消|赔偿|投诉|支付|付款|人工)/u.test(normalized)) {
     return undefined;
   }
   const question = normalized
     .replace(/^(?:(?:你好|您好|嗨|哈[喽啰])(?:呀|啊|哈)?[，,\s]*)?(?:请问|想问一下|问一下)?\s*/u, '')
     .replace(/[吗呢呀啊]$/u, '')
     .trim();
-  return /^(?:(?:普通地区|现货商品|预售商品)?(?:一般|通常|大概|预计)?(?:多久|几天|多长时间|什么时候)(?:能)?发(?:货|出)|发(?:货|出)(?:要|需要)?(?:多久|几天|多长时间)|发什么快递|支持指定快递|(?:是否|支持)?包邮|(?:有|支持)?运费险)$/u.test(question)
+  return /^(?:(?:(?:普通地区|偏远地区|新疆|西藏|现货商品|预售商品)?(?:一般|通常|大概|预计)?(?:多久|几天|多长时间|什么时候)(?:能)?发(?:货|出)|发(?:货|出)(?:要|需要)?(?:多久|几天|多长时间)|发什么快递|支持指定快递|(?:是否|支持)?包邮|(?:有|支持)?运费险))$/u.test(question)
     ? 'SHIPPING_POLICY'
     : undefined;
 }

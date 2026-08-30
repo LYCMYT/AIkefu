@@ -64,6 +64,10 @@ describe('server AI providers', () => {
         { intent: 'SIZE_RECOMMENDATION', status: 'FAILED', errorCode: 'NO_EVIDENCE' },
       ],
     }));
+    const noEvidence = await provider.invoke(request('REPLY_GENERATION', {
+      turn: { text: '你们支持线下试穿吗？' },
+      tasks: [{ intent: 'FAQ_QUERY', status: 'FAILED', errorCode: 'NO_EVIDENCE' }],
+    }));
 
     expect(resolved.output).toEqual({
       text: '这个规格目前有现货。\n普通现货商品通常在24小时内发出。',
@@ -71,6 +75,10 @@ describe('server AI providers', () => {
     });
     expect(partial.output).toEqual({
       text: '这个规格目前有现货。\n尺码建议还需要人工确认。',
+      requiresHuman: true,
+    });
+    expect(noEvidence.output).toEqual({
+      text: '关于“线下试穿”，暂时没有找到可靠依据，已转入人工确认。',
       requiresHuman: true,
     });
   });
@@ -232,7 +240,7 @@ describe('server AI providers', () => {
   });
 
   it('uses the offline provider when no external model gateway is configured', async () => {
-    const runtime = createServerAiRuntime({});
+    const runtime = createServerAiRuntime({ AI_OFFLINE_MODE: '1' });
     const result = await runtime.runStructured({
       purpose: 'RISK_CLASSIFIER',
       input: { text: 'hello' },
@@ -243,7 +251,7 @@ describe('server AI providers', () => {
   });
 
   it('grounds an offline workflow recommendation in the products returned by its scoped query', async () => {
-    const runtime = createServerAiRuntime({});
+    const runtime = createServerAiRuntime({ AI_OFFLINE_MODE: '1' });
     const result = await runtime.runStructured({
       purpose: 'REPLY_GENERATION',
       input: {
@@ -297,7 +305,7 @@ describe('server AI providers', () => {
     }
   });
 
-  it.each(['RISK_CLASSIFIER', 'INTENT_PLANNER'] as const)(
+  it.each(['RISK_CLASSIFIER', 'INTENT_PLANNER', 'SUMMARY', 'KNOWLEDGE_EXTRACT', 'REPLY_GENERATION', 'IMAGE_ANALYSIS', 'QUALITY_JUDGE'] as const)(
     'fails closed for %s when its configured primary provider fails',
     async (purpose) => {
       const fetcher = jest.fn().mockRejectedValue(new Error('configured provider unavailable'));
@@ -320,4 +328,20 @@ describe('server AI providers', () => {
       expect(fetcher).toHaveBeenCalledTimes(2);
     },
   );
+
+  it('fails startup closed in production when neither a real provider nor explicit offline mode is configured', () => {
+    expect(() => createServerAiRuntime({ NODE_ENV: 'production' })).toThrow('AI_PROVIDER_CONFIGURATION_REQUIRED');
+  });
+
+  it('parses provider Retry-After metadata without retaining response bodies', async () => {
+    const provider = new JsonModelGatewayProvider({
+      endpoint: 'https://models.example.test/structured', secret: 'server-only-secret', model: 'fast-model',
+      fetcher: jest.fn().mockResolvedValue({
+        ok: false, status: 429, headers: { get: () => '3' }, json: async () => ({ diagnostic: 'must-not-be-stored' }),
+      }) as never,
+    });
+    await expect(provider.invoke(request('SUMMARY', {}))).rejects.toMatchObject({
+      kind: 'HTTP', status: 429, retryAfterMs: 3_000,
+    });
+  });
 });

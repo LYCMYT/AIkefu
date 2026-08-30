@@ -41,6 +41,7 @@ import { createKnowledgeEmbeddingProvider, KNOWLEDGE_EMBEDDING_PROVIDER } from '
 import { ConversationMemoryService } from './ai/conversation-memory.service';
 import { AI_INVOCATION_REPOSITORY, PrismaAIInvocationRepository } from './ai/ai-invocation.repository';
 import { AIInvocationService } from './ai/ai-invocation.service';
+import { AiEvalFaultRegistry } from './eval/ai-eval-fault-registry';
 import { AI_RUNTIME, AiRuntimeApplicationService } from './ai/ai-runtime-application.service';
 import { createServerAiRuntime } from './ai/ai-providers';
 import {
@@ -80,6 +81,8 @@ import { ScenarioLabService } from './scenarios/scenario-lab.service';
 import { ScenarioLabController } from './scenarios/scenario-lab.controller';
 import { ReplyIncidentPublisher } from './incidents/reply-incident.publisher';
 import { WorkflowRealtimePublisher } from './workflow/workflow-realtime.publisher';
+import { ShowcaseCatalogService } from './showcase/showcase-catalog.service';
+import { ShowcaseController } from './showcase/showcase.controller';
 
 @Module({
   controllers: [
@@ -105,6 +108,7 @@ import { WorkflowRealtimePublisher } from './workflow/workflow-realtime.publishe
     TraceController,
     ReplyIncidentController,
     ScenarioLabController,
+    ShowcaseController,
   ],
   providers: [
     PrismaService,
@@ -121,6 +125,7 @@ import { WorkflowRealtimePublisher } from './workflow/workflow-realtime.publishe
     ConversationMemoryRebuildWorker,
     CoalescingConversationMemoryRebuildScheduler,
     AIInvocationService,
+    AiEvalFaultRegistry,
     UsageService,
     ReplyJobService,
     ReplyDraftService,
@@ -144,6 +149,7 @@ import { WorkflowRealtimePublisher } from './workflow/workflow-realtime.publishe
     TraceService,
     ReplyIncidentService,
     ScenarioLabService,
+    ShowcaseCatalogService,
     ReplyIncidentPublisher,
     PrismaAIInvocationRepository,
     AiRuntimeApplicationService,

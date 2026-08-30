@@ -1,0 +1,2 @@
+ALTER TABLE "AIInvocation"
+  ALTER COLUMN "status" SET DEFAULT 'RUNNING';

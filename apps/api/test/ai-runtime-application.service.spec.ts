@@ -49,14 +49,16 @@ describe('AiRuntimeApplicationService', () => {
     expect(ledger.start).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: 'workspace-1', tenantId: 'tenant-1', shopId: 'shop-1' }),
       expect.objectContaining({
-        provider: 'test-provider',
-        model: 'test-model',
+        provider: 'unresolved',
+        model: 'unresolved',
         includedDataClasses: ['text'],
         excludedPII: ['PHONE'],
         evidence: [expect.objectContaining({ versionId: 'version-2' })],
       }),
     );
-    expect(ledger.complete).toHaveBeenCalledWith(expect.any(Object), 'invocation-1', expect.objectContaining({ status: 'SUCCEEDED' }));
+    expect(ledger.complete).toHaveBeenCalledWith(expect.any(Object), 'invocation-1', expect.objectContaining({
+      status: 'SUCCEEDED', provider: 'test-provider', model: 'test-model',
+    }));
     expect(ledger.recordUsage).toHaveBeenCalledWith(expect.any(Object), 'invocation-1', expect.objectContaining({ success: true }));
     expect(gateway.publish).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'USAGE_UPDATED',
@@ -67,6 +69,39 @@ describe('AiRuntimeApplicationService', () => {
 
     evidence[0]!.contentSnapshot.answer = 'mutated later';
     expect(ledger.start.mock.calls[0]![1].evidence[0].contentSnapshot.answer).toBe('316L');
+  });
+
+  it('persists a RUNNING invocation before the provider is allowed to start', async () => {
+    const order: string[] = [];
+    const ledger = {
+      start: jest.fn(async () => { order.push('STARTED'); return { id: 'invocation-running' }; }),
+      complete: jest.fn(async () => { order.push('COMPLETED'); return { id: 'invocation-running' }; }),
+      recordUsage: jest.fn().mockResolvedValue({ id: 'usage-running' }),
+    };
+    const runtime = {
+      runStructured: jest.fn(async () => {
+        order.push('PROVIDER');
+        return {
+          output: { riskLevel: 'LOW', reasons: [], recommendedMode: 'AUTO' },
+          provider: 'primary', model: 'quality-v1', fallbackUsed: false,
+          usage: { inputTokens: 3, outputTokens: 2 },
+        };
+      }),
+    };
+    const service = new AiRuntimeApplicationService(runtime as never, ledger as never);
+
+    await service.runStructured(
+      { workspaceId: 'workspace-1', tenantId: 'tenant-1', shopId: 'shop-1' },
+      {
+        purpose: 'RISK_CLASSIFIER', schema: 'RiskResult', context: { text: '你好' },
+        allowedDataClasses: ['text'], promptVersion: 'reply-risk-v1',
+      },
+    );
+
+    expect(order).toEqual(['STARTED', 'PROVIDER', 'COMPLETED']);
+    expect(ledger.start).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      provider: 'unresolved', model: 'unresolved',
+    }));
   });
 
   it('preserves a stable runtime failure while recording only non-sensitive failure metadata', async () => {
@@ -181,13 +216,15 @@ describe('AiRuntimeApplicationService', () => {
 
     const abortedStart = starts.find((entry) => entry.input.purpose === 'SUMMARY');
     expect(abortedStart?.input).toMatchObject({
-      provider: 'aborted-provider',
+      provider: 'unresolved',
       model: 'unresolved',
       fallbackUsed: false,
     });
     const abortedCompletion = completions.find((entry) => entry.invocationId === abortedStart?.id);
     expect(abortedCompletion?.input).toMatchObject({
       status: 'ABORTED',
+      provider: 'aborted-provider',
+      model: 'unresolved',
       inputTokens: 0,
       outputTokens: 0,
       fallbackUsed: false,

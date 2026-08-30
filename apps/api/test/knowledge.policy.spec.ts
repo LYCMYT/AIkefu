@@ -5,6 +5,7 @@ import {
   inferKnowledgeScope,
   parseKnowledgeCsv,
   rankKnowledgeCandidates,
+  assessKnowledgeRelevance,
   requiresDynamicFactLookup,
   versionSwitchDecision,
 } from '../src/knowledge/knowledge.policy';
@@ -58,10 +59,19 @@ describe('Phase 03 knowledge policy', () => {
         answer: '偏远地区通常 72 小时内发货。',
       }),
     ).toMatchObject({ status: 'VALID' });
-
     expect(
       classifyImportRow({
         rowNumber: 4,
+        scope: 'PRODUCT',
+        productExternalId: 'p-1',
+        question: '有哪些颜色规格？',
+        answer: '商品规格包含黑色和白色，具体可售颜色与库存以实时 SKU 信息为准。',
+      }),
+    ).toMatchObject({ status: 'VALID' });
+
+    expect(
+      classifyImportRow({
+        rowNumber: 5,
         scope: 'STORE',
         productExternalId: null,
         question: '我的订单状态如何？',
@@ -149,6 +159,41 @@ describe('Phase 03 knowledge policy', () => {
 
     expect(ranked).toHaveLength(1);
     expect(ranked[0]).toMatchObject({ id: 'semantic-hit', lexicalScore: 0, vectorScore: 0.96 });
+  });
+
+  it('rejects an unrelated FAQ hit instead of treating any legal top-1 candidate as evidence', () => {
+    const ranked = rankKnowledgeCandidates(
+      [
+        candidate('return-policy', { scoreText: '支持7天无理由退货，但商品需保持完好。', vectorScore: 0.74 }),
+        candidate('shipping-policy', { scoreText: '普通现货商品通常24小时内发出。', vectorScore: 0.72 }),
+      ],
+      {
+        workspaceId: 'workspace-a',
+        tenantId: 'tenant-a',
+        shopId: 'shop-a',
+        query: '你们支持线下试穿吗？',
+      },
+    );
+
+    expect(assessKnowledgeRelevance(ranked)).toMatchObject({
+      status: 'NO_EVIDENCE',
+      candidates: [],
+    });
+  });
+
+  it('distinguishes a reliable answer from two effectively tied candidates', () => {
+    const exact = rankKnowledgeCandidates(
+      [candidate('care', { scoreText: '可以烘干吗 不建议使用烘干机', vectorScore: 0.91 })],
+      {
+        workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', query: '这件衣服可以烘干吗？',
+      },
+    );
+    expect(assessKnowledgeRelevance(exact)).toMatchObject({ status: 'RELIABLE' });
+
+    const tied = exact.length
+      ? [exact[0]!, { ...exact[0]!, id: 'care-conflicting', itemId: 'care-conflicting-item', score: exact[0]!.score - 0.005 }]
+      : [];
+    expect(assessKnowledgeRelevance(tied)).toMatchObject({ status: 'AMBIGUOUS', candidates: [] });
   });
 
   it('uses corpus BM25 with a small synonym expansion while preserving metadata isolation', () => {

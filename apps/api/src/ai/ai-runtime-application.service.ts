@@ -17,6 +17,7 @@ import type {
 } from './ai-invocation.repository';
 import { WorkspaceGateway } from '../websocket/workspace.gateway';
 import { getPromptDefinition } from './prompt-registry';
+import { AiEvalFaultRegistry, AiEvalSimulatedCrash } from '../eval/ai-eval-fault-registry';
 
 export const AI_RUNTIME = Symbol('AI_RUNTIME');
 
@@ -44,6 +45,7 @@ export class AiRuntimeApplicationService {
     @Inject(AI_RUNTIME) private readonly runtime: AiRuntime,
     private readonly invocations: AIInvocationService,
     @Optional() private readonly gateway?: WorkspaceGateway,
+    @Optional() private readonly evalFaults?: AiEvalFaultRegistry,
   ) {}
 
   async runStructured<T = { riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; reasons: string[]; recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' }>(scope: AIInvocationScope, input: RunStructuredApplicationInput): Promise<{
@@ -57,6 +59,30 @@ export class AiRuntimeApplicationService {
     const sanitized = sanitizeContext(input.context, input.allowedDataClasses);
     const evidence = cloneEvidence(input.evidence ?? []);
     const prompt = getPromptDefinition(input.purpose, input.promptVersion);
+    const evalScenario = this.evalFaults?.consume(scope.workspaceId, input.purpose);
+    if (evalScenario && evalScenario !== 'CRASH_ONCE') {
+      await this.recordInjectedTimeout(scope, input, sanitized.audit, evidence, 'eval-primary-timeout');
+      if (evalScenario === 'TOTAL_TIMEOUT') {
+        await this.recordInjectedTimeout(scope, input, sanitized.audit, evidence, 'eval-fallback-timeout', true);
+        throw new AiRuntimeFailure('TIMEOUT', 'Configured evaluation providers timed out');
+      }
+    }
+    const invocation = await this.invocations.start(scope, {
+      purpose: input.purpose,
+      provider: 'unresolved',
+      model: 'unresolved',
+      promptVersion: input.promptVersion,
+      ragStrategy: input.ragStrategy,
+      fallbackUsed: false,
+      contextVersion: input.contextVersion,
+      includedDataClasses: sanitized.audit.includedDataClasses,
+      excludedPII: sanitized.audit.excludedPII,
+      evidence,
+    });
+    const invocationId = requireInvocationId(invocation);
+    // The isolated production-eval restart case intentionally leaves this
+    // durable RUNNING row and its GENERATING ReplyJob for recovery to claim.
+    if (evalScenario === 'CRASH_ONCE') throw new AiEvalSimulatedCrash();
 
     try {
       const result = await this.runtime.runStructured<T>({
@@ -68,19 +94,6 @@ export class AiRuntimeApplicationService {
         ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
       });
       const durationMs = Date.now() - startedAt;
-      const invocation = await this.invocations.start(scope, {
-        purpose: input.purpose,
-        provider: result.provider,
-        model: result.model,
-        promptVersion: input.promptVersion,
-        ragStrategy: input.ragStrategy,
-        fallbackUsed: result.fallbackUsed,
-        contextVersion: input.contextVersion,
-        includedDataClasses: sanitized.audit.includedDataClasses,
-        excludedPII: sanitized.audit.excludedPII,
-        evidence,
-      });
-      const invocationId = requireInvocationId(invocation);
       const inputTokens = result.usage?.inputTokens ?? 0;
       const outputTokens = result.usage?.outputTokens ?? 0;
       await this.invocations.complete(scope, invocationId, {
@@ -88,7 +101,9 @@ export class AiRuntimeApplicationService {
         durationMs,
         inputTokens,
         outputTokens,
-        fallbackUsed: result.fallbackUsed,
+        fallbackUsed: result.fallbackUsed || evalScenario === 'PRIMARY_TIMEOUT_FALLBACK_SUCCESS',
+        provider: result.provider,
+        model: result.model,
       });
       await this.invocations.recordUsage(scope, invocationId, {
         purpose: input.purpose,
@@ -97,22 +112,50 @@ export class AiRuntimeApplicationService {
         inputTokens,
         outputTokens,
         success: true,
-        fallbackUsed: result.fallbackUsed,
+        fallbackUsed: result.fallbackUsed || evalScenario === 'PRIMARY_TIMEOUT_FALLBACK_SUCCESS',
         durationMs,
       });
       this.publishUsage(scope, invocationId, input.purpose, result.provider, result.model, true);
-      return { ...result, invocationId };
+      return {
+        ...result,
+        fallbackUsed: result.fallbackUsed || evalScenario === 'PRIMARY_TIMEOUT_FALLBACK_SUCCESS',
+        invocationId,
+      };
     } catch (error) {
-      await this.recordFailure(scope, input, sanitized.audit, evidence, startedAt, error);
+      await this.recordFailure(scope, invocationId, input, startedAt, error);
       throw error;
     }
   }
 
-  private async recordFailure(
+  private async recordInjectedTimeout(
     scope: AIInvocationScope,
     input: RunStructuredApplicationInput,
     audit: ReturnType<typeof sanitizeContext>['audit'],
     evidence: AIInvocationEvidenceInput[],
+    provider: string,
+    fallbackUsed = false,
+  ): Promise<void> {
+    const invocation = await this.invocations.start(scope, {
+      purpose: input.purpose, provider, model: 'unresolved', promptVersion: input.promptVersion,
+      ragStrategy: input.ragStrategy, fallbackUsed, contextVersion: input.contextVersion,
+      includedDataClasses: audit.includedDataClasses, excludedPII: audit.excludedPII, evidence,
+    });
+    const invocationId = requireInvocationId(invocation);
+    await this.invocations.complete(scope, invocationId, {
+      status: 'FAILED', durationMs: input.timeoutMs ?? 8_000, inputTokens: 0, outputTokens: 0,
+      fallbackUsed, provider, model: 'unresolved',
+    });
+    await this.invocations.recordUsage(scope, invocationId, {
+      purpose: input.purpose, provider, model: 'unresolved', inputTokens: 0, outputTokens: 0,
+      success: false, fallbackUsed, durationMs: input.timeoutMs ?? 8_000, errorCode: 'TIMEOUT',
+    });
+    this.publishUsage(scope, invocationId, input.purpose, provider, 'unresolved', false);
+  }
+
+  private async recordFailure(
+    scope: AIInvocationScope,
+    invocationId: string,
+    input: RunStructuredApplicationInput,
     startedAt: number,
     error: unknown,
   ): Promise<void> {
@@ -130,25 +173,14 @@ export class AiRuntimeApplicationService {
 
     // Preserve the original runtime failure if persistence itself is unavailable.
     try {
-      const invocation = await this.invocations.start(scope, {
-        purpose: input.purpose,
-        provider,
-        model,
-        promptVersion: input.promptVersion,
-        ragStrategy: input.ragStrategy,
-        fallbackUsed,
-        contextVersion: input.contextVersion,
-        includedDataClasses: audit.includedDataClasses,
-        excludedPII: audit.excludedPII,
-        evidence,
-      });
-      const invocationId = requireInvocationId(invocation);
       await this.invocations.complete(scope, invocationId, {
         status,
         durationMs,
         inputTokens,
         outputTokens,
         fallbackUsed,
+        provider,
+        model,
       });
       await this.invocations.recordUsage(scope, invocationId, {
         purpose: input.purpose,

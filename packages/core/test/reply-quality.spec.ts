@@ -77,6 +77,25 @@ describe('reply quality primitives', () => {
     })).toMatchObject({ allowed: true });
   });
 
+  it('rejects broader false facts, sensitive fields, duplicate/internal and customer-hostile output', () => {
+    expect(guardReplyOutput({ text: '售价是199元。', taskResults: [{ intent: 'PRODUCT_QUERY', facts: { price: 299 } }] }))
+      .toMatchObject({ allowed: false, reason: 'FACT_MISMATCH' });
+    expect(guardReplyOutput({ text: '订单已经签收。', taskResults: [{ intent: 'ORDER_QUERY', facts: { status: 'SHIPPED' } }] }))
+      .toMatchObject({ allowed: false, reason: 'FACT_MISMATCH' });
+    expect(guardReplyOutput({ text: '已为您备注好了。', taskResults: [] }))
+      .toMatchObject({ allowed: false, reason: 'ACTION_WITHOUT_RECEIPT' });
+    expect(guardReplyOutput({ text: '请发到 demo@example.com。', taskResults: [] }))
+      .toMatchObject({ allowed: false, reason: 'PII_LEAK' });
+    expect(guardReplyOutput({ text: '银行卡 6222021234567890123。', taskResults: [] }))
+      .toMatchObject({ allowed: false, reason: 'PII_LEAK' });
+    expect(guardReplyOutput({ text: '可以正常下单。可以正常下单。', taskResults: [] }))
+      .toMatchObject({ allowed: false, reason: 'DUPLICATE_REPLY' });
+    expect(guardReplyOutput({ text: '{"status":"WAITING_HUMAN","code":"NO_EVIDENCE"}', taskResults: [] }))
+      .toMatchObject({ allowed: false, reason: 'INTERNAL_LEAK' });
+    expect(guardReplyOutput({ text: '请人工处理此会话。', taskResults: [] }))
+      .toMatchObject({ allowed: false, reason: 'NOT_CUSTOMER_FACING' });
+  });
+
   it('renders internal order/inventory facts as customer language without exposing IDs or exact stock', () => {
     expect(renderCustomerFactReply('ORDER_QUERY', {
       externalOrderId: 'ORDER-SECRET-1', status: 'SHIPPED', logistics: { trackingNumber: 'TRACK-SECRET-1' },

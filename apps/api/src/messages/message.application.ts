@@ -14,6 +14,7 @@ export type BuyerView = {
   id: string;
   workspaceId: string;
   tenantId: string;
+  externalBuyerId: string;
   displayName: string;
   avatar: string | null;
   tags: string[];
@@ -22,6 +23,7 @@ export type BuyerView = {
 export type ProductView = {
   id: string;
   shopId: string;
+  externalProductId: string;
   title: string;
   description: string;
   status: string;

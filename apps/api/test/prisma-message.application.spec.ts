@@ -25,6 +25,39 @@ describe('PrismaMessageApplication buyer shop scope', () => {
       orderBy: { createdAt: 'asc' },
     });
   });
+
+  it('projects the stable external buyer id used by guided showcase resource resolution', async () => {
+    const prisma = {
+      shop: { findFirst: jest.fn().mockResolvedValue({ id: 'shop-a' }) },
+      buyer: { findMany: jest.fn().mockResolvedValue([{
+        id: 'buyer-a', ...scope, externalBuyerId: 'dy_buyer_002', displayName: 'Mia', avatar: null, tagsJson: ['尺码咨询'],
+      }]) },
+    };
+    const app = new PrismaMessageApplication(
+      prisma as never, { publish: jest.fn() } as never, {} as never, {} as never, {} as never,
+    );
+
+    await expect(app.listBuyers(scope, 'shop-a')).resolves.toEqual([expect.objectContaining({
+      id: 'buyer-a', externalBuyerId: 'dy_buyer_002', displayName: 'Mia',
+    })]);
+  });
+
+  it('projects the stable external product id used by guided showcase resource resolution', async () => {
+    const prisma = {
+      shop: { findFirst: jest.fn().mockResolvedValue({ id: 'shop-a' }) },
+      product: { findMany: jest.fn().mockResolvedValue([{
+        id: 'product-a', shopId: 'shop-a', externalProductId: 'P-F-001', title: '轻薄连帽卫衣', description: '说明',
+        status: 'ON_SHELF', recommendable: true, skus: [],
+      }]) },
+    };
+    const app = new PrismaMessageApplication(
+      prisma as never, { publish: jest.fn() } as never, {} as never, {} as never, {} as never,
+    );
+
+    await expect(app.listProducts(scope, 'shop-a')).resolves.toEqual([expect.objectContaining({
+      id: 'product-a', externalProductId: 'P-F-001', title: '轻薄连帽卫衣',
+    })]);
+  });
 });
 
 describe('PrismaMessageApplication memory invalidation', () => {

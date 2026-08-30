@@ -25,6 +25,7 @@ import type { WorkspaceScope } from '../workspaces/workspace.repository';
 import { AiRuntimeApplicationService } from '../ai/ai-runtime-application.service';
 import { parseKnowledgeImportSource } from './knowledge.import-source';
 import {
+  assessKnowledgeRelevance,
   buildProductKnowledgeSource,
   classifyImportRow,
   containsForbiddenKnowledgeText,
@@ -1136,12 +1137,15 @@ export class KnowledgeService {
         conflictItemIds: [...new Set(rankedConflicts.map((candidate) => candidate.itemId))].sort(),
       };
     }
-    if (ranked.length === 0) return { status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] };
+    const relevance = assessKnowledgeRelevance(ranked);
+    if (relevance.status !== 'RELIABLE') {
+      return { status: relevance.status, evidence: [], conflictItemIds: [] };
+    }
 
     // Copy and freeze each value now. Callers can persist this evidence object
     // with a reply without later edits to KnowledgeItem/KnowledgeVersion
     // mutating the historical content snapshot.
-    const evidence: ReplyEvidenceSnapshot[] = ranked.map((candidate) =>
+    const evidence: ReplyEvidenceSnapshot[] = relevance.candidates.map((candidate) =>
       Object.freeze({
         itemId: candidate.itemId,
         versionId: candidate.versionId,

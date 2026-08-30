@@ -100,7 +100,7 @@ export type ReplyOutputTaskResult = {
 
 export type ReplyOutputGuardResult =
   | { allowed: true }
-  | { allowed: false; reason: 'EMPTY_REPLY' | 'REPLY_TOO_LONG' | 'ACTION_WITHOUT_RECEIPT' | 'FACT_MISMATCH' | 'PII_LEAK' | 'INTERNAL_LEAK' };
+  | { allowed: false; reason: 'EMPTY_REPLY' | 'REPLY_TOO_LONG' | 'ACTION_WITHOUT_RECEIPT' | 'FACT_MISMATCH' | 'PII_LEAK' | 'INTERNAL_LEAK' | 'DUPLICATE_REPLY' | 'NOT_CUSTOMER_FACING' };
 
 /**
  * Minimal deterministic post-composition guard. It does not decide policy; it
@@ -115,12 +115,16 @@ export function guardReplyOutput(input: {
   const text = input.text.trim();
   if (!text) return { allowed: false, reason: 'EMPTY_REPLY' };
   if (text.length > (input.maxLength ?? 1_000)) return { allowed: false, reason: 'REPLY_TOO_LONG' };
-  if (/(?:system\s*prompt|developer\s*(?:message|trace)|chain[-\s]?of[-\s]?thought|内部提示词|系统提示词|开发者追踪|trace[_ -]?id)/iu.test(text)) {
+  if (/(?:system\s*prompt|developer\s*(?:message|trace)|chain[-\s]?of[-\s]?thought|内部提示词|系统提示词|开发者追踪|trace[_ -]?id|reply[_ -]?job|send[_ -]?outbox|WAITING_HUMAN|NO_EVIDENCE|MANUAL_REQUIRED|\{\s*"(?:status|code)"\s*:)/iu.test(text)) {
     return { allowed: false, reason: 'INTERNAL_LEAK' };
   }
-  if (/(?:^|\D)1[3-9]\d{9}(?:\D|$)|\b\d{17}[\dXx]\b/u.test(text)) {
+  if (/(?:^|\D)1[3-9]\d{9}(?:\D|$)|\b\d{17}[\dXx]\b|\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b|(?:银行卡|卡号)\D{0,6}\d{13,19}/iu.test(text)) {
     return { allowed: false, reason: 'PII_LEAK' };
   }
+  if (text === '请人工处理此会话。' || /(?:请|需)人工处理此会话/u.test(text)) {
+    return { allowed: false, reason: 'NOT_CUSTOMER_FACING' };
+  }
+  if (maximumSentenceRepetition(text) > 1) return { allowed: false, reason: 'DUPLICATE_REPLY' };
   if (claimsCompletedAction(text) && !input.taskResults.some((task) => hasSucceededReceipt(task.facts))) {
     return { allowed: false, reason: 'ACTION_WITHOUT_RECEIPT' };
   }
@@ -130,11 +134,16 @@ export function guardReplyOutput(input: {
   if (inventoryFacts.length > 0 && claimedInventory.some((value) => !inventoryFacts.includes(value))) {
     return { allowed: false, reason: 'FACT_MISMATCH' };
   }
+  const priceFacts = input.taskResults.flatMap((task) => numericValues(task.facts, /(?:price|amount|售价|价格|金额)/i));
+  const claimedPrices = [...text.matchAll(/(?:售价|价格|到手价|退款金额|补偿金额)\D{0,8}(\d+(?:\.\d+)?)\s*元/gu)].map((match) => Number(match[1]));
+  if (priceFacts.length > 0 && claimedPrices.some((value) => !priceFacts.includes(value))) return { allowed: false, reason: 'FACT_MISMATCH' };
+  const statusFacts = input.taskResults.flatMap((task) => stringValues(task.facts, /(?:order.?status|status|订单状态)/i));
+  if (statusFacts.length > 0 && contradictsOrderStatus(text, statusFacts)) return { allowed: false, reason: 'FACT_MISMATCH' };
   return { allowed: true };
 }
 
 function claimsCompletedAction(text: string): boolean {
-  return /(?:已|已经|成功)(?:为您|帮您|给您)?(?:完成|办理|提交|发起|操作)?(?:退款|退货|换货|取消订单|修改地址|改地址|补偿|赔付)|(?:退款|退货|换货|订单取消|地址修改)(?:已|已经)(?:成功|完成|提交)/u.test(text);
+  return /(?:已|已经|成功)(?:为您|帮您|给您)?(?:完成|办理|提交|发起|操作)?(?:退款|退货|换货|取消订单|修改地址|改地址|补偿|赔付|备注|转接)|(?:退款|退货|换货|订单取消|地址修改|备注)(?:已|已经)(?:成功|完成|提交|处理好)|已处理好/u.test(text);
 }
 
 function hasSucceededReceipt(value: unknown): boolean {
@@ -158,6 +167,40 @@ function numericValues(value: unknown, keyPattern: RegExp): number[] {
     const own = keyPattern.test(key) && typeof entry === 'number' && Number.isFinite(entry) ? [entry] : [];
     return [...own, ...numericValues(entry, keyPattern)];
   });
+}
+
+function stringValues(value: unknown, keyPattern: RegExp): string[] {
+  if (!value || typeof value !== 'object') return [];
+  if (Array.isArray(value)) return value.flatMap((entry) => stringValues(entry, keyPattern));
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, entry]) => {
+    const own = keyPattern.test(key) && typeof entry === 'string' ? [entry] : [];
+    return [...own, ...stringValues(entry, keyPattern)];
+  });
+}
+
+function contradictsOrderStatus(text: string, facts: readonly string[]): boolean {
+  const labels: Record<string, RegExp> = {
+    WAITING_PAYMENT: /待付款/u,
+    PAID: /待发货/u,
+    WAITING_SHIPMENT: /待发货/u,
+    SHIPPED: /(?:已|已经)发货|运输中/u,
+    DELIVERED: /(?:已|已经)签收/u,
+    COMPLETED: /(?:已|已经)完成/u,
+    CANCELLED: /(?:已|已经)取消/u,
+    REFUNDING: /退款处理中/u,
+    REFUNDED: /(?:已|已经)退款/u,
+  };
+  const allowed = new Set(facts.flatMap((status) => labels[status] ? [status] : []));
+  const claimed = Object.entries(labels).filter(([, pattern]) => pattern.test(text)).map(([status]) => status);
+  return claimed.some((status) => !allowed.has(status));
+}
+
+function maximumSentenceRepetition(text: string): number {
+  const counts = new Map<string, number>();
+  for (const sentence of text.split(/[。！？!?\n]+/u).map((entry) => entry.replace(/\s+/gu, '').trim()).filter((entry) => entry.length >= 4)) {
+    counts.set(sentence, (counts.get(sentence) ?? 0) + 1);
+  }
+  return Math.max(0, ...counts.values());
 }
 
 const ORDER_STATUS_LABELS: Record<string, string> = {

@@ -61,10 +61,37 @@ export type RankedRagCandidate = RagCandidate & {
   /** Raw Okapi BM25 score calculated over the already metadata-filtered corpus. */
   bm25Score: number;
   lexicalScore: number;
+  /** Portion of non-generic query terms covered by this candidate. */
+  lexicalCoverage: number;
   vectorScore: number;
   priorityScore: number;
   score: number;
 };
+
+export type KnowledgeRelevanceConfig = Readonly<{
+  minimumScore: number;
+  minimumLexicalCoverage: number;
+  minimumSemanticScore: number;
+  ambiguityScoreGap: number;
+}>;
+
+export const DEFAULT_KNOWLEDGE_RELEVANCE_CONFIG: KnowledgeRelevanceConfig = Object.freeze({
+  minimumScore: 0.42,
+  minimumLexicalCoverage: 0.18,
+  minimumSemanticScore: 0.88,
+  ambiguityScoreGap: 0.01,
+});
+
+export function knowledgeRelevanceConfig(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): KnowledgeRelevanceConfig {
+  return Object.freeze({
+    minimumScore: boundedNumber(env.KNOWLEDGE_RELEVANCE_MIN_SCORE, DEFAULT_KNOWLEDGE_RELEVANCE_CONFIG.minimumScore),
+    minimumLexicalCoverage: boundedNumber(env.KNOWLEDGE_RELEVANCE_MIN_LEXICAL_COVERAGE, DEFAULT_KNOWLEDGE_RELEVANCE_CONFIG.minimumLexicalCoverage),
+    minimumSemanticScore: boundedNumber(env.KNOWLEDGE_RELEVANCE_MIN_SEMANTIC_SCORE, DEFAULT_KNOWLEDGE_RELEVANCE_CONFIG.minimumSemanticScore),
+    ambiguityScoreGap: boundedNumber(env.KNOWLEDGE_RELEVANCE_AMBIGUITY_GAP, DEFAULT_KNOWLEDGE_RELEVANCE_CONFIG.ambiguityScoreGap),
+  });
+}
 
 // “现货商品通常 24 小时内发出” is a stable policy, not inventory. Only
 // current-stock assertions (for example “当前有货” / “现货仅剩 2 件”) are blocked.
@@ -176,11 +203,18 @@ export function buildProductKnowledgeSource(input: { title: string; description:
 }
 
 export function containsDynamicCommerceFact(value: string): boolean {
-  return DYNAMIC_COMMERCE_FACT.test(value)
-    || DYNAMIC_RELATIVE_COMMITMENT.test(value)
-    || DYNAMIC_FULFILLMENT_FACT.test(value)
-    || DYNAMIC_PRESALE_FULFILLMENT.test(value)
-    || DYNAMIC_QUANTIFIED_FACT.test(value);
+  // Stable knowledge may explain that a live field must be read from runtime
+  // context. Remove only explicit source-of-truth deferrals; concrete values
+  // such as “库存 2 件” or “当前有货” remain blocked.
+  const assertionsOnly = value.replace(
+    /(?:具体)?(?:可售颜色与)?库存以实时\s*SKU\s*信息为准/gi,
+    '实时业务信息为准',
+  );
+  return DYNAMIC_COMMERCE_FACT.test(assertionsOnly)
+    || DYNAMIC_RELATIVE_COMMITMENT.test(assertionsOnly)
+    || DYNAMIC_FULFILLMENT_FACT.test(assertionsOnly)
+    || DYNAMIC_PRESALE_FULFILLMENT.test(assertionsOnly)
+    || DYNAMIC_QUANTIFIED_FACT.test(assertionsOnly);
 }
 
 /** A stable policy answer may legitimately use a generic question such as
@@ -230,6 +264,7 @@ export function rankKnowledgeCandidates(candidates: readonly RagCandidate[], inp
   const queryTokens = expandBm25QueryTerms(input.query);
   if (queryTokens.size === 0) return [];
   const queryEmbedding = input.queryEmbedding ?? deterministicKnowledgeEmbedding(input.query);
+  const relevanceTerms = meaningfulRelevanceTerms(input.query);
 
   // Metadata filtering happens before corpus statistics.  Besides enforcing
   // tenancy, this stops another shop's document frequencies from influencing
@@ -278,10 +313,15 @@ export function rankKnowledgeCandidates(candidates: readonly RagCandidate[], inp
       const sourcePriority = candidate.sourceType === 'MANUAL' ? 0.15 : candidate.sourceType === 'HUMAN_REVIEWED' ? 0.1 : 0.05;
       const scopePriority = candidate.scope === 'PRODUCT' ? 0.08 : 0;
       const priorityScore = sourcePriority + scopePriority;
+      const documentText = normalizeKnowledgeText(`${candidate.question}\n${candidate.answer}`);
+      const lexicalCoverage = relevanceTerms.length
+        ? relevanceTerms.filter((term) => documentText.includes(term)).length / relevanceTerms.length
+        : 0;
       return {
         ...candidate,
         bm25Score: bm25,
         lexicalScore,
+        lexicalCoverage,
         vectorScore,
         priorityScore,
         score: lexicalScore * 0.55 + vectorScore * 0.35 + priorityScore,
@@ -293,6 +333,21 @@ export function rankKnowledgeCandidates(candidates: readonly RagCandidate[], inp
     .filter((candidate) => candidate.lexicalScore > 0 || candidate.vectorScore >= 0.7)
     .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
     .slice(0, Math.min(Math.max(input.topK ?? 3, 1), 3));
+}
+
+export function assessKnowledgeRelevance(
+  candidates: readonly RankedRagCandidate[],
+  config: KnowledgeRelevanceConfig = knowledgeRelevanceConfig(),
+): { status: 'RELIABLE' | 'NO_EVIDENCE' | 'AMBIGUOUS'; candidates: readonly RankedRagCandidate[]; config: KnowledgeRelevanceConfig } {
+  const reliable = candidates.filter((candidate) => candidate.score >= config.minimumScore && (
+    candidate.lexicalCoverage >= config.minimumLexicalCoverage
+    || candidate.vectorScore >= config.minimumSemanticScore
+  ));
+  if (!reliable.length) return { status: 'NO_EVIDENCE', candidates: [], config };
+  if (reliable.length > 1 && Math.abs(reliable[0]!.score - reliable[1]!.score) <= config.ambiguityScoreGap) {
+    return { status: 'AMBIGUOUS', candidates: [], config };
+  }
+  return { status: 'RELIABLE', candidates: reliable, config };
 }
 
 const BM25_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
@@ -312,6 +367,24 @@ function expandBm25QueryTerms(query: string): Set<string> {
     for (const synonym of synonyms) for (const token of tokenizeKnowledgeForBm25(synonym)) terms.add(token);
   }
   return terms;
+}
+
+const GENERIC_RELEVANCE_TERMS = new Set([
+  '你们', '我们', '请问', '是否', '可以', '支持', '怎么', '什么', '这个', '那个', '一下', '问题', '咨询', '的吗', '吗',
+]);
+
+function meaningfulRelevanceTerms(value: string): string[] {
+  const normalized = normalizeKnowledgeText(value);
+  const latin = normalized.match(/[a-z0-9]+/g) ?? [];
+  const han = [...normalized.replace(/[^\u3400-\u9fff]/g, '')];
+  const bigrams = Array.from({ length: Math.max(0, han.length - 1) }, (_, index) => `${han[index]}${han[index + 1]}`);
+  return [...new Set([...latin, ...bigrams])].filter((term) => !GENERIC_RELEVANCE_TERMS.has(term));
+}
+
+function boundedNumber(value: string | undefined, fallback: number): number {
+  if (value === undefined || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
 }
 
 /** Keep term frequency for BM25; tokenizeKnowledge intentionally de-duplicates. */

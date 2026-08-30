@@ -24,6 +24,8 @@
     "ai:eval": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/reply-eval.cli.js --real-provider",
     "ai:eval:production:offline": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/production-reply-eval.cli.js --offline-fixture",
     "ai:eval:production": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/production-reply-eval.cli.js --real-provider",
+    "ai:eval:auto:offline": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/production-reply-eval.cli.js --offline-fixture --auto-suite --fail-on-regression",
+    "ai:eval:auto": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/production-reply-eval.cli.js --real-provider --auto-suite --fail-on-regression",
     "release:archive": "node scripts/create-source-archive.mjs"
   },
   "devDependencies": {

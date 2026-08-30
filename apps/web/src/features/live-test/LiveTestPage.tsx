@@ -66,6 +66,8 @@ export interface LiveTestPageProps {
   refreshKey: number;
   /** The dynamic `/live-test/:shopId` segment, when the router has one. */
   requestedShopId?: string;
+  /** Optional guided-demo selection; ordinary LiveTest remains user controlled. */
+  requestedBuyerExternalId?: string;
   /** Reuse Application's single workspace socket; this page deliberately does not open a second connection. */
   realtimeEvent?: WorkspaceSocketEvent;
   socketStatus?: WorkspaceSocketStatus;
@@ -197,19 +199,24 @@ export function LiveTestPage({
   onShopChange,
   refreshKey,
   requestedShopId,
+  requestedBuyerExternalId,
   realtimeEvent,
   socketStatus = 'idle',
   onOpenWorkbench,
 }: LiveTestPageProps) {
   const requestedShop = requestedShopId ? shops.find((shop) => shop.id === requestedShopId) : undefined;
   const activeShop = shops.find((shop) => shop.id === activeShopId);
-  const shop = requestedShop ?? activeShop ?? shops[0];
+  // A destructive Showcase reset returns the new shop id before Application's
+  // foundation snapshot is refreshed. Do not fall back to the deleted shop
+  // during that short transition or issue scoped requests with mixed ids.
+  const shop = requestedShopId ? requestedShop : (activeShop ?? shops[0]);
   const shopId = shop?.id ?? '';
   const [surface, setSurface] = useState<LiveTestSurface>('buyer');
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [snapshotShopId, setSnapshotShopId] = useState('');
   const [buyerId, setBuyerId] = useState('');
   const [conversationId, setConversationId] = useState('');
   const [detail, setDetail] = useState<Conversation>();
@@ -228,9 +235,13 @@ export function LiveTestPage({
   const [editingText, setEditingText] = useState('');
   const [pendingRecallId, setPendingRecallId] = useState('');
   const requestGeneration = useRef(0);
+  const conversationRequestGeneration = useRef(0);
   const loadedScopeRef = useRef('');
   const buyerMessagesRef = useRef<HTMLDivElement>(null);
   const storeMessagesRef = useRef<HTMLDivElement>(null);
+  const scopeRevision = `${token}:${shopId}:${refreshKey}`;
+  const scopeRevisionRef = useRef(scopeRevision);
+  scopeRevisionRef.current = scopeRevision;
 
   useEffect(() => {
     if (shopId && activeShopId !== shopId) onShopChange(shopId);
@@ -239,6 +250,9 @@ export function LiveTestPage({
   const loadShop = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!shopId) return;
     const generation = ++requestGeneration.current;
+    const revision = scopeRevisionRef.current;
+    // Invalidate an in-flight detail request from the pre-reset Workspace snapshot.
+    conversationRequestGeneration.current += 1;
     if (!background) {
       setLoading(true);
       setNotice(undefined);
@@ -249,10 +263,12 @@ export function LiveTestPage({
         getProducts(token, shopId),
         getConversations(token, shopId),
       ]);
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current || revision !== scopeRevisionRef.current) return;
       setBuyers(nextBuyers);
       setProducts(nextProducts);
       setConversations(nextConversations);
+      setSnapshotShopId(shopId);
+      setNotice((current) => current && (current.tone === 'error' || current.tone === 'warning') ? undefined : current);
       setBuyerId((current) => nextBuyers.some((buyer) => buyer.id === current) ? current : (nextBuyers[0]?.id ?? ''));
       setSelectedProductId((current) => nextProducts.some((product) => product.id === current) ? current : (nextProducts[0]?.id ?? ''));
     } catch (error) {
@@ -270,6 +286,7 @@ export function LiveTestPage({
     const refreshKind = liveTestRefreshKind(loadedScopeRef.current, token, shopId);
     loadedScopeRef.current = scope;
     if (refreshKind === 'initialize') {
+      setSnapshotShopId('');
       setBuyerId('');
       setConversationId('');
       setDetail(undefined);
@@ -284,35 +301,50 @@ export function LiveTestPage({
   }, [loadShop, refreshKey, shopId, token]);
 
   useEffect(() => {
+    if (!requestedBuyerExternalId) return;
+    const requestedBuyer = buyers.find((buyer) => buyer.externalBuyerId === requestedBuyerExternalId);
+    if (requestedBuyer && requestedBuyer.id !== buyerId) setBuyerId(requestedBuyer.id);
+  }, [buyerId, buyers, requestedBuyerExternalId]);
+
+  useEffect(() => {
+    if (snapshotShopId !== shopId) {
+      setConversationId('');
+      return;
+    }
     const matching = conversations.find((conversation) => conversation.buyerId === buyerId);
     setConversationId((current) => current && conversations.some((conversation) => conversation.id === current && conversation.buyerId === buyerId)
       ? current
       : (matching?.id ?? ''));
-  }, [buyerId, conversations]);
+  }, [buyerId, conversations, shopId, snapshotShopId]);
 
   const refreshConversation = useCallback(async (targetId: string) => {
     if (!targetId) {
       setDetail(undefined);
       return;
     }
+    const generation = ++conversationRequestGeneration.current;
+    const revision = scopeRevisionRef.current;
     try {
       const snapshot = await getConversation(token, targetId);
+      if (generation !== conversationRequestGeneration.current || revision !== scopeRevisionRef.current) return;
       setDetail(snapshot);
       setConversations((current) => current.some((conversation) => conversation.id === snapshot.id)
         ? current.map((conversation) => conversation.id === snapshot.id ? { ...conversation, ...snapshot } : conversation)
         : [snapshot, ...current]);
     } catch (error) {
-      setNotice({ text: errorMessage(error), tone: 'error' });
+      if (generation === conversationRequestGeneration.current && revision === scopeRevisionRef.current) {
+        setNotice({ text: errorMessage(error), tone: 'error' });
+      }
     }
-  }, [token]);
+  }, [scopeRevision, token]);
 
   useEffect(() => {
     setDetail(undefined);
-    if (conversationId) void refreshConversation(conversationId);
-  }, [conversationId, refreshConversation]);
+    if (snapshotShopId === shopId && conversationId) void refreshConversation(conversationId);
+  }, [conversationId, refreshConversation, shopId, snapshotShopId]);
 
   useEffect(() => {
-    if (!shopId || !buyerId) {
+    if (!shopId || !buyerId || snapshotShopId !== shopId) {
       setOrders([]);
       return;
     }
@@ -325,13 +357,16 @@ export function LiveTestPage({
       if (current) setNotice({ text: errorMessage(error), tone: 'error' });
     });
     return () => { current = false; };
-  }, [buyerId, refreshKey, shopId, token]);
+  }, [buyerId, refreshKey, shopId, snapshotShopId, token]);
 
   useEffect(() => {
     if (!realtimeEvent || !shopId || !shouldRefreshLiveTest(realtimeEvent, shopId, conversationId)) return;
+    const generation = ++conversationRequestGeneration.current;
+    const revision = scopeRevisionRef.current;
     const targetId = eventConversationId(realtimeEvent) || conversationId;
     void Promise.all([getConversations(token, shopId), targetId ? getConversation(token, targetId) : Promise.resolve(undefined), getProducts(token, shopId)])
       .then(([nextConversations, nextDetail, nextProducts]) => {
+        if (generation !== conversationRequestGeneration.current || revision !== scopeRevisionRef.current) return;
         setConversations(nextConversations);
         setProducts(nextProducts);
         if (nextDetail) {
@@ -339,8 +374,12 @@ export function LiveTestPage({
           if (!conversationId && nextDetail.buyerId === buyerId) setConversationId(nextDetail.id);
         }
       })
-      .catch((error: unknown) => setNotice({ text: errorMessage(error), tone: 'warning' }));
-  }, [buyerId, conversationId, realtimeEvent, shopId, token]);
+      .catch((error: unknown) => {
+        if (generation === conversationRequestGeneration.current && revision === scopeRevisionRef.current) {
+          setNotice({ text: errorMessage(error), tone: 'warning' });
+        }
+      });
+  }, [buyerId, conversationId, realtimeEvent, scopeRevision, shopId, token]);
 
   const selectedConversation = detail?.id === conversationId
     ? detail

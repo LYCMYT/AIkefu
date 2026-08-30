@@ -9,6 +9,7 @@ export * from './privacy';
 export * from './quality';
 export * from './reliability';
 export * from './scenario';
+export * from './showcase';
 export * from './trace';
 export * from './websocket';
 export * from './workflow';
