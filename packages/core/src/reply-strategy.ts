@@ -29,12 +29,16 @@ export interface ForbiddenTermCheck {
   violations: string[];
 }
 
-/** A deterministic path is allowed only for a single, complete low-risk fact. */
+/** A deterministic path is allowed for one complete low-risk fact, or for a
+ * canonical built-in/sanitized observation whose wording must not be changed
+ * by the composer. Policy still decides AUTO versus human review afterwards. */
 export function selectReplyStrategy(input: ReplyBuildInput): ReplyStrategy {
   if (input.tasks.length !== 1) return 'COMPOSER';
   const task = input.tasks[0]!;
+  const deterministicSource = task.facts?.source === 'SYSTEM_SAFE_REPLY'
+    || task.facts?.source === 'SANITIZED_IMAGE_ANALYSIS';
   return task.status === 'RESOLVED'
-    && task.riskLevel === 'LOW'
+    && (task.riskLevel === 'LOW' || deterministicSource)
     && !task.blocking
     && typeof task.facts?.reply === 'string'
     && task.facts.reply.trim().length > 0

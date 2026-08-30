@@ -262,7 +262,7 @@ describe('ConversationReplyControlService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       replyJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      userTurn: { findFirst: jest.fn().mockResolvedValue({ normalizedText: '什么时候发货？' }) },
+      userTurn: { findFirst: jest.fn().mockResolvedValue({ normalizedText: '材质是什么？' }) },
       $queryRaw: jest.fn().mockResolvedValue([]),
     };
     const prisma = { $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)) };
@@ -271,22 +271,55 @@ describe('ConversationReplyControlService', () => {
     const service = new ConversationReplyControlService(prisma as never, knowledge as never, {} as never, outboxes as never);
 
     await expect(service.saveHumanFinal(scope, 'conversation-a', {
-      text: '偏远地区通常 72 小时内发货。', sourceDraftId: 'draft-a', editType: 'FACTUAL_CORRECTION',
+      text: '材质为 100% 棉。', sourceDraftId: 'draft-a', editType: 'FACTUAL_CORRECTION',
     })).resolves.toMatchObject({ sendOutboxId: 'send-a', candidateId: 'candidate-a' });
 
     expect(tx.replyDraft.updateMany).toHaveBeenCalledWith({
       where: { id: 'draft-a', workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', status: 'WAITING_HUMAN' },
-      data: { humanFinal: '偏远地区通常 72 小时内发货。', editType: 'FACTUAL_CORRECTION' },
+      data: { humanFinal: '材质为 100% 棉。', editType: 'FACTUAL_CORRECTION' },
     });
     expect(outboxes.enqueueInTransaction).toHaveBeenCalledWith(tx, scope, expect.objectContaining({
-      replyJobId: 'reply-a', conversationId: 'conversation-a', text: '偏远地区通常 72 小时内发货。',
+      replyJobId: 'reply-a', conversationId: 'conversation-a', text: '材质为 100% 棉。',
       expectedLastMessageId: 'message-8', expectedSequence: 8, expectedContextVersion: 5,
     }));
     expect((tx as { message?: unknown }).message).toBeUndefined();
     expect(knowledge.createHumanCandidateInTransaction).toHaveBeenCalledWith(tx, scope, expect.objectContaining({
       shopId: 'shop-a', conversationId: 'conversation-a', replyJobId: 'reply-a',
-      question: '什么时候发货？', answer: '偏远地区通常 72 小时内发货。', source: 'FACTUAL_CORRECTION',
+      question: '材质是什么？', answer: '材质为 100% 棉。', source: 'FACTUAL_CORRECTION',
     }));
+  });
+
+  it('sends a dynamic factual correction but never promotes the temporary fulfillment fact into Knowledge', async () => {
+    const tx = {
+      conversation: { findFirst: jest.fn().mockResolvedValue({ id: 'conversation-a', buyerId: 'buyer-a', lastCommittedSequence: 8, contextVersion: 5 }) },
+      replyDraft: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'draft-a', replyJobId: 'reply-a', aiDraft: '24小时内发出。', sourceContextVersion: 5,
+          sourceLastMessageId: 'message-8', sourceSequence: 8, status: 'WAITING_HUMAN',
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      replyJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      userTurn: { findFirst: jest.fn().mockResolvedValue({ normalizedText: '多久发货？' }) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+    const knowledge = { createHumanCandidateInTransaction: jest.fn() };
+    const outboxes = { enqueueInTransaction: jest.fn().mockResolvedValue({ id: 'send-dynamic', status: 'PENDING' }) };
+    const service = new ConversationReplyControlService(
+      { $transaction: jest.fn((work: Function) => work(tx)) } as never,
+      knowledge as never,
+      {} as never,
+      outboxes as never,
+    );
+
+    await expect(service.saveHumanFinal(scope, 'conversation-a', {
+      text: '该商品为预售款，预计7天内发出。', sourceDraftId: 'draft-a', editType: 'FACTUAL_CORRECTION',
+    })).resolves.toEqual({ sendOutboxId: 'send-dynamic' });
+
+    expect(outboxes.enqueueInTransaction).toHaveBeenCalledWith(tx, scope, expect.objectContaining({
+      text: '该商品为预售款，预计7天内发出。', senderRole: 'HUMAN',
+    }));
+    expect(knowledge.createHumanCandidateInTransaction).not.toHaveBeenCalled();
   });
 
   it('allows an operator in MANUAL takeover to enqueue a scoped human final without an AI draft', async () => {

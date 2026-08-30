@@ -3,6 +3,7 @@ import {
   guardReplyOutput,
   isTaskBlocking,
   renderCustomerFactReply,
+  renderImageObservationReply,
 } from '../src/reply-quality';
 
 describe('reply quality primitives', () => {
@@ -83,5 +84,26 @@ describe('reply quality primitives', () => {
     expect(renderCustomerFactReply('INVENTORY_QUERY', {
       externalSkuId: 'SKU-SECRET-1', inventory: 2,
     })).toBe('这个规格目前库存较少，建议尽快下单。');
+    expect(renderCustomerFactReply('LOGISTICS_QUERY', {
+      externalOrderId: 'ORDER-SECRET-2', status: 'SHIPPED',
+      logistics: { carrier: '京东物流', lastNode: '广州分拨中心', trackingNumber: 'TRACK-SECRET-2' },
+    })).toBe('这笔订单已经发货，最新物流到达广州分拨中心。');
+  });
+
+  it('renders only the sanitized product-damage observation as a human-review draft fact', () => {
+    expect(renderImageObservationReply(
+      'AFTER_SALES_QUERY',
+      '[图片 PRODUCT_DAMAGE] 疑似商品破损\n收到就是这样的',
+    )).toBe('图片中疑似商品破损，建议由人工客服进一步核实处理。');
+    expect(renderImageObservationReply(
+      'AFTER_SALES_QUERY',
+      '[图片 PRODUCT_DAMAGE] 袖口位置有撕裂痕迹\n收到就是这样的',
+    )).toBe('图片中疑似商品破损，建议由人工客服进一步核实处理。');
+    expect(renderImageObservationReply(
+      'AFTER_SALES_QUERY',
+      '[图片 UNKNOWN] 图片显示商品疑似破损\n收到就是这样的',
+    )).toBe('图片中疑似商品破损，建议由人工客服进一步核实处理。');
+    expect(renderImageObservationReply('ORDER_QUERY', '[图片 SHIPPING_LABEL] 已进行脱敏处理。')).toBeUndefined();
+    expect(renderImageObservationReply('AFTER_SALES_QUERY', '普通文字：商品很好')).toBeUndefined();
   });
 });

@@ -17,6 +17,21 @@ export type ReplyEvalExecution = {
   tasks: string[];
   mode: string;
   evidence: string[];
+  outputSource?: 'SENT_MESSAGE' | 'SEND_OUTBOX' | 'DRAFT' | 'TASK_RESULT' | 'NONE';
+  terminalStatus?: string;
+  trace?: {
+    workspaceId: string;
+    conversationId: string;
+    replyJobId?: string;
+    userTurnId?: string;
+    taskIds: string[];
+    evidenceIds: string[];
+    knowledgeVersionIds: string[];
+    draftId?: string;
+    sendOutboxId?: string;
+    sentMessageId?: string;
+    invocationIds: string[];
+  };
   provider?: string;
   model?: string;
   inputTokens?: number;
@@ -33,7 +48,7 @@ export type ReplyEvalCaseResult = ReplyEvalExecution & {
 
 export type ReplyEvalReport = {
   generatedAt: string;
-  mode: 'OFFLINE_FIXTURE' | 'REAL_PROVIDER';
+  mode: 'OFFLINE_FIXTURE' | 'REAL_PROVIDER' | 'PRODUCTION_OFFLINE' | 'PRODUCTION_REAL_PROVIDER';
   provider?: string;
   model: string;
   summary: { total: number; passed: number; failed: number; inputTokens: number; outputTokens: number; totalCost: number | null; averageLatencyMs: number };

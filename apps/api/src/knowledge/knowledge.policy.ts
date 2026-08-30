@@ -152,7 +152,7 @@ export function classifyImportRow(
   if (row.scope === 'PRODUCT' && !row.productExternalId) {
     return { status: 'ERROR', reason: 'PRODUCT_ID_REQUIRED' };
   }
-  if (containsDynamicCommerceFact(`${row.question}\n${row.answer}`)) {
+  if (containsForbiddenKnowledgeText(row.question, row.answer)) {
     return { status: 'ERROR', reason: 'DYNAMIC_COMMERCE_FACT_FORBIDDEN' };
   }
   const fingerprint = knowledgeFingerprint(row.question);
@@ -181,6 +181,14 @@ export function containsDynamicCommerceFact(value: string): boolean {
     || DYNAMIC_FULFILLMENT_FACT.test(value)
     || DYNAMIC_PRESALE_FULFILLMENT.test(value)
     || DYNAMIC_QUANTIFIED_FACT.test(value);
+}
+
+/** A stable policy answer may legitimately use a generic question such as
+ * “什么时候发货”. Block live entity lookups from the question and all dynamic
+ * claims from the answer, rather than rejecting a reusable policy solely
+ * because its FAQ wording resembles a runtime query. */
+export function containsForbiddenKnowledgeText(question: string, answer: string): boolean {
+  return DYNAMIC_RUNTIME_QUERY.test(question) || containsDynamicCommerceFact(answer);
 }
 
 export function requiresDynamicFactLookup(query: string): boolean {

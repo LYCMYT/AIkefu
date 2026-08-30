@@ -176,7 +176,15 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
 export function renderCustomerFactReply(intent: string, dynamic: Record<string, unknown>): string | undefined {
   if (typeof dynamic.status === 'string' && /ORDER|LOGISTICS|SHIP/i.test(intent)) {
     const status = ORDER_STATUS_LABELS[dynamic.status] ?? '状态已更新';
-    if (dynamic.status === 'SHIPPED') return '这笔订单已经发货，请留意物流更新。';
+    if (dynamic.status === 'SHIPPED') {
+      const logistics = dynamic.logistics && typeof dynamic.logistics === 'object' && !Array.isArray(dynamic.logistics)
+        ? dynamic.logistics as Record<string, unknown>
+        : undefined;
+      const lastNode = safeCustomerLocation(logistics?.lastNode);
+      return lastNode
+        ? `这笔订单已经发货，最新物流到达${lastNode}。`
+        : '这笔订单已经发货，请留意物流更新。';
+    }
     return `这笔订单目前${status}。`;
   }
   if (typeof dynamic.inventory === 'number' && /SKU|INVENTORY|STOCK|PRODUCT/i.test(intent)) {
@@ -185,4 +193,24 @@ export function renderCustomerFactReply(intent: string, dynamic: Record<string, 
     return '这个规格目前有现货，可以正常下单。';
   }
   return undefined;
+}
+
+/** Uses only the already-sanitized deterministic image analysis in UserTurn. */
+export function renderImageObservationReply(intent: string, normalizedTurn: string): string | undefined {
+  if (!/AFTER_SALES/i.test(intent)) return undefined;
+  // PRODUCT_DAMAGE is a validated, sanitized scene classification. Provider
+  // observations are free text and may say “撕裂痕迹” instead of repeating the
+  // canonical phrase, so the deterministic customer reply must key off the
+  // scene marker rather than brittle model wording.
+  const classifiedDamage = /\[图片\s+PRODUCT_DAMAGE\]/iu.test(normalizedTurn);
+  const sanitizedDamageObservation = /\[图片\s+[A-Z_]+\][\s\S]{0,160}疑似.{0,12}(?:破损|损坏|撕裂)/iu.test(normalizedTurn);
+  if (!classifiedDamage && !sanitizedDamageObservation) return undefined;
+  return '图片中疑似商品破损，建议由人工客服进一步核实处理。';
+}
+
+function safeCustomerLocation(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.replace(/[\r\n\t]+/g, ' ').trim();
+  if (!normalized || normalized.length > 80) return undefined;
+  return normalized;
 }

@@ -11,6 +11,7 @@ export * from './safe-social-reply';
 export * from './reply-quality';
 export * from './structured-output';
 export * from './intent-task-bundle';
+export * from './intent-heuristics';
 export * from './turn-buffer';
 export * from './workspace-token';
 export * from './workflow';

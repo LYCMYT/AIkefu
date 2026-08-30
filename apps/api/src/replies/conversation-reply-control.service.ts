@@ -3,6 +3,7 @@ import { Prisma, type ReplyDraftEditType } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../database/prisma.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import { containsForbiddenKnowledgeText } from '../knowledge/knowledge.policy';
 import type { WorkspaceScope } from '../workspaces/workspace.repository';
 import { ReplyJobService, type ReplyJobScope } from './reply-job.service';
 import { SendOutboxService, cancelAiSendsForStaleJobs } from './send-outbox.service';
@@ -236,7 +237,14 @@ export class ConversationReplyControlService {
         ? await tx.userTurn.findFirst({ where: { conversationId, ...scope }, orderBy: [{ lastSequence: 'desc' }, { updatedAt: 'desc' }], select: { normalizedText: true } })
         : null;
       if (!sendOutboxId) throw new BadRequestException({ code: 'HUMAN_MESSAGE_DRAFT_REQUIRED', message: 'sourceDraftId is required for a durable human final' });
-      const candidate = replyJobId && turn?.normalizedText && (input.editType === 'FACTUAL_CORRECTION' || input.editType === 'KNOWLEDGE_ENRICHMENT')
+      // Human delivery and long-lived Knowledge have different safety
+      // boundaries. A reviewer may send a current fulfillment correction,
+      // while inventory/order/relative delivery facts must never be indexed
+      // as reusable knowledge. Keep the durable edit label, but skip only the
+      // unsafe candidate instead of rolling back the operator's send intent.
+      const candidate = replyJobId && turn?.normalizedText
+        && (input.editType === 'FACTUAL_CORRECTION' || input.editType === 'KNOWLEDGE_ENRICHMENT')
+        && !containsForbiddenKnowledgeText(turn.normalizedText, text)
         ? await this.knowledge.createHumanCandidateInTransaction(tx, scope, {
             shopId: scope.shopId, conversationId, replyJobId,
             question: turn.normalizedText, answer: text, source: input.editType,

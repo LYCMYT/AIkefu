@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { ReplyEvidenceSnapshot } from '@ai-customer-service/contracts';
-import { buildReply, buildReplyContext, checkForbiddenTerms, createTaskBundle, decideReplyPolicy, executeTaskBundle, guardReplyOutput, isTaskBlocking, renderCustomerFactReply, resolveContext, resolveSafeKnowledgeIntent, resolveSafeSocialReply, sanitizeContext, type TaskBundleExecution, type TaskState } from '@ai-customer-service/core';
+import { buildReply, buildReplyContext, checkForbiddenTerms, createTaskBundle, decideReplyPolicy, executeTaskBundle, guardReplyOutput, isTaskBlocking, mergeExplicitIntentTasks, renderCustomerFactReply, renderImageObservationReply, resolveContext, resolveSafeKnowledgeIntent, resolveSafeSocialReply, sanitizeContext, type PlannedTask, type TaskBundleExecution, type TaskState } from '@ai-customer-service/core';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { AiRuntimeApplicationService } from '../ai/ai-runtime-application.service';
@@ -160,6 +160,7 @@ export class ReplyRuntimeService {
           clarification,
           autoReady,
           shop?.aiMode === 'AUTO_ALLOWED' ? 'SHOP_AI_NOT_READY' : 'SHOP_AI_AUTO_DISABLED',
+          taskBundle.tasks,
         );
       }
       const lookup = safeSocial
@@ -173,8 +174,39 @@ export class ReplyRuntimeService {
         tasks: [...lookup.byTaskId.entries()].map(([taskId, entries]) => ({ taskId, knowledgeVersionIds: entries.map((entry) => entry.versionId) })),
       });
       if (safeKnowledgeIntent) void this.recordTrace(scope, job, 'SAFE_KNOWLEDGE_POLICY', { intent: safeKnowledgeIntent, evidenceCount: evidence.length });
-      // A conflict in any Task-scoped retrieval blocks the whole customer reply.
-      if (lookup.hasConflict) return this.waitForHuman(scope, job, 'CONTEXT_CONFLICT');
+      // A conflict in any Task-scoped retrieval blocks the whole customer
+      // reply, but the canonical Tasks and MANUAL policy decision still need
+      // to be durable.  Operators and quality evaluation must never see a
+      // generic draft with the original customer intent missing.
+      if (lookup.hasConflict) {
+        const conflictExecution = await executeTaskBundle(taskBundle, async () => ({
+          status: 'FAILED' as const,
+          errorCode: 'KNOWLEDGE_CONFLICT',
+        }));
+        await this.persistTasks(
+          scope,
+          job.id,
+          job.conversationId,
+          job.userTurnId,
+          conflictExecution.tasks,
+          false,
+        );
+        await this.recordTrace(scope, job, 'TASKS', {
+          tasks: conflictExecution.tasks.map((task) => ({
+            id: task.id,
+            status: task.status,
+            riskLevel: task.riskLevel,
+            errorCode: task.errorCode ?? null,
+          })),
+        });
+        await this.recordTrace(scope, job, 'REPLY_POLICY', {
+          mode: 'MANUAL',
+          reasons: ['CONTEXT_CONFLICT'],
+          evidenceCount: 0,
+          taskStatuses: conflictExecution.tasks.map((task) => task.status),
+        });
+        return this.waitForHuman(scope, job, 'CONTEXT_CONFLICT');
+      }
       let execution = await executeTaskBundle(taskBundle, async (task) => {
         const context = taskContexts.get(task.id);
         if (context && context.status !== 'RESOLVED') {
@@ -182,14 +214,15 @@ export class ReplyRuntimeService {
         }
         const dynamicReplyText = context?.entity ? dynamicReply(task.intent, context.entity as unknown as Record<string, unknown>) : undefined;
         const builtInReplyText = safeSocial && task.intent === `SAFE_SOCIAL_${safeSocial.intent}` ? safeSocial.text : undefined;
-        const deterministicReplyText = builtInReplyText ?? dynamicReplyText;
+        const imageObservationText = renderImageObservationReply(task.intent, job.userTurn.normalizedText);
+        const deterministicReplyText = builtInReplyText ?? imageObservationText ?? dynamicReplyText;
         const taskEvidence = lookup.byTaskId.get(task.id) ?? [];
         if (taskEvidence.length === 0 && !deterministicReplyText) return { status: 'FAILED' as const, errorCode: 'NO_EVIDENCE' };
         return {
           status: 'RESOLVED' as const,
           facts: {
             reply: deterministicReplyText ?? taskEvidence[0]!.contentSnapshot.answer,
-            ...(builtInReplyText ? { source: 'SYSTEM_SAFE_REPLY' } : {}),
+            ...(builtInReplyText ? { source: 'SYSTEM_SAFE_REPLY' } : imageObservationText ? { source: 'SANITIZED_IMAGE_ANALYSIS' } : {}),
             ...(context?.entity ? { context: context.entity } : {}),
           },
           evidence: taskEvidence.map((entry) => entry.versionId),
@@ -551,7 +584,7 @@ export class ReplyRuntimeService {
       message?: { findMany(input: unknown): Promise<Array<{ kind: string; contentJson: unknown }>> };
       product?: { findMany(input: unknown): Promise<Array<{ id: string; title: string }>>; findFirst?: (input: unknown) => Promise<{ id: string; title: string } | null> };
       productSku?: { findMany(input: unknown): Promise<Array<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown }>>; findFirst?: (input: unknown) => Promise<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown } | null> };
-      order?: { findMany(input: unknown): Promise<Array<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number }>>; findFirst?: (input: unknown) => Promise<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number } | null> };
+      order?: { findMany(input: unknown): Promise<Array<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } }>>; findFirst?: (input: unknown) => Promise<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } } | null> };
     };
     const cards = sourceMessageIds.length && repository.message
       ? await repository.message.findMany({
@@ -583,7 +616,7 @@ export class ReplyRuntimeService {
     repository: {
       product?: { findMany(input: unknown): Promise<Array<{ id: string; title: string }>>; findFirst?: (input: unknown) => Promise<{ id: string; title: string } | null> };
       productSku?: { findMany(input: unknown): Promise<Array<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown }>>; findFirst?: (input: unknown) => Promise<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown } | null> };
-      order?: { findMany(input: unknown): Promise<Array<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number }>>; findFirst?: (input: unknown) => Promise<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number } | null> };
+      order?: { findMany(input: unknown): Promise<Array<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } }>>; findFirst?: (input: unknown) => Promise<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } } | null> };
     },
     scope: ReplyJobScope,
     buyerId: string,
@@ -595,17 +628,17 @@ export class ReplyRuntimeService {
     const exactId = options.cardId || options.choiceId;
     if (kind === 'ORDER' && repository.order) {
       if (exactId && repository.order.findFirst) {
-        const row = await repository.order.findFirst({ where: { id: exactId, ...scope, buyerId }, select: { id: true, externalOrderId: true, status: true, logisticsSnapshotJson: true, version: true } });
+        const row = await repository.order.findFirst({ where: { id: exactId, ...scope, buyerId }, select: { id: true, externalOrderId: true, status: true, logisticsSnapshotJson: true, version: true, product: { select: { title: true } } } });
         return row ? [orderCandidate(row)] : [];
       }
       // A buyer who explicitly names another scoped order in this turn wins
       // over the older conversation selection.  Keep this bounded, but broad
       // enough that a recently selected order cannot hide the named one.
-      const rows = await repository.order.findMany({ where: { ...scope, buyerId, ...(exactId ? { id: exactId } : {}) }, orderBy: { orderedAt: 'desc' }, take: exactId ? 1 : 25, select: { id: true, externalOrderId: true, status: true, logisticsSnapshotJson: true, version: true } });
+      const rows = await repository.order.findMany({ where: { ...scope, buyerId, ...(exactId ? { id: exactId } : {}) }, orderBy: { orderedAt: 'desc' }, take: exactId ? 1 : 25, select: { id: true, externalOrderId: true, status: true, logisticsSnapshotJson: true, version: true, product: { select: { title: true } } } });
       const textMatches = explicitOrderMatches(rows, options.text);
       if (textMatches.length) return textMatches.map(orderCandidate);
       if (options.preferredId && repository.order.findFirst) {
-        const row = await repository.order.findFirst({ where: { id: options.preferredId, ...scope, buyerId }, select: { id: true, externalOrderId: true, status: true, logisticsSnapshotJson: true, version: true } });
+        const row = await repository.order.findFirst({ where: { id: options.preferredId, ...scope, buyerId }, select: { id: true, externalOrderId: true, status: true, logisticsSnapshotJson: true, version: true, product: { select: { title: true } } } });
         return row ? [orderCandidate(row)] : [];
       }
       return rows.map(orderCandidate);
@@ -673,6 +706,7 @@ export class ReplyRuntimeService {
     text: string,
     autoSend: boolean,
     manualReason: string,
+    plannedTasks: PlannedTask[],
   ): Promise<
     | { status: 'READY_TO_SEND' | 'STALE'; reason?: string }
     | { status: 'WAITING_HUMAN'; draftId: string; reason: string }
@@ -692,12 +726,26 @@ export class ReplyRuntimeService {
       });
       if (!persisted.count) return { committed: false, reason: 'CLARIFICATION_CAS_LOST' } as const;
       const taskRepository = tx as unknown as { task?: { createMany(input: unknown): Promise<unknown> } };
-      const clarificationTasks = [...contexts.values()].flatMap((context, index) => context.clarification ? [{
-        id: `reply-task:${job.id}:clarification:${index}`, ...scope, conversationId: job.conversationId, userTurnId: job.userTurnId,
-        intent: 'CLARIFICATION', operation: 'READ', riskLevel: 'LOW', requiredContextJson: context.clarification.requests.map((request) => request.kind),
-        requiredKnowledgeJson: [], requiredToolsJson: [], status: 'AMBIGUOUS', blocking: false,
-        resultJson: cloneJson({ clarification: context.clarification }),
-      }] : []);
+      const plannedById = new Map(plannedTasks.map((task) => [task.id, task]));
+      const clarificationTasks = [...contexts.entries()].flatMap(([taskId, context], index) => {
+        if (!context.clarification) return [];
+        const planned = plannedById.get(taskId);
+        return [{
+          id: planned ? `reply-task:${job.id}:${planned.id}` : `reply-task:${job.id}:clarification:${index}`,
+          ...scope,
+          conversationId: job.conversationId,
+          userTurnId: job.userTurnId,
+          intent: planned?.intent ?? 'CLARIFICATION',
+          operation: planned?.operation ?? 'READ',
+          riskLevel: planned?.riskLevel ?? 'LOW',
+          requiredContextJson: planned?.requiredContext ?? context.clarification.requests.map((request) => request.kind),
+          requiredKnowledgeJson: planned?.requiredKnowledge ?? [],
+          requiredToolsJson: planned?.requiredTools ?? [],
+          status: 'AMBIGUOUS',
+          blocking: planned?.blocking ?? false,
+          resultJson: cloneJson({ clarification: context.clarification }),
+        }];
+      });
       if (clarificationTasks.length && taskRepository.task) await taskRepository.task.createMany({ data: clarificationTasks, skipDuplicates: true });
       // ASSIST_ONLY and not-yet-ready AUTO shops may retain the useful
       // clarification plan, but they must never create an AI send intent.
@@ -832,6 +880,7 @@ export class ReplyRuntimeService {
     conversationId: string,
     userTurnId: string,
     tasks: Array<{ id: string; intent: string; operation: 'READ' | 'WRITE'; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; requiredContext: string[]; requiredKnowledge?: Array<'STORE' | 'PRODUCT'>; requiredTools: string[]; status: string; facts?: Record<string, unknown>; evidence?: string[]; errorCode?: string; blocking: boolean }>,
+    routeWorkflow = true,
   ): Promise<string[]> {
     const persistedTaskIds = tasks.map((task) => `reply-task:${replyJobId}:${task.id}`);
     const repository = this.prisma as unknown as {
@@ -855,7 +904,7 @@ export class ReplyRuntimeService {
       // This route intent is committed in the same short transaction as the
       // Task rows. A restart can therefore claim it later; no in-memory only
       // callback owns a workflow task.
-      if (tx.processingOutbox) {
+      if (routeWorkflow && tx.processingOutbox) {
         const data = { ...scope, eventId: `workflow-route:${replyJobId}`, aggregateType: 'TASK_BUNDLE', aggregateId: replyJobId, eventType: 'WORKFLOW_ROUTE', payloadJson: { conversationId, taskIds: persistedTaskIds } };
         if (tx.processingOutbox.upsert) await tx.processingOutbox.upsert({ where: { eventId: data.eventId }, update: {}, create: data });
         else await tx.processingOutbox.create({ data });
@@ -981,18 +1030,7 @@ function maxRisk(left: 'LOW' | 'MEDIUM' | 'HIGH', right: 'LOW' | 'MEDIUM' | 'HIG
  * plan, but deterministically restore obvious inventory/size intents so a
  * multi-intent turn cannot silently drop one of the buyer's questions. */
 function augmentExplicitIntentTasks(text: string, tasks: IntentPlanTask[]): IntentPlanTask[] {
-  const inventoryRequested = /库存|有货|还有|还剩|现货|缺货|售罄|(?:黑色|白色|红色|蓝色|绿色|灰色).{0,8}(?:有吗|有么|有货)/i.test(text);
-  const sizeRequested = /尺码|尺寸|大小|合身|身高|体重|公斤|(?:^|[\s，,])(?:XXL|XL|XS|L|M|S)\s*(?:呢|多大|适合|怎么选|推荐|穿|吗|？|\?|$)/i.test(text);
-  if (!inventoryRequested && !sizeRequested) return tasks.slice(0, 4);
-
-  const augmented = tasks.filter((task) => task.intent !== 'UNKNOWN');
-  if (inventoryRequested && !augmented.some((task) => /(?:^|_)INVENTORY(?:_|$)/.test(task.intent))) {
-    augmented.push({ intent: 'INVENTORY_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'], requiredKnowledge: [], requiredTools: ['GET_INVENTORY'] });
-  }
-  if (sizeRequested && !augmented.some((task) => task.intent === 'SIZE_RECOMMENDATION')) {
-    augmented.push({ intent: 'SIZE_RECOMMENDATION', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU', 'CUSTOMER_MEMORY'], requiredKnowledge: ['PRODUCT'], requiredTools: ['GET_PRODUCT'] });
-  }
-  return augmented.slice(0, 4);
+  return mergeExplicitIntentTasks(text, tasks);
 }
 
 function stringValues(value: unknown): string[] {
@@ -1026,9 +1064,10 @@ function jsonRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function orderCandidate(row: { id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number }) {
+function orderCandidate(row: { id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } }) {
   return {
-    id: row.id, kind: 'ORDER' as const, label: row.externalOrderId,
+    id: row.id, kind: 'ORDER' as const,
+    label: row.product?.title ? `${row.product.title}（订单 ${row.externalOrderId}）` : row.externalOrderId,
     dynamic: { externalOrderId: row.externalOrderId, status: row.status, logistics: jsonRecord(row.logisticsSnapshotJson), version: row.version },
   };
 }
@@ -1046,7 +1085,7 @@ function selectSkuMatches<T extends { attributesJson: unknown }>(rows: T[], text
   const scored = rows.map((row) => {
     const attributes = jsonRecord(row.attributesJson);
     const score = attributes
-      ? Object.values(attributes).filter((value) => typeof value === 'string' && value.trim().length > 0 && normalized.includes(value.trim().toLocaleLowerCase())).length
+      ? Object.entries(attributes).filter(([key, value]) => typeof value === 'string' && attributeValueMentioned(normalized, key, value)).length
       : 0;
     return { row, score };
   });
@@ -1061,12 +1100,23 @@ function explicitSkuMatches<T extends { externalSkuId: string; attributesJson: u
     const attributes = jsonRecord(row.attributesJson);
     const score = (row.externalSkuId.trim().length > 0 && normalized.includes(row.externalSkuId.trim().toLocaleLowerCase()) ? 1 : 0)
       + (attributes
-        ? Object.values(attributes).filter((value) => typeof value === 'string' && value.trim().length > 0 && normalized.includes(value.trim().toLocaleLowerCase())).length
+        ? Object.entries(attributes).filter(([key, value]) => typeof value === 'string' && attributeValueMentioned(normalized, key, value)).length
         : 0);
     return { row, score };
   });
   const maximum = Math.max(0, ...scored.map((entry) => entry.score));
   return maximum > 0 ? scored.filter((entry) => entry.score === maximum).map((entry) => entry.row) : [];
+}
+
+/** Size tokens must match as whole ASCII tokens: `L` is not a mention of `XL`. */
+function attributeValueMentioned(normalizedText: string, key: string, rawValue: string): boolean {
+  const value = rawValue.trim().toLocaleLowerCase();
+  if (!value) return false;
+  if (/(?:size|尺码)/i.test(key) && /^[a-z0-9]+$/i.test(value)) {
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`, 'i').test(normalizedText);
+  }
+  return normalizedText.includes(value);
 }
 
 /** Summaries never supply operational truth; preserve only non-dynamic facts/open questions. */
@@ -1124,9 +1174,26 @@ function clarificationText(contexts: Map<string, ReturnType<typeof resolveContex
   return lines.join('\n');
 }
 
-function explicitOrderMatches<T extends { externalOrderId: string }>(rows: T[], text: string): T[] {
+export function explicitOrderMatches<T extends { externalOrderId: string; product?: { title: string } }>(rows: T[], text: string): T[] {
   const normalized = text.toLocaleLowerCase();
-  return rows.filter((row) => row.externalOrderId.trim().length > 0 && normalized.includes(row.externalOrderId.trim().toLocaleLowerCase()));
+  const direct = rows.filter((row) => row.externalOrderId.trim().length > 0 && normalized.includes(row.externalOrderId.trim().toLocaleLowerCase()));
+  if (direct.length) return direct;
+  const tokens = orderReferenceTokens(normalized);
+  if (!tokens.length) return [];
+  return rows.filter((row) => {
+    const title = row.product?.title.trim().toLocaleLowerCase() ?? '';
+    return title.length > 0 && tokens.some((token) => title.includes(token));
+  });
+}
+
+function orderReferenceTokens(text: string): string[] {
+  const withoutGenericWords = text
+    .replace(/(?:怎么没动|到哪了|我的|那个|这个|那笔|这笔|快递|物流|订单|昨天|想问|请问|怎么|没动|到哪|有吗|呢|吗)/giu, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+  return [...new Set(withoutGenericWords.split(/\s+/u)
+    .map((token) => token.trim())
+    .filter((token) => /[\p{Script=Han}]{2,}/u.test(token) || /^[a-z0-9]{3,}$/iu.test(token)))];
 }
 
 function knowledgeScopesForTask(

@@ -49,6 +49,32 @@ describe('server AI providers', () => {
     });
   });
 
+  it('composes only durable task facts in offline mode and flags unresolved parts for human review', async () => {
+    const provider = new OfflineStructuredProvider();
+
+    const resolved = await provider.invoke(request('REPLY_GENERATION', {
+      tasks: [
+        { intent: 'INVENTORY_QUERY', status: 'RESOLVED', facts: { reply: '这个规格目前有现货。' } },
+        { intent: 'SHIPPING_POLICY', status: 'RESOLVED', facts: { reply: '普通现货商品通常在24小时内发出。' } },
+      ],
+    }));
+    const partial = await provider.invoke(request('REPLY_GENERATION', {
+      tasks: [
+        { intent: 'INVENTORY_QUERY', status: 'RESOLVED', facts: { reply: '这个规格目前有现货。' } },
+        { intent: 'SIZE_RECOMMENDATION', status: 'FAILED', errorCode: 'NO_EVIDENCE' },
+      ],
+    }));
+
+    expect(resolved.output).toEqual({
+      text: '这个规格目前有现货。\n普通现货商品通常在24小时内发出。',
+      requiresHuman: false,
+    });
+    expect(partial.output).toEqual({
+      text: '这个规格目前有现货。\n尺码建议还需要人工确认。',
+      requiresHuman: true,
+    });
+  });
+
   it('calls an explicitly configured server-side JSON model gateway without leaking its secret into the body', async () => {
     const fetcher = jest.fn().mockResolvedValue({
       ok: true,
@@ -214,6 +240,30 @@ describe('server AI providers', () => {
     });
 
     expect(result.provider).toBe('offline-structured-demo');
+  });
+
+  it('grounds an offline workflow recommendation in the products returned by its scoped query', async () => {
+    const runtime = createServerAiRuntime({});
+    const result = await runtime.runStructured({
+      purpose: 'REPLY_GENERATION',
+      input: {
+        workflow: {
+          priorNodeOutputs: {
+            query: {
+              products: [
+                { id: 'product-keyboard', title: 'SilentKey 84 静音键盘', status: 'ON_SHELF', recommendable: true },
+                { id: 'product-screen', title: 'ViewGo 15.6英寸便携屏', status: 'ON_SHELF', recommendable: true },
+              ],
+            },
+          },
+        },
+      },
+      validate: (value: unknown): value is { text: string; requiresHuman: boolean } => Boolean(
+        value && typeof value === 'object' && 'text' in value && 'requiresHuman' in value,
+      ),
+    });
+
+    expect(result.output).toEqual({ text: '为你推荐 SilentKey 84 静音键盘。', requiresHuman: false });
   });
 
   it('activates the frozen AI_BASE_URL/API_KEY/model environment contract by purpose', async () => {

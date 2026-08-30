@@ -1,5 +1,17 @@
 import { ConflictException } from '@nestjs/common';
-import { ReplyRuntimeService } from '../src/replies/reply-runtime.service';
+import { ReplyRuntimeService, explicitOrderMatches } from '../src/replies/reply-runtime.service';
+
+describe('explicitOrderMatches', () => {
+  const orders = [
+    { externalOrderId: 'PT-006', product: { title: 'SilentKey 84 静音键盘' } },
+    { externalOrderId: 'PT-007', product: { title: 'ViewGo 15.6英寸便携屏' } },
+  ];
+
+  it('uses a unique customer product phrase without treating generic logistics wording as a selection', () => {
+    expect(explicitOrderMatches(orders, '键盘那个')).toEqual([orders[0]]);
+    expect(explicitOrderMatches(orders, '我的快递怎么没动？')).toEqual([]);
+  });
+});
 
 describe('ReplyRuntimeService', () => {
   const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' };
@@ -448,6 +460,9 @@ describe('ReplyRuntimeService', () => {
     expect(runtime.runStructured).not.toHaveBeenCalledWith(scope, expect.objectContaining({ purpose: 'REPLY_GENERATION' }));
     expect(outboxes.enqueue).not.toHaveBeenCalled();
     expect(drafts.createWaitingHuman).toHaveBeenCalledWith(scope, expect.objectContaining({ replyJobId: 'reply-conflict' }));
+    expect(prisma.task.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({ intent: 'SHIPPING_POLICY', status: 'FAILED', errorCode: 'KNOWLEDGE_CONFLICT' })],
+    }));
   });
 
   it('uses each shop transfer keyword and conservative risk recommendation as a manual ceiling', async () => {
@@ -608,6 +623,7 @@ describe('ReplyRuntimeService', () => {
       replyEvidence: { createMany: jest.fn() }, task: { createMany: jest.fn() },
       productSku: { findMany: jest.fn().mockResolvedValue([
         { id: 'sku-black-xl', productId: 'product-a', externalSkuId: 'black-xl', inventory: 3, price: 99, attributesJson: { color: '黑色', size: 'XL' } },
+        { id: 'sku-black-l', productId: 'product-a', externalSkuId: 'black-l', inventory: 0, price: 99, attributesJson: { color: '黑色', size: 'L' } },
         { id: 'sku-white-xl', productId: 'product-a', externalSkuId: 'white-xl', inventory: 7, price: 99, attributesJson: { color: '白色', size: 'XL' } },
       ]) },
       shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
@@ -718,7 +734,10 @@ describe('ReplyRuntimeService', () => {
       const prisma = {
         replyJob: { findFirst: jest.fn().mockResolvedValue(baseJob(rounds)), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         replyEvidence: { createMany: jest.fn() }, task: { createMany: jest.fn() },
-        order: { findMany: jest.fn().mockResolvedValue([{ id: 'order-a', externalOrderId: 'A', status: 'SHIPPED', logisticsSnapshotJson: null, version: 1 }, { id: 'order-b', externalOrderId: 'B', status: 'SHIPPED', logisticsSnapshotJson: null, version: 1 }]) },
+        order: { findMany: jest.fn().mockResolvedValue([
+          { id: 'order-a', externalOrderId: 'A', status: 'SHIPPED', logisticsSnapshotJson: null, version: 1, product: { title: 'SilentKey 84 静音键盘' } },
+          { id: 'order-b', externalOrderId: 'B', status: 'SHIPPED', logisticsSnapshotJson: null, version: 1, product: { title: 'ViewGo 便携屏' } },
+        ]) },
         shop: { findFirst: jest.fn().mockResolvedValue(shop) }, shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
         $transaction: jest.fn((work: Function) => work(tx)),
       };
@@ -732,7 +751,10 @@ describe('ReplyRuntimeService', () => {
     };
     const first = make({});
     await expect(first.service.process(scope, 'reply-clarify')).resolves.toMatchObject({ status: 'READY_TO_SEND' });
-    expect(first.tx.conversation.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { clarificationRoundsJson: { ORDER: { round: 1, choices: [{ id: 'order-a', label: 'A' }, { id: 'order-b', label: 'B' }] } } } }));
+    expect(first.tx.conversation.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { clarificationRoundsJson: { ORDER: { round: 1, choices: [
+      { id: 'order-a', label: 'SilentKey 84 静音键盘（订单 A）' },
+      { id: 'order-b', label: 'ViewGo 便携屏（订单 B）' },
+    ] } } } }));
     expect(first.outboxes.enqueueInTransaction).toHaveBeenCalledWith(first.tx, scope, expect.objectContaining({ text: expect.stringContaining('哪笔订单'), idempotencyKey: expect.stringContaining('clarification:reply-clarify:') }));
     expect(first.runtime.runStructured).toHaveBeenCalledTimes(2);
 
@@ -743,7 +765,13 @@ describe('ReplyRuntimeService', () => {
       status: 'WAITING_HUMAN', reason: 'SHOP_AI_NOT_READY',
     });
     expect(preparing.tx.task.createMany).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.arrayContaining([expect.objectContaining({ intent: 'CLARIFICATION', status: 'AMBIGUOUS' })]),
+      data: expect.arrayContaining([expect.objectContaining({
+        id: 'reply-task:reply-clarify:reply-clarify:0',
+        intent: 'LOGISTICS_QUERY',
+        riskLevel: 'LOW',
+        requiredContextJson: ['ORDER'],
+        status: 'AMBIGUOUS',
+      })]),
     }));
     expect(preparing.drafts.createWaitingHuman).toHaveBeenCalledWith(scope, expect.objectContaining({
       replyJobId: 'reply-clarify', aiDraft: expect.stringContaining('哪笔订单'),

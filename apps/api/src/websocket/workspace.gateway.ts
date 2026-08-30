@@ -76,6 +76,10 @@ export class WorkspaceGateway implements OnGatewayInit, OnGatewayConnection, OnG
   }
 
   publish(event: WorkspaceEventEnvelope<unknown>): void {
+    // Command-line workers and production evaluation use an application
+    // context without an HTTP/WebSocket adapter. Durable state remains the
+    // source of truth, so realtime notification is an advisory no-op there.
+    if (!this.server) return;
     this.server.to(this.room(event.workspaceId)).emit('workspace.event', event);
   }
 

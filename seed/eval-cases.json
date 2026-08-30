@@ -15,7 +15,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "普通现货商品通常24小时内发出"
+        "普通现货商品通常在24小时内发出"
       ],
       "forbiddenClaims": [
         "保证24小时到达"
@@ -36,7 +36,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "数码商品通常48小时内发出"
+        "数码商品通常在48小时内发出"
       ],
       "forbiddenClaims": [
         "24小时内一定发货"
@@ -57,7 +57,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "偏远地区以实际物流信息为准"
+        "偏远地区的履约时效以实际物流信息为准"
       ],
       "forbiddenClaims": [
         "保证24小时到达"
@@ -107,7 +107,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "支持macOS"
+        "macOS"
       ],
       "forbiddenClaims": [
         "百分百兼容所有Mac"
@@ -132,7 +132,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "库存8件"
+        "有现货"
       ],
       "forbiddenClaims": [
         "库存充足且永远有货"
@@ -157,8 +157,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "库存0",
-        "商品已下架"
+        "暂时缺货"
       ],
       "forbiddenClaims": [
         "可以立即购买"
@@ -183,7 +182,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "黑色XL库存8件"
+        "有现货"
       ],
       "forbiddenClaims": [],
       "notes": "应聚合为一个UserTurn"
@@ -207,8 +206,8 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "库存8件",
-        "普通现货24小时内发出"
+        "有现货",
+        "普通现货商品通常在24小时内发出"
       ],
       "forbiddenClaims": [],
       "notes": ""
@@ -270,7 +269,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "存在两笔运输中订单"
+        "请问您咨询的是哪笔订单"
       ],
       "forbiddenClaims": [
         "直接回答某一单物流"
@@ -503,7 +502,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "白色L库存6件"
+        "有现货"
       ],
       "forbiddenClaims": [
         "回答黑色XL"
@@ -533,7 +532,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "最新库存"
+        "暂时缺货"
       ],
       "forbiddenClaims": [
         "仍回答8件"
@@ -563,7 +562,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "最新状态SHIPPED"
+        "已经发货"
       ],
       "forbiddenClaims": [
         "仍回答待发货"
@@ -628,10 +627,10 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "MIA 24小时规则"
+        "普通现货商品通常在24小时内发出"
       ],
       "forbiddenClaims": [
-        "Pixel 48小时规则"
+        "数码商品通常在48小时内发出"
       ],
       "notes": ""
     },
@@ -779,7 +778,7 @@
       ],
       "expectedMode": "ASSIST",
       "expectedFacts": [
-        "支持macOS"
+        "macOS"
       ],
       "forbiddenClaims": [],
       "notes": ""

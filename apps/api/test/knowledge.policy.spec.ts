@@ -49,6 +49,15 @@ describe('Phase 03 knowledge policy', () => {
         answer: '普通现货商品通常在 24 小时内发出。',
       }),
     ).toMatchObject({ status: 'VALID' });
+    expect(
+      classifyImportRow({
+        rowNumber: 3,
+        scope: 'STORE',
+        productExternalId: null,
+        question: '什么时候发货？',
+        answer: '偏远地区通常 72 小时内发货。',
+      }),
+    ).toMatchObject({ status: 'VALID' });
 
     expect(
       classifyImportRow({

@@ -29,6 +29,25 @@ describe('Reply Strategy', () => {
     expect(composer).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves a single sanitized image observation instead of letting the composer paraphrase its canonical fact', async () => {
+    const composer = jest.fn().mockResolvedValue('图片显示商品疑似破损。');
+    const imageReview = {
+      ...lowResolved,
+      intent: 'AFTER_SALES_QUERY',
+      riskLevel: 'MEDIUM' as const,
+      facts: {
+        reply: '图片中疑似商品破损，建议由人工客服进一步核实处理。',
+        source: 'SANITIZED_IMAGE_ANALYSIS',
+      },
+    };
+
+    await expect(buildReply({ tasks: [imageReview] }, { compose: composer })).resolves.toEqual({
+      strategy: 'FAST_PATH',
+      text: '图片中疑似商品破损，建议由人工客服进一步核实处理。',
+    });
+    expect(composer).not.toHaveBeenCalled();
+  });
+
   it('applies configured forbidden-term replacements and blocks terms without a safe replacement', () => {
     expect(checkForbiddenTerms('我们绝对不会掉色。', [{ term: '绝对', replacement: '尽量' }])).toEqual({
       allowed: true, text: '我们尽量不会掉色。', violations: ['绝对'],

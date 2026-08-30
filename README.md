@@ -7,7 +7,7 @@
 
 本仓库是一个合成数据 Demo，不是已上线的电商客服产品。默认运行不需要真实平台账号或模型密钥；需要真实 PostgreSQL / Redis / MinIO 验收时，必须显式启动 Docker 并打开 opt-in 开关。当前文档不声称在线部署、生产 SLA 或商业 KPI。
 
-## 本轮发布收口（2026-08-29）
+## 本轮发布收口（2026-08-30）
 
 本节只记录当前工作区已经落盘并在本地复验的能力；任何“通过”均不等同于公网部署、真实电商平台接入或生产验收。
 
@@ -20,14 +20,15 @@
 
 | 范围 | 当前状态 |
 | --- | --- |
-| API unit | 64 suites / 359 tests 通过 |
-| Web unit | 23 files / 100 tests 通过 |
-| API integration | 13 suites / 55 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
+| API unit | 68 suites / 385 tests 通过 |
+| Web unit | 23 files / 107 tests 通过 |
+| API integration | 14 suites / 61 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
 | Contracts | 6 / 6 通过 |
-| 前端终态 Gate | Playwright 13 项：9 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0 |
+| 前端终态 Gate | Playwright 14 项：10 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0 |
+| Q0 生产回复评测 | Offline 31 / 36；DeepSeek 31 / 36（30,150 / 3,688 Token，平均 1,757 ms）；其余 5 项为尚未接入统一 runner 的故障注入场景 |
 | 公网部署 | 未完成；没有把本地服务或容器验收表述为在线 Preview |
 | 3 分钟演示视频 | 未完成；现有演示脚本不是已录制、已验收的视频 |
-| 真实外部凭据 | 未随本次交付提供或验证；真实平台凭据仍不在 V1 范围，模型凭据仅可作为服务端可选配置 |
+| 真实外部凭据 | DeepSeek Key 仅从仓库外服务端文件读取并已完成真实评测；真实电商平台凭据仍不在 V1 范围，任何 Secret 都不随仓库交付 |
 
 真实基础设施 Gate 已在本机 opt-in 环境通过，但尚未部署到公网。
 
@@ -146,9 +147,9 @@ pnpm release:archive
 
 ```bash
 pnpm typecheck
-pnpm ai:eval:offline
+pnpm ai:eval:production:offline
 # 配置真实服务端 Provider 后：
-pnpm ai:eval
+pnpm ai:eval:production
 pnpm test:unit
 pnpm test:integration
 pnpm test:e2e

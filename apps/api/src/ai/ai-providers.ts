@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import {
   AiProviderFailure,
   AiRuntime,
+  inferExplicitIntentTasks,
   type AiProvider,
   type AiProviderRequest,
   type AiProviderResponse,
@@ -481,38 +482,80 @@ function offlineOutput(purpose: AiPurpose, input: unknown): unknown {
     case 'QUALITY_JUDGE':
       return { relevance: 0, completeness: 0, groundedness: 0, tone: 0, risk: 'LOW', result: 'NEEDS_HUMAN' };
     case 'REPLY_GENERATION':
-      return { text: '', requiresHuman: true };
+      return offlineReplyGeneration(input);
   }
 }
 
-function offlineIntentPlan(text: string): Record<string, unknown> {
-  const normalized = text.trim();
-  const tasks: Array<Record<string, unknown>> = [];
-  const inventoryRequested = /库存|有货|还有|还剩|现货|缺货|售罄|(?:黑色|白色|红色|蓝色|绿色|灰色).{0,8}(?:有吗|有么|有货)/i.test(normalized);
-  const sizeRequested = /尺码|尺寸|大小|身高|体重|公斤|(?:^|\s)(?:XXL|XL|XS|L|M|S)(?:\s|呢|吗|？|\?|$)/i.test(normalized);
+/**
+ * The offline demo may join facts already produced by scoped resolvers or
+ * frozen Evidence, but it must never invent a missing answer.  Partial work
+ * stays in the human-review lane and names the unresolved customer need.
+ */
+function offlineReplyGeneration(input: unknown): { text: string; requiresHuman: boolean } {
+  const tasks = readArray(input, 'tasks').map(objectRecord);
+  const replies = [...new Set(tasks.flatMap((task) => {
+    if (task.status !== 'RESOLVED') return [];
+    const reply = readString(task.facts, ['reply'])?.trim();
+    return reply ? [reply] : [];
+  }))];
+  const unresolved = tasks.filter((task) => task.status !== 'RESOLVED');
+  if (!replies.length) {
+    const product = offlineWorkflowProducts(input).find((entry) => (
+      entry.recommendable === true
+      && entry.status === 'ON_SHELF'
+      && typeof entry.title === 'string'
+      && entry.title.trim().length > 0
+    ));
+    if (product && typeof product.title === 'string') {
+      return { text: `为你推荐 ${product.title.trim()}。`, requiresHuman: false };
+    }
+    return { text: '', requiresHuman: true };
+  }
+  if (!unresolved.length) return { text: replies.join('\n'), requiresHuman: false };
+  const unresolvedLabels = [...new Set(unresolved.map((task) => offlineIntentLabel(typeof task.intent === 'string' ? task.intent : 'UNKNOWN')))];
+  return {
+    text: [...replies, `${unresolvedLabels.join('、')}还需要人工确认。`].join('\n'),
+    requiresHuman: true,
+  };
+}
 
-  if (inventoryRequested) {
-    tasks.push({
-      intent: 'INVENTORY_QUERY',
-      riskLevel: 'LOW',
-      requiredContext: ['PRODUCT', 'SKU'],
-      requiredTools: ['GET_INVENTORY'],
-    });
-  }
-  if (sizeRequested) {
-    tasks.push({
-      intent: 'SIZE_RECOMMENDATION',
-      riskLevel: 'LOW',
-      requiredContext: ['PRODUCT', 'SKU', 'CUSTOMER_MEMORY'],
-      requiredTools: ['GET_PRODUCT'],
-    });
-  }
+function offlineWorkflowProducts(input: unknown): Record<string, unknown>[] {
+  const workflow = objectRecord(objectRecord(input).workflow);
+  const priorNodeOutputs = objectRecord(workflow.priorNodeOutputs);
+  return Object.values(priorNodeOutputs).flatMap((output) => {
+    const products = objectRecord(output).products;
+    return Array.isArray(products) ? products.map(objectRecord) : [];
+  });
+}
+
+function offlineIntentLabel(intent: string): string {
+  const labels: Record<string, string> = {
+    SIZE_RECOMMENDATION: '尺码建议',
+    PRODUCT_RECOMMENDATION: '商品推荐',
+    LOGISTICS_QUERY: '物流信息',
+    ORDER_QUERY: '订单信息',
+    SHIPPING_POLICY: '发货时效',
+    AFTER_SALES_QUERY: '售后问题',
+  };
+  return labels[intent] ?? '其余问题';
+}
+
+function offlineIntentPlan(text: string): Record<string, unknown> {
+  const tasks = inferExplicitIntentTasks(text);
   if (tasks.length === 0) {
     return { tasks: [{ intent: 'UNKNOWN', riskLevel: 'LOW', requiredContext: [], requiredTools: [] }], summary: '' };
   }
+  const intents = tasks.map((task) => task.intent);
+  const summary = intents.length === 2 && intents.includes('INVENTORY_QUERY') && intents.includes('SIZE_RECOMMENDATION')
+    ? '库存与尺码咨询'
+    : intents.length === 1 && intents[0] === 'INVENTORY_QUERY'
+      ? '库存咨询'
+      : intents.length === 1 && intents[0] === 'SIZE_RECOMMENDATION'
+        ? '尺码咨询'
+        : intents.join(',');
   return {
     tasks,
-    summary: inventoryRequested && sizeRequested ? '库存与尺码咨询' : inventoryRequested ? '库存咨询' : '尺码咨询',
+    summary,
   };
 }
 
@@ -533,6 +576,10 @@ function readArray(value: unknown, key: string): unknown[] {
   if (!value || typeof value !== 'object') return [];
   const candidate = (value as Record<string, unknown>)[key];
   return Array.isArray(candidate) ? candidate : [];
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function safeDecode(value: string): string {

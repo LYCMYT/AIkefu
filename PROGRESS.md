@@ -78,7 +78,7 @@
 ### Phase 03 已知问题 / 环境复验项
 
 - Phase 03 Migration、pgvector/HNSW、PostgreSQL-backed 检索、MinIO 上传/签名下载/删除与 Redis 队列已在本机真实基础设施中复验通过；浏览器也已连接同一真实 Workspace API。
-- AI Runtime 与 Embedding 均提供显式服务器端 Provider 边界，并以确定性离线 Provider 做无凭据回退；已验证超时、重试、fallback、结构化修复、失败关闭、熔断、PII/Secret 清洗及 Invocation/Usage/Evidence 持久化。新增可审查的版本化 Prompt Registry、DeepSeek / OpenAI-compatible Chat / Responses 适配器与 `AI_API_KEY_FILE`；36 Case 已真实执行，但真实 DeepSeek Provider-only 报告仅 3/36 PASS，不能作为产品回复质量 PASS。
+- AI Runtime 与 Embedding 均提供显式服务器端 Provider 边界，并以确定性离线 Provider 做无凭据回退；已验证超时、重试、fallback、结构化修复、失败关闭、熔断、PII/Secret 清洗及 Invocation/Usage/Evidence 持久化。新增可审查的版本化 Prompt Registry、DeepSeek / OpenAI-compatible Chat / Responses 适配器与 `AI_API_KEY_FILE`。本阶段早期 Provider-only 报告为 3/36；2026-08-30 的 Q0 production runner 已提升为 Offline / DeepSeek 均 31/36。
 - 未接入任何真实电商平台私有接口、Cookie、Token、真实账号或原产品代码；商品、知识、图片与 Eval 数据全部为合成数据。
 - 独立审查登记 3 项非阻断 P2：pgvector SQL 前推 ENABLED / activeVersion 过滤、XLSX 解压炸弹资源限制、Memory DIRTY 扫描 lease / backoff / 稳定排序；不阻断 Phase 04，将在后续可靠性/发布硬化中处理。
 
@@ -149,7 +149,7 @@
 - 公开边界硬化已完成：Nest 全局 `ValidationPipe` 对全部 Body DTO 启用 transform/whitelist/forbidNonWhitelisted；文本、JSON、Knowledge topK、Workflow 图与普通请求体均有上限；环境变量启动时 fail-closed；API Helmet/安全响应头生效。
 - 附件对象存储已由手写 SigV4 改为官方 AWS SDK v3，并为 PUT/DELETE/CreateBucket 增加强制 Abort/deadline；真实 MinIO opt-in integration 随全套 47/47 通过。
 - AI Gateway 已按错误类型做有界重试：网络、超时、408、429 与选定 5xx 最多重试一次；400、401、403 与无效响应不重试。`AiRuntime` 内存 Usage 视图默认仅保留最近 1,000 条，持久化 Invocation / Usage 账本仍是事实源。
-- DeepSeek Chat endpoint / 模型 / 服务端 Key 文件已经配置；结构化风险分类探针及合成 Buyer→Intent/Risk/Reply→Workbench Draft→Human Final 的连接态浏览器链均通过。36 个固定 Case 已生成离线与真实 Provider 报告；真实报告为 3/36，且 Provider-only runner 不含生产 DB Evidence，禁止把它表述为端到端准确率。Judge、外部 Embedding / Image 仍是复验项。
+- DeepSeek Chat endpoint / 模型 / 服务端 Key 文件已经配置；结构化风险分类探针及合成 Buyer→Intent/Risk/Reply→Workbench Draft→Human Final 的连接态浏览器链均通过。36 个固定 Case 已进入隔离 production runner，Offline / DeepSeek 均为 31/36；DeepSeek 持久化 usage 为 30,150 / 3,688 Token、平均 1,757 ms。剩余 5 项是统一 runner 尚未接入的 fault / approval context / restart 驱动。Judge、外部 Embedding 仍是复验项。
 - `docs/16` 冻结的“公开 Demo 不做 Workspace Quota / Rate Limit / 超额 Fallback”保持不变并继续作为已知费用风险；未用外部审查建议擅自覆盖冻结决策。
 
 ## Release
@@ -198,7 +198,7 @@
 - [x] R3：连接态 Reset→Buyer 三连发→Workbench Draft→人工接管→Human Final→Buyer 可见 E2E。同时修复 Reset 500 与 WebSocket 刷新期静默丢发。
 - [x] R4 代码 Gate：模型错误分类、有界重试、RUNNING 账本、最近 1,000 条内存 Usage。
 - [x] R4 外部 Chat Gate：DeepSeek `deepseek-v4-flash` 风险探针与 Intent/Risk/Reply 合成浏览器主链通过，Key 仅从仓库外文件读取。
-- [ ] R4 完整 Eval Gate：36 Case 的离线 / DeepSeek Provider-only 报告已执行（真实 3/36）；生产 ReplyRuntime + DB Evidence 的 36 Case runner、Judge、外部 Embedding 与 Image 尚未完成，不虚构成本或准确率。
+- [ ] R4 完整 Eval Gate：生产 ReplyRuntime + DB Evidence runner 已完成并达到 Offline / DeepSeek 31/36；`E026`、`E027`、`E033`、`E035`、`E036` 的统一故障注入驱动及完整 Judge / 外部 Embedding Gate 尚未完成，不虚构 36/36、成本或准确率。
 - [x] R5 安全拆分基线：React Router、TanStack Query、`app/`、`features/`、`components/ui/`，Usage / Privacy 移出 `App.tsx`；三尺寸快照已视觉复核。
 - [x] R5 产品化拆分：Workbench / Buyer / Workflow、`api.ts` 与 `styles.css` 已按 feature / client / normalizer / endpoint / style domain 拆分，并由 69 条 Web unit 与真实连接态 E2E 回归。
 - [x] R6 本地/CI/容器交付：CI 现实跑非 skip 基础设施 integration 与连接态 Playwright；生产风格五容器验收通过。
@@ -215,20 +215,20 @@
 
 ### 当前后端 Gate
 
-- [x] API unit：64 suites / 359 tests 通过。
-- [x] Web unit：23 files / 100 tests 通过。
-- [x] API integration：13 suites / 55 tests 通过，基于本地真实 PostgreSQL、Redis、MinIO、pgvector。
+- [x] API unit：68 suites / 385 tests 通过。
+- [x] Web unit：23 files / 107 tests 通过。
+- [x] API integration：14 suites / 61 tests 通过，基于本地真实 PostgreSQL、Redis、MinIO、pgvector。
 - [x] Contracts：6 / 6 通过。
 - [x] 真实基础设施测试已在本机 opt-in 环境通过；这不是公网部署，也不代表真实平台凭据已接入。
 
 ### 前端终态 Gate
 
-- [x] Playwright 13 项：9 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0。
+- [x] Playwright 14 项：10 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0。
 - [x] 1440×900 最新真实截图已覆盖空店首页、店铺概览、店铺聊天、基础设置、知识导入、AI 管理中心、Workflow、Buyer Simulator、实时联调和 Scenario Lab；Workflow 保持运营 Workspace 真实空态，没有为截图制造数据。
 
 ### 仍未完成（不得记为通过）
 - [ ] 在线部署 / 公网 Preview：尚未部署。
 - [ ] 3 分钟演示视频：仓库保留人工脚本，但未录制或验收视频。
-- [ ] 真实外部凭据：不随本次交付提供或验证；真实电商平台凭据仍不在 V1 范围，模型凭据仅为服务端可选配置。
+- [x] 可选模型凭据：DeepSeek Key 仅从仓库外服务端文件读取并已完成 production eval；Secret 不随仓库交付。真实电商平台凭据仍不在 V1 范围。
 
 以上状态为本轮最新发布记录，优先于本文中带日期的历史 Gate 计数。

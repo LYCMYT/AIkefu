@@ -27,7 +27,7 @@ import { parseKnowledgeImportSource } from './knowledge.import-source';
 import {
   buildProductKnowledgeSource,
   classifyImportRow,
-  containsDynamicCommerceFact,
+  containsForbiddenKnowledgeText,
   inferKnowledgeScope,
   knowledgeFingerprint,
   normalizeKnowledgeText,
@@ -1667,7 +1667,7 @@ export class KnowledgeService {
         candidate.containsPII ||
         candidate.containsTemporaryCommitment ||
         this.containsKnowledgePII(question, answer) ||
-        containsDynamicCommerceFact(`${question}\n${answer}`)
+        containsForbiddenKnowledgeText(question, answer)
       ) {
         return;
       }
@@ -2278,7 +2278,7 @@ export class KnowledgeService {
     if (!question?.trim() || !answer?.trim()) {
       throw badRequest('KNOWLEDGE_QUESTION_AND_ANSWER_REQUIRED', 'question and answer are required');
     }
-    if (containsDynamicCommerceFact(`${question}\n${answer}`)) {
+    if (containsForbiddenKnowledgeText(question, answer)) {
       throw badRequest('DYNAMIC_COMMERCE_FACT_FORBIDDEN', 'Dynamic price, inventory, and SKU facts cannot be indexed');
     }
     if (this.containsKnowledgePII(question, answer)) {
@@ -2297,7 +2297,7 @@ export class KnowledgeService {
 
   private importTextViolation(question: string, answer: string): string | undefined {
     if (!question?.trim() || !answer?.trim()) return 'KNOWLEDGE_QUESTION_AND_ANSWER_REQUIRED';
-    if (containsDynamicCommerceFact(`${question}\n${answer}`)) return 'DYNAMIC_COMMERCE_FACT_FORBIDDEN';
+    if (containsForbiddenKnowledgeText(question, answer)) return 'DYNAMIC_COMMERCE_FACT_FORBIDDEN';
     return this.containsKnowledgePII(question, answer) ? 'KNOWLEDGE_PII_FORBIDDEN' : undefined;
   }
 

@@ -1,0 +1,1354 @@
+{
+  "sourceVersion": "1.0",
+  "executionBoundary": "APP_MODULE_PRISMA_REPLY_RUNTIME",
+  "generatedAt": "2026-08-30T05:08:00.540Z",
+  "mode": "PRODUCTION_REAL_PROVIDER",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "summary": {
+    "total": 36,
+    "passed": 31,
+    "failed": 5,
+    "inputTokens": 30150,
+    "outputTokens": 3688,
+    "totalCost": null,
+    "averageLatencyMs": 1757
+  },
+  "cases": [
+    {
+      "id": "E001",
+      "text": "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+        "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
+        "不同商品洗护要求不同，请发送商品卡或商品名称后查询。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 742,
+      "outputTokens": 97,
+      "latencyMs": 1800,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfci6h70000uz4wumtjbfds",
+        "conversationId": "cmtfci7j500eouz4w98wtn5kg",
+        "replyJobId": "cmtfci9lt00i8uz4wms703l0o",
+        "userTurnId": "cmtfci98f00i2uz4wiyjeckom",
+        "taskIds": [
+          "reply-task:cmtfci9lt00i8uz4wms703l0o:cmtfci9lt00i8uz4wms703l0o:0"
+        ],
+        "evidenceIds": [
+          "cmtfcib7200kxuz4we6kg012e",
+          "cmtfcib7200kyuz4w95y6tpj8",
+          "cmtfcib7200kzuz4wfbdlpy5x"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfci6nv0032uz4wffnwcajd",
+          "cmtfci6oc0036uz4wa3mmeh08",
+          "cmtfci6rd004auz4w1kjff326"
+        ],
+        "draftId": "cmtfciba700lduz4wou9z9l29",
+        "invocationIds": [
+          "cmtfciaib00jmuz4wph7m5bhy",
+          "cmtfcib3500kquz4wwo8p5usa"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E002",
+      "text": "数码商品通常在48小时内发出；预售或定制商品以商品页说明为准。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "数码商品通常在48小时内发出；预售或定制商品以商品页说明为准。",
+        "保修期限以商品说明和订单凭证为准。",
+        "请发送订单卡或选择具体订单，系统不会从多个订单中猜测。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 742,
+      "outputTokens": 97,
+      "latencyMs": 1677,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcibge00lquz4wgypvwtlb",
+        "conversationId": "cmtfcicj10120uz4wofg5rmht",
+        "replyJobId": "cmtfciem0015ouz4wuvzxh019",
+        "userTurnId": "cmtfcie7a014guz4wgvu1fuwi",
+        "taskIds": [
+          "reply-task:cmtfciem0015ouz4wuvzxh019:cmtfciem0015ouz4wuvzxh019:0"
+        ],
+        "evidenceIds": [
+          "cmtfcig0w0183uz4wt2b3pxpm",
+          "cmtfcig0w0184uz4wbl6p6qgq",
+          "cmtfcig0w0185uz4wcsjg3b5b"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfcibrv00r4uz4wvtr3kewj",
+          "cmtfcibuj00s8uz4w6z4vobb3",
+          "cmtfcibvd00skuz4wlvv43mq4"
+        ],
+        "draftId": "cmtfcig2f018puz4w91wceooz",
+        "invocationIds": [
+          "cmtfcifa4016uuz4wpkbwddou",
+          "cmtfcify6017muz4wv9sckrdx"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E003",
+      "text": "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
+        "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+        "不同商品洗护要求不同，请发送商品卡或商品名称后查询。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 744,
+      "outputTokens": 94,
+      "latencyMs": 2002,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcig53018suz4w04qbqund",
+        "conversationId": "cmtfciguy01oauz4ww326ioaa",
+        "replyJobId": "cmtfciivw01r0uz4wg9z6s2nb",
+        "userTurnId": "cmtfciih101quuz4wbec5zpuk",
+        "taskIds": [
+          "reply-task:cmtfciivw01r0uz4wg9z6s2nb:cmtfciivw01r0uz4wg9z6s2nb:0"
+        ],
+        "evidenceIds": [
+          "cmtfcikk801tvuz4w9k0b2nu4",
+          "cmtfcikk801twuz4wcdx9zrk3",
+          "cmtfcikk801txuz4w8h6g8lad"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfcig9l01byuz4w7qoln8lj",
+          "cmtfcig9d01buuz4w3dv96uov",
+          "cmtfcigbs01d2uz4wlmth37bt"
+        ],
+        "draftId": "cmtfciklt01ufuz4wfer415u8",
+        "invocationIds": [
+          "cmtfcijqv01seuz4w4b8pus2a",
+          "cmtfcikhc01tkuz4wc7awixlv"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E004",
+      "text": "不建议使用烘干机。",
+      "tasks": [
+        "PRODUCT_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "不建议使用烘干机。",
+        "该商品为宽松版型。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 750,
+      "outputTokens": 105,
+      "latencyMs": 1863,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcikph01uuuz4wxzn2d6z1",
+        "conversationId": "cmtfcilg302acuz4wra22jeji",
+        "replyJobId": "cmtfcinjn02dkuz4whkllnul9",
+        "userTurnId": "cmtfcin4x02deuz4w6rsh496j",
+        "taskIds": [
+          "reply-task:cmtfcinjn02dkuz4whkllnul9:cmtfcinjn02dkuz4whkllnul9:0"
+        ],
+        "evidenceIds": [
+          "cmtfcip4e02gbuz4wq0k4ps2i",
+          "cmtfcip4e02gcuz4wdwlkgei2"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfcil1d021quz4wlb3z095d",
+          "cmtfcil14021muz4wxqgz4bxo"
+        ],
+        "draftId": "cmtfcip5w02gmuz4wknzjbial",
+        "invocationIds": [
+          "cmtfciog702f6uz4wgua4v72m",
+          "cmtfcip1802g2uz4wjiatslph"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E005",
+      "text": "支持Mac的，SilentKey 84 静音键盘兼容Windows和macOS系统。",
+      "tasks": [
+        "FAQ_QUERY",
+        "PRODUCT_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "支持Windows和macOS。",
+        "支持蓝牙、2.4G和有线三模。",
+        "采用静音线性轴，适合安静办公。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1782,
+      "outputTokens": 116,
+      "latencyMs": 2774,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcip7x02gruz4w6zs4bu7u",
+        "conversationId": "cmtfcipxh02w7uz4wq8r76v4r",
+        "replyJobId": "cmtfcirt40303uz4wu275eouc",
+        "userTurnId": "cmtfcirne02znuz4wc0ykiyt0",
+        "taskIds": [
+          "reply-task:cmtfcirt40303uz4wu275eouc:cmtfcirt40303uz4wu275eouc:0",
+          "reply-task:cmtfcirt40303uz4wu275eouc:cmtfcirt40303uz4wu275eouc:1"
+        ],
+        "evidenceIds": [
+          "cmtfcit95032ouz4wtil025k8",
+          "cmtfcit95032puz4wr1zxlios",
+          "cmtfcit95032quz4w0tgl5so9"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfcipnh02r1uz4wi4rxvjq9",
+          "cmtfcipn902qxuz4wvya2pj9g",
+          "cmtfcipnv02r9uz4w7kamknvo"
+        ],
+        "draftId": "cmtfciu6m034kuz4w7chkmvpp",
+        "invocationIds": [
+          "cmtfciskm031fuz4woa1vlstr",
+          "cmtfcit4g031vuz4wxt390o91",
+          "cmtfciu5f034auz4wl04dqz8t"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E006",
+      "text": "这个规格目前有现货，可以正常下单。",
+      "tasks": [
+        "INVENTORY_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 751,
+      "outputTokens": 98,
+      "latencyMs": 1726,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfciubo034luz4wn89cfe85",
+        "conversationId": "cmtfciv1c03k7uz4w8z8f9p3v",
+        "replyJobId": "cmtfciwv003n1uz4wsbfbk2bt",
+        "userTurnId": "cmtfciwp803mvuz4wizs5rfll",
+        "taskIds": [
+          "reply-task:cmtfciwv003n1uz4wsbfbk2bt:cmtfciwv003n1uz4wsbfbk2bt:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfciyaw03pzuz4wrwdi9g2u",
+        "invocationIds": [
+          "cmtfcixgj03oduz4w4lf7jodk",
+          "cmtfciy8i03pjuz4w1jyzbuqq"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E007",
+      "text": "这个规格目前暂时缺货，您可以看看其他规格。",
+      "tasks": [
+        "INVENTORY_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 753,
+      "outputTokens": 97,
+      "latencyMs": 1545,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfciyf503q0uz4wkcw36v21",
+        "conversationId": "cmtfciz5k045muz4wb634zl6k",
+        "replyJobId": "cmtfcj14t049iuz4wklphrxzq",
+        "userTurnId": "cmtfcj0wb048muz4wx7ouzkm4",
+        "taskIds": [
+          "reply-task:cmtfcj14t049iuz4wklphrxzq:cmtfcj14t049iuz4wklphrxzq:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfcj2fz04bouz4w2ttymx5h",
+        "invocationIds": [
+          "cmtfcj1xv04auuz4wpj5u1h6x",
+          "cmtfcj2di04b0uz4wkaodu09v"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E008",
+      "text": "您好，黑色XL码目前有现货，可以正常下单。根据您165cm、55公斤的身材，建议选择XL码，适合春秋日常穿着。商品为70%棉、30%聚酯纤维材质，不建议使用烘干机。如有其他问题，欢迎咨询。",
+      "tasks": [
+        "INVENTORY_QUERY",
+        "SIZE_RECOMMENDATION"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "适合春秋日常穿着。",
+        "70%棉、30%聚酯纤维。",
+        "不建议使用烘干机。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 2140,
+      "outputTokens": 223,
+      "latencyMs": 3503,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcj2k004c7uz4wyvdw5pe6",
+        "conversationId": "cmtfcj3a904rhuz4wa6yqbgsd",
+        "replyJobId": "cmtfcj5ev04vduz4wpjtcfifq",
+        "userTurnId": "cmtfcj53604v7uz4wum2lax6o",
+        "taskIds": [
+          "reply-task:cmtfcj5ev04vduz4wpjtcfifq:cmtfcj5ev04vduz4wpjtcfifq:0",
+          "reply-task:cmtfcj5ev04vduz4wpjtcfifq:cmtfcj5ev04vduz4wpjtcfifq:1"
+        ],
+        "evidenceIds": [
+          "cmtfcj72204y4uz4wks6uv50d",
+          "cmtfcj72204y5uz4wnd99q5zp",
+          "cmtfcj72204y6uz4w009m4gp4"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfcj2vc04j7uz4w1wrsj2cn",
+          "cmtfcj2uq04ivuz4w4pd9rv1w",
+          "cmtfcj2v504j3uz4w3gaa1xx5"
+        ],
+        "draftId": "cmtfcj8af050wuz4wprkmyznx",
+        "invocationIds": [
+          "cmtfcj6cw04x3uz4w43e3bjmz",
+          "cmtfcj70304xxuz4wvr4dpxa5",
+          "cmtfcj896050muz4w3rz9no88"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E009",
+      "text": "黑色XL目前有现货，可以正常下单。普通现货商品通常在24小时内发出，具体以实际物流为准。",
+      "tasks": [
+        "INVENTORY_QUERY",
+        "SHIPPING_POLICY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+        "不同商品洗护要求不同，请发送商品卡或商品名称后查询。",
+        "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1793,
+      "outputTokens": 172,
+      "latencyMs": 3302,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcj8cx050xuz4wa8rl8e3t",
+        "conversationId": "cmtfcj92605gjuz4w9i6iugo4",
+        "replyJobId": "cmtfcjau305jduz4w2vc2ti3i",
+        "userTurnId": "cmtfcjarj05j7uz4wasl6lzw2",
+        "taskIds": [
+          "reply-task:cmtfcjau305jduz4w2vc2ti3i:cmtfcjau305jduz4w2vc2ti3i:0",
+          "reply-task:cmtfcjau305jduz4w2vc2ti3i:cmtfcjau305jduz4w2vc2ti3i:1"
+        ],
+        "evidenceIds": [
+          "cmtfcjcj805mcuz4wbv271prp",
+          "cmtfcjcj905mduz4wupdnfz6q",
+          "cmtfcjcj905meuz4wkhs565yc"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfcj8hq053zuz4w0rq4s5ri",
+          "cmtfcj8k50559uz4wssijk1vo",
+          "cmtfcj8i10543uz4wg5idhk4s"
+        ],
+        "draftId": "cmtfcjdj405owuz4wijxqt7r7",
+        "invocationIds": [
+          "cmtfcjbpb05kruz4wslk0eo4w",
+          "cmtfcjchn05lzuz4wxfae6i4s",
+          "cmtfcjdhx05omuz4wghtnj0ug"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E010",
+      "text": "请问您咨询的是哪件商品？ 可选：CodeBoard 75 机械键盘、AirMouse 轻量无线鼠标、GaN 100W 三口充电器。\n请问您需要哪个规格？ 可选：P-T-004-BLACK、P-T-001-BLACK。\n请问您咨询的是哪笔订单？ 可选：SilentKey 84 静音键盘（订单 PT-20260824-006）、ViewGo 15.6英寸便携屏（订单 PT-20260824-007）。",
+      "tasks": [
+        "PRODUCT_QUERY",
+        "INVENTORY_QUERY",
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 818,
+      "outputTokens": 219,
+      "latencyMs": 2404,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcjdob05oxuz4wkufke7og",
+        "conversationId": "cmtfcjeem064juz4wttz378hn",
+        "replyJobId": "cmtfcjgac0675uz4w2fm1capt",
+        "userTurnId": "cmtfcjg1i066zuz4wgs6slv44",
+        "taskIds": [
+          "reply-task:cmtfcjgac0675uz4w2fm1capt:cmtfcjgac0675uz4w2fm1capt:0",
+          "reply-task:cmtfcjgac0675uz4w2fm1capt:cmtfcjgac0675uz4w2fm1capt:1",
+          "reply-task:cmtfcjgac0675uz4w2fm1capt:cmtfcjgac0675uz4w2fm1capt:2"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfcji8n06axuz4wdtthzarq",
+        "invocationIds": [
+          "cmtfcjhl5069juz4w032fj2zt",
+          "cmtfcji6o06apuz4w5df3oqav"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E011",
+      "text": "这笔订单已经发货，最新物流到达广州分拨中心。",
+      "tasks": [
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 751,
+      "outputTokens": 103,
+      "latencyMs": 1600,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcjibj06ayuz4wnqvdthrr",
+        "conversationId": "cmtfcjj0b06qkuz4wmunmrpyz",
+        "replyJobId": "cmtfcjkyi06teuz4wxh2dxkse",
+        "userTurnId": "cmtfcjkpa06t8uz4wibts7gsz",
+        "taskIds": [
+          "reply-task:cmtfcjkyi06teuz4wxh2dxkse:cmtfcjkyi06teuz4wxh2dxkse:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfcjmb306wcuz4wrp7jm0ap",
+        "invocationIds": [
+          "cmtfcjliz06uquz4wjto8d4dg",
+          "cmtfcjm8q06vwuz4w651wl7a5"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E012",
+      "text": "请问您咨询的是哪笔订单？ 可选：SilentKey 84 静音键盘（订单 PT-20260824-006）、ViewGo 15.6英寸便携屏（订单 PT-20260824-007）。",
+      "tasks": [
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 748,
+      "outputTokens": 103,
+      "latencyMs": 1825,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcjmdg06wduz4w2xvwfrj1",
+        "conversationId": "cmtfcjn2v07bzuz4wi98rpl3e",
+        "replyJobId": "cmtfcjou807eluz4wfcw3zzny",
+        "userTurnId": "cmtfcjoqn07efuz4wwp9itcsw",
+        "taskIds": [
+          "reply-task:cmtfcjou807eluz4wfcw3zzny:cmtfcjou807eluz4wfcw3zzny:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfcjqc707hbuz4wemvmxfr8",
+        "invocationIds": [
+          "cmtfcjpkq07fxuz4wb6voq4t7",
+          "cmtfcjqad07h3uz4w6sp82sa5"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E013",
+      "text": "这笔订单已经发货，最新物流到达广州分拨中心。",
+      "tasks": [
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 772,
+      "outputTokens": 97,
+      "latencyMs": 1520,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcjqgk07heuz4wjcfz05ky",
+        "conversationId": "cmtfcjr6107wyuz4w2yo4xsc5",
+        "replyJobId": "cmtfcjt48080uuz4wkrqmu4mm",
+        "userTurnId": "cmtfcjsv107zwuz4w0ene8uyg",
+        "taskIds": [
+          "reply-task:cmtfcjt48080uuz4wkrqmu4mm:cmtfcjt48080uuz4wkrqmu4mm:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfcjuee082yuz4wy12oid8e",
+        "invocationIds": [
+          "cmtfcjtvq0826uz4wyilcfxwu",
+          "cmtfcjubu082cuz4wfl7q36u4"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E014",
+      "text": "请人工处理此会话。",
+      "tasks": [
+        "HUMAN_REQUEST"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 737,
+      "outputTokens": 83,
+      "latencyMs": 1326,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcjugd0837uz4wq4l7rhfq",
+        "conversationId": "cmtfcjv4r08ifuz4wsn003rdl",
+        "replyJobId": "cmtfcjx0e08m1uz4waxdcmmhu",
+        "userTurnId": "cmtfcjwtl08lnuz4wqrjpt09k",
+        "taskIds": [
+          "reply-task:cmtfcjx0e08m1uz4waxdcmmhu:cmtfcjx0e08m1uz4waxdcmmhu:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfcjy4t08nxuz4wleqiyj26",
+        "invocationIds": [
+          "cmtfcjxhp08mjuz4wntrj9s9h",
+          "cmtfcjy2t08nhuz4wvfk9sqyz"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E015",
+      "text": "请人工处理此会话。",
+      "tasks": [
+        "COMPLAINT"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 738,
+      "outputTokens": 97,
+      "latencyMs": 1637,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcjy7s08o2uz4wvn89803h",
+        "conversationId": "cmtfcjyyd093ouz4wcm14bms7",
+        "replyJobId": "cmtfck0wh097auz4we5rfuuxe",
+        "userTurnId": "cmtfck0mh096cuz4wjmtud95s",
+        "taskIds": [
+          "reply-task:cmtfck0wh097auz4we5rfuuxe:cmtfck0wh097auz4we5rfuuxe:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfck29l099uuz4wl91opv01",
+        "invocationIds": [
+          "cmtfck1ln098muz4whbdhwsxg",
+          "cmtfck27j0996uz4w9ic1z8ct"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E016",
+      "text": "请人工处理此会话。",
+      "tasks": [
+        "REFUND_REQUEST"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 736,
+      "outputTokens": 102,
+      "latencyMs": 1754,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfck2cq09a9uz4wx8q3w0d2",
+        "conversationId": "cmtfck31l09phuz4wdi04t241",
+        "replyJobId": "cmtfck56309sjuz4wq1kvmokt",
+        "userTurnId": "cmtfck4qp09sbuz4wpdne5fw4",
+        "taskIds": [
+          "reply-task:cmtfck56309sjuz4wq1kvmokt:cmtfck56309sjuz4wq1kvmokt:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfck6mx09vfuz4wbjcqyb6e",
+        "invocationIds": [
+          "cmtfck61c09u1uz4wrptg59vz",
+          "cmtfck6k909uzuz4wmemucmdw"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E017",
+      "text": "支持7天无理由退货，但商品需保持完好，不影响二次销售。",
+      "tasks": [
+        "FAQ_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "支持7天无理由退货，但商品需保持完好，不影响二次销售。",
+        "是否支持指定快递需要人工确认，AI不做确定承诺。",
+        "普通地区是否包邮以商品页与下单页面显示为准，偏远地区可能产生附加运费。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 748,
+      "outputTokens": 87,
+      "latencyMs": 1623,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfck6rt09vkuz4w4gb1x6cu",
+        "conversationId": "cmtfck7gl0ab4uz4wkr0dt4om",
+        "replyJobId": "cmtfck9fy0aesuz4wybheb52j",
+        "userTurnId": "cmtfck93d0admuz4wlgs1s25c",
+        "taskIds": [
+          "reply-task:cmtfck9fy0aesuz4wybheb52j:cmtfck9fy0aesuz4wybheb52j:0"
+        ],
+        "evidenceIds": [
+          "cmtfckasc0ah7uz4wcsjks6gg",
+          "cmtfckasc0ah8uz4weqcem47p",
+          "cmtfckasc0ah9uz4wn5j3i5iz"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfck6x509zwuz4wvs6pej4i",
+          "cmtfck6wh09zguz4wgisi9758",
+          "cmtfck6wr09zmuz4wleeni06s"
+        ],
+        "draftId": "cmtfckato0ahpuz4wmmyce5tg",
+        "invocationIds": [
+          "cmtfcka2m0ag0uz4wlgfnu5xn",
+          "cmtfckaqt0agsuz4w8bka4bf8"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E018",
+      "text": "请人工处理此会话。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 746,
+      "outputTokens": 97,
+      "latencyMs": 1485,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfckaxn0ahuuz4wxrlfhfmv",
+        "conversationId": "cmtfckbpc0axsuz4wjc5bicxy",
+        "replyJobId": "cmtfckdp80b0euz4wlclw2lu8",
+        "userTurnId": "cmtfckddb0b08uz4w34u3771e",
+        "taskIds": [
+          "reply-task:cmtfckdp80b0euz4wlclw2lu8:cmtfckdp80b0euz4wlclw2lu8:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfckezm0b3auz4wbkzsx1kw",
+        "invocationIds": [
+          "cmtfcke9r0b1quz4w6qd1tbo9",
+          "cmtfckew90b2wuz4w0obhbrt0"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E019",
+      "text": "请人工处理此会话。",
+      "tasks": [
+        "HUMAN_REQUEST",
+        "REFUND_REQUEST"
+      ],
+      "mode": "MANUAL",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 773,
+      "outputTokens": 97,
+      "latencyMs": 1638,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfckf400b3buz4wthcg669d",
+        "conversationId": "cmtfckft40bixuz4waa4ox6ij",
+        "replyJobId": "cmtfckhlp0blluz4wfud7tjqf",
+        "userTurnId": "cmtfckhhk0blduz4whpkhmwqq",
+        "taskIds": [
+          "reply-task:cmtfckhlp0blluz4wfud7tjqf:cmtfckhlp0blluz4wfud7tjqf:0",
+          "reply-task:cmtfckhlp0blluz4wfud7tjqf:cmtfckhlp0blluz4wfud7tjqf:1"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfckiyv0bohuz4w0ne2nn2y",
+        "invocationIds": [
+          "cmtfcki7u0bmvuz4w8ggo0e9o",
+          "cmtfckiwv0bo1uz4wyohcwu42"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E020",
+      "text": "图片中疑似商品破损，建议由人工客服进一步核实处理。",
+      "tasks": [
+        "AFTER_SALES_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "请上传破损位置的清晰图片，客服会根据订单和售后政策协助处理。",
+        "普通地区是否包邮以商品页与下单页面显示为准，偏远地区可能产生附加运费。",
+        "不同商品洗护要求不同，请发送商品卡或商品名称后查询。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 755,
+      "outputTokens": 118,
+      "latencyMs": 1711,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfckj1f0boiuz4wt3ib9oha",
+        "conversationId": "cmtfckjsb0c46uz4wbdme5rft",
+        "replyJobId": "cmtfcklvl0c82uz4w6fml39ol",
+        "userTurnId": "cmtfckliw0c6wuz4wkyzwstjj",
+        "taskIds": [
+          "reply-task:cmtfcklvl0c82uz4w6fml39ol:cmtfcklvl0c82uz4w6fml39ol:0"
+        ],
+        "evidenceIds": [
+          "cmtfcknbk0caruz4wvm7wk3e3",
+          "cmtfcknbk0casuz4w4c4l3vvd",
+          "cmtfcknbk0catuz4w30ccw1yu"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfckj7c0bseuz4wbf1fqr1n",
+          "cmtfckj6p0bs2uz4wzayzcel3",
+          "cmtfckj850bsuuz4wgbivbivs"
+        ],
+        "draftId": "cmtfcknd20cb3uz4wvisurypw",
+        "invocationIds": [
+          "cmtfckmhf0c98uz4wbdz17z4o",
+          "cmtfckn8k0ca8uz4w8x6xxxcv"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E021",
+      "text": "请问您咨询的是哪笔订单？ 可选：SilentKey 84 静音键盘（订单 PT-20260824-006）、ViewGo 15.6英寸便携屏（订单 PT-20260824-007）。",
+      "tasks": [
+        "ORDER_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 765,
+      "outputTokens": 98,
+      "latencyMs": 1834,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcknh50cb6uz4w4mlwugrw",
+        "conversationId": "cmtfcko6o0cquuz4wxp98hvra",
+        "replyJobId": "cmtfckq5b0ctquz4wm9yspxae",
+        "userTurnId": "cmtfckpvw0ctiuz4w306kz2d6",
+        "taskIds": [
+          "reply-task:cmtfckq5b0ctquz4wm9yspxae:cmtfckq5b0ctquz4wm9yspxae:1"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfckrn90cweuz4w2vydnveg",
+        "invocationIds": [
+          "cmtfckqzk0cv2uz4w8j3268fo",
+          "cmtfckrlo0cw6uz4w8w7l7ih6"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E022",
+      "text": "这笔订单目前待发货。",
+      "tasks": [
+        "LOGISTICS_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 748,
+      "outputTokens": 91,
+      "latencyMs": 1382,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfckrq60cwhuz4wbq2n9gcl",
+        "conversationId": "cmtfcksgz0dc1uz4w1x0khf42",
+        "replyJobId": "cmtfckufm0dfzuz4wocm0gf15",
+        "userTurnId": "cmtfcku860dfjuz4wmqu5vp3u",
+        "taskIds": [
+          "reply-task:cmtfckufm0dfzuz4wocm0gf15:cmtfckufm0dfzuz4wocm0gf15:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfckvm70dhxuz4w3l0qhgkr",
+        "invocationIds": [
+          "cmtfckuyi0dgtuz4wett4lrfl",
+          "cmtfckvjm0dhfuz4wf2g0zxam"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E023",
+      "text": "这个规格目前有现货，可以正常下单。",
+      "tasks": [
+        "INVENTORY_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 744,
+      "outputTokens": 99,
+      "latencyMs": 1803,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfckvp60di4uz4wr91levps",
+        "conversationId": "cmtfckwen0dxkuz4wvmv3ss3x",
+        "replyJobId": "cmtfckybi0e18uz4ww2ma34rs",
+        "userTurnId": "cmtfcky430e0quz4w1abq6usk",
+        "taskIds": [
+          "reply-task:cmtfckybi0e18uz4ww2ma34rs:cmtfckybi0e18uz4ww2ma34rs:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfckztm0e46uz4wy24csuxy",
+        "invocationIds": [
+          "cmtfckyub0e1yuz4wqt8p8gpp",
+          "cmtfckzr90e3quz4wa6we08ys"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E024",
+      "text": "这个规格目前暂时缺货，您可以看看其他规格。",
+      "tasks": [
+        "INVENTORY_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 751,
+      "outputTokens": 95,
+      "latencyMs": 1590,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfckzy40e49uz4wvgu0ghjs",
+        "conversationId": "cmtfcl0o10ejvuz4w30zuhfac",
+        "replyJobId": "cmtfcl2l20emruz4w22ysxy8x",
+        "userTurnId": "cmtfcl2du0emjuz4wpygkqkm4",
+        "taskIds": [
+          "reply-task:cmtfcl2l20emruz4w22ysxy8x:cmtfcl2l20emruz4w22ysxy8x:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfcl3wr0epnuz4wvcaex8qn",
+        "invocationIds": [
+          "cmtfcl38f0eo1uz4w6dicrfhb",
+          "cmtfcl3ur0ep7uz4wrae6tz41"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E025",
+      "text": "这笔订单已经发货，请留意物流更新。",
+      "tasks": [
+        "ORDER_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 1383,
+      "outputTokens": 130,
+      "latencyMs": 3162,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfcl3zh0epouz4w0ic1xh08",
+        "conversationId": "cmtfcl4pm0f5auz4wuh1olzjk",
+        "replyJobId": "cmtfcl6hk0f86uz4wu5mz48gc",
+        "userTurnId": "cmtfcl6fe0f7yuz4wydpm6ott",
+        "taskIds": [
+          "reply-task:cmtfcl6hk0f86uz4wu5mz48gc:cmtfcl6hk0f86uz4wu5mz48gc:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfcl92b0fdguz4wpa5g2xgc",
+        "invocationIds": [
+          "cmtfcl7580f9guz4wlymtvfbp",
+          "cmtfcl86h0fb4uz4ww40z1lzr",
+          "cmtfcl9150fd6uz4w0lyjb71l"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E026",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: EXECUTOR_UNSUPPORTED:primaryProvider,fallback"
+      ]
+    },
+    {
+      "id": "E027",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: EXECUTOR_UNSUPPORTED:primaryProvider,fallback"
+      ]
+    },
+    {
+      "id": "E028",
+      "text": "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+        "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
+        "不同商品洗护要求不同，请发送商品卡或商品名称后查询。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 742,
+      "outputTokens": 97,
+      "latencyMs": 1674,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfclami0g8nuz4wdtqekap7",
+        "conversationId": "cmtfclbd10go1uz4w45o2jpda",
+        "replyJobId": "cmtfcld2s0gqvuz4w64xcth50",
+        "userTurnId": "cmtfcld100gqpuz4wvme9zmea",
+        "taskIds": [
+          "reply-task:cmtfcld2s0gqvuz4w64xcth50:cmtfcld2s0gqvuz4w64xcth50:0"
+        ],
+        "evidenceIds": [
+          "cmtfclegb0gtguz4wswpjiy7f",
+          "cmtfclegb0gthuz4wtilj6vp9",
+          "cmtfclegb0gtiuz4wxlrshjsu"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfclar30gbpuz4wb8y27b2p",
+          "cmtfclare0gbtuz4w02q2j9g9",
+          "cmtfclats0gcxuz4whv6m50uq"
+        ],
+        "draftId": "cmtfclei40gtyuz4wcxp4sgpj",
+        "invocationIds": [
+          "cmtfcldrn0gs7uz4wgcug307g",
+          "cmtfcleez0gt3uz4wnq8tnq3c"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E029",
+      "text": "您好，根据您的需求，我们为您推荐以下商品：1. SilentKey 84 静音键盘（P-T-001）；2. ViewGo 15.6英寸便携屏（P-T-002）；3. GaN 100W 三口充电器（P-T-003）。请问您对哪款感兴趣？我们可以提供更多详情。",
+      "tasks": [
+        "PRODUCT_RECOMMENDATION"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 2136,
+      "outputTokens": 267,
+      "latencyMs": 3773,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfclemi0gtzuz4w8zlx4wo0",
+        "conversationId": "cmtfclfb50h9luz4wukk2iuze",
+        "replyJobId": "cmtfclhbt0hc9uz4wdeurz3yo",
+        "userTurnId": "cmtfclgzo0hc1uz4w7x4v4tjq",
+        "taskIds": [
+          "reply-task:cmtfclhbt0hc9uz4wdeurz3yo:cmtfclhbt0hc9uz4wdeurz3yo:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfclkj00hinuz4wd14djgv7",
+        "invocationIds": [
+          "cmtfclhz20hdjuz4wg3e7lujh",
+          "cmtfclikx0hepuz4w2png43vy",
+          "cmtfclkhk0hibuz4wsz2ysys6",
+          "cmtfcljgi0hgnuz4w2vhd1d55"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E030",
+      "text": "您好，默认使用顺丰或中通，具体承运方以订单物流信息为准。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "默认使用顺丰或中通，具体承运方以订单物流信息为准。",
+        "是否支持指定快递需要人工确认，AI不做确定承诺。",
+        "请发送订单卡或进入订单详情，以避免关联错误记录。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 744,
+      "outputTokens": 95,
+      "latencyMs": 1647,
+      "cost": null,
+      "outputSource": "SEND_OUTBOX",
+      "terminalStatus": "SENT",
+      "trace": {
+        "workspaceId": "cmtfclknb0hj8uz4wbx9y8aa0",
+        "conversationId": "cmtfcllc10hyguz4wegoagbm7",
+        "replyJobId": "cmtfcln600i1quz4wecwga6ij",
+        "userTurnId": "cmtfclmz00i1euz4wk4upk63f",
+        "taskIds": [
+          "reply-task:cmtfcln600i1quz4wecwga6ij:cmtfcln600i1quz4wecwga6ij:0"
+        ],
+        "evidenceIds": [
+          "cmtfcloj50i45uz4wu1qqnl7j",
+          "cmtfcloj50i46uz4w12x2dqm1",
+          "cmtfcloj50i47uz4wjld0awjc"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfclkrs0hmsuz4w8gr7pj6q",
+          "cmtfclkrz0hmwuz4whlt7cfht",
+          "cmtfclktu0hnwuz4w3ipohgmu"
+        ],
+        "draftId": "cmtfcloko0i4puz4wvcqcsbq3",
+        "sendOutboxId": "cmtfclom10i4vuz4wqza1nvzi",
+        "invocationIds": [
+          "cmtfclnrg0i2yuz4wnhzygktg",
+          "cmtfclohk0i3suz4wejl54yad"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E031",
+      "text": "该商品预售7天内发出。",
+      "tasks": [
+        "SHIPPING_POLICY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [
+        "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+        "不同商品洗护要求不同，请发送商品卡或商品名称后查询。",
+        "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。"
+      ],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 747,
+      "outputTokens": 97,
+      "latencyMs": 1943,
+      "cost": null,
+      "outputSource": "SEND_OUTBOX",
+      "terminalStatus": "SENT",
+      "trace": {
+        "workspaceId": "cmtfclp0r0i56uz4wa4c107iw",
+        "conversationId": "cmtfclpqw0iksuz4wt0v2b72m",
+        "replyJobId": "cmtfclru10ioouz4wxw9gt2l4",
+        "userTurnId": "cmtfclrhf0inkuz4wplkhma46",
+        "taskIds": [
+          "reply-task:cmtfclru10ioouz4wxw9gt2l4:cmtfclru10ioouz4wxw9gt2l4:0"
+        ],
+        "evidenceIds": [
+          "cmtfcltfl0ir3uz4wq5uwjsa8",
+          "cmtfcltfl0ir4uz4wevhv2kxy",
+          "cmtfcltfl0ir5uz4weuhydf2j"
+        ],
+        "knowledgeVersionIds": [
+          "cmtfclp5i0i8auz4wpesad60z",
+          "cmtfclp810i9muz4wx7im27oq",
+          "cmtfclp5r0i8euz4wwq9j6l13"
+        ],
+        "draftId": "cmtfclthd0irnuz4w2crthn8u",
+        "sendOutboxId": "cmtfcltjl0irruz4wtwbepyft",
+        "invocationIds": [
+          "cmtfclsrw0iq0uz4w3t3runwz",
+          "cmtfcltdp0iqquz4w6vt7wkzb"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E032",
+      "text": "您好，根据您300元的预算和静音需求，我们推荐 SilentKey 84 静音键盘，它符合您的预算且主打静音。请问您对这款感兴趣吗？",
+      "tasks": [
+        "PRODUCT_RECOMMENDATION"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 2110,
+      "outputTokens": 206,
+      "latencyMs": 4155,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "WAITING_HUMAN",
+      "trace": {
+        "workspaceId": "cmtfclu0x0it4uz4wafmr1zkt",
+        "conversationId": "cmtfcluqv0j8iuz4w0yt3wx79",
+        "replyJobId": "cmtfclwgz0jbcuz4w6dxt6x05",
+        "userTurnId": "cmtfclwdg0jb4uz4w5kb4q9tn",
+        "taskIds": [
+          "reply-task:cmtfclwgz0jbcuz4w6dxt6x05:cmtfclwgz0jbcuz4w6dxt6x05:0"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfclzza0jhmuz4wtf2rrizi",
+        "invocationIds": [
+          "cmtfclxak0jcouz4w4ksuec7o",
+          "cmtfcly1o0jduuz4w8zbsvtjw",
+          "cmtfclzxq0jheuz4wq9kaoids",
+          "cmtfclyy30jfsuz4w9s61rirh"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E033",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: EXECUTOR_UNSUPPORTED:changeContextBeforeApproval"
+      ]
+    },
+    {
+      "id": "E034",
+      "text": "请问您咨询的是哪笔订单？ 可选：轻薄连帽卫衣（订单 MF-20260826-001）、高腰直筒牛仔裤（订单 MF-20260825-002）。\n请问您咨询的是哪笔订单？ 可选：轻薄连帽卫衣（订单 MF-20260826-001）、高腰直筒牛仔裤（订单 MF-20260825-002）。",
+      "tasks": [
+        "SHIPPING_POLICY",
+        "ORDER_QUERY"
+      ],
+      "mode": "ASSIST",
+      "evidence": [],
+      "provider": "deepseek-openai-chat",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 761,
+      "outputTokens": 111,
+      "latencyMs": 1569,
+      "cost": null,
+      "outputSource": "DRAFT",
+      "terminalStatus": "EXPIRED",
+      "trace": {
+        "workspaceId": "cmtfcm0w20jxmuz4wo567nd16",
+        "conversationId": "cmtfcm1lh0kcwuz4wxjws1glt",
+        "replyJobId": "cmtfcm3gj0kgguz4wl5akn9hp",
+        "userTurnId": "cmtfcm3ad0kg2uz4wbtezs6se",
+        "taskIds": [
+          "reply-task:cmtfcm3gj0kgguz4wl5akn9hp:cmtfcm3gj0kgguz4wl5akn9hp:0",
+          "reply-task:cmtfcm3gj0kgguz4wl5akn9hp:cmtfcm3gj0kgguz4wl5akn9hp:1"
+        ],
+        "evidenceIds": [],
+        "knowledgeVersionIds": [],
+        "draftId": "cmtfcm4rk0kimuz4wpanllcdz",
+        "invocationIds": [
+          "cmtfcm43f0khmuz4wamk5f3o9",
+          "cmtfcm4pm0ki4uz4w25ul0n37"
+        ]
+      },
+      "passed": true,
+      "failureReasons": []
+    },
+    {
+      "id": "E035",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: EXECUTOR_UNSUPPORTED:restartDuring"
+      ]
+    },
+    {
+      "id": "E036",
+      "text": "",
+      "tasks": [],
+      "mode": "NOT_RUN",
+      "evidence": [],
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "latencyMs": 0,
+      "cost": null,
+      "passed": false,
+      "failureReasons": [
+        "EXECUTOR_FAILED: EXECUTOR_UNSUPPORTED:restartDuring"
+      ]
+    }
+  ]
+}
