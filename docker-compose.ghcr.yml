@@ -1,0 +1,8 @@
+services:
+  api:
+    image: ghcr.io/lycmyt/aikefu/api:${AIKEFU_IMAGE_TAG:-v1.0.0-demo}
+    build: null
+
+  web:
+    image: ghcr.io/lycmyt/aikefu/web:${AIKEFU_IMAGE_TAG:-v1.0.0-demo}
+    build: null

@@ -26,6 +26,9 @@
     "ai:eval:production": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/production-reply-eval.cli.js --real-provider",
     "ai:eval:auto:offline": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/production-reply-eval.cli.js --offline-fixture --auto-suite --fail-on-regression",
     "ai:eval:auto": "pnpm --filter @ai-customer-service/api build && dotenv -e .env -- node apps/api/dist/eval/production-reply-eval.cli.js --real-provider --auto-suite --fail-on-regression",
+    "demo:record": "node scripts/record-demo.mjs",
+    "demo:voiceover": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/generate-demo-voiceover.ps1",
+    "demo:build": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-demo-video.ps1",
     "release:archive": "node scripts/create-source-archive.mjs"
   },
   "devDependencies": {

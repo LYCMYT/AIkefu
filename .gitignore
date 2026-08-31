@@ -27,6 +27,10 @@ apps/api/prisma/*.db-journal
 references/
 release-artifacts/
 
+# Generated review/video deliverables stay local or are uploaded as release assets.
+.review-export/
+artifacts/demo/
+
 # Original handoff inventories become stale once development starts.
 checksums.sha256
 package-manifest.json

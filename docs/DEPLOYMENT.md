@@ -32,7 +32,28 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 
 首次构建会安装锁定的 pnpm 依赖、生成 Prisma Client，并构建 React 静态文件。浏览器访问 `http://localhost:8080`；若设置了其他 `WEB_PORT`，使用对应地址。`WEB_ORIGIN` 必须与浏览器实际访问的 scheme、host 和 port 完全一致，例如 `https://demo.example.com`。
 
+### 使用 GHCR 发布镜像
+
+`main` 和 `v*` tag 会由 GitHub Actions 生成 API/Web 镜像。`v1.0.0-demo` 可以通过 Compose override 固定使用同一发布版本，而不在服务器重复构建：
+
+```powershell
+$env:AIKEFU_IMAGE_TAG = 'v1.0.0-demo'
+docker compose --env-file .env.production `
+  -f docker-compose.prod.yml `
+  -f docker-compose.ghcr.yml `
+  pull
+docker compose --env-file .env.production `
+  -f docker-compose.prod.yml `
+  -f docker-compose.ghcr.yml `
+  up -d --wait
+Remove-Item Env:AIKEFU_IMAGE_TAG
+```
+
+镜像路径为 `ghcr.io/lycmyt/aikefu/api` 与 `ghcr.io/lycmyt/aikefu/web`。如果仓库包不是 public，使用仅含 `read:packages` 的最小权限 Token 登录 GHCR；不要把该 Token 写入 `.env.production` 或 Compose 文件。
+
 生产站点应在 Nginx 前终止 TLS（或把 host 端口限制为受信任网络），并将 `WEB_ORIGIN` 改为 HTTPS 公共地址。不要把默认 HTTP 端口直接暴露到不受信任的公网。
+
+公网前置条件、访问限制、DNS/TLS、上线验收与回滚步骤见 [`PUBLIC_DEMO_CHECKLIST.md`](PUBLIC_DEMO_CHECKLIST.md)。GitHub Pages 只能托管静态资源，无法运行本项目的 API、PostgreSQL、Redis、MinIO 和后台 Worker，因此不是完整 Demo 的部署目标。
 
 连接字符串中的 `POSTGRES_PASSWORD`、`REDIS_PASSWORD` 和 `MINIO_ROOT_PASSWORD` 应使用 URL-safe/base64url 随机值（字母、数字、`-`、`_`）；避免未转义的 `@`、`:`、`/`、`?` 或 `#`。可为每个值单独生成一个：
 

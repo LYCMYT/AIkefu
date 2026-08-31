@@ -60,3 +60,18 @@ test('CI has a non-skipped real infrastructure and browser gate', () => {
   assert.match(workflow, /Build workspace libraries for runtime tests[\s\S]*@ai-customer-service\/contracts build[\s\S]*@ai-customer-service\/core build[\s\S]*@ai-customer-service\/mock-douyin build/);
   assert.match(workflow, /playwright install --with-deps chromium/);
 });
+
+test('portfolio release documentation is complete and does not advertise localhost as public', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  const releaseNotes = readFileSync(new URL('../docs/RELEASE_V1.0.0_DEMO.md', import.meta.url), 'utf8');
+  const resumeCopy = readFileSync(new URL('../docs/PORTFOLIO_RESUME_COPY.md', import.meta.url), 'utf8');
+
+  assert.match(readme, /v1\.0\.0-demo/);
+  assert.match(readme, /releases\/download\/v1\.0\.0-demo\/aikefu-3min-demo\.mp4/);
+  assert.doesNotMatch(readme, /public demo[^\n]*https?:\/\/(?:localhost|127\.0\.0\.1)/i);
+  assert.match(releaseNotes, /647 \/ 647/);
+  assert.match(releaseNotes, /61 \/ 61/);
+  assert.match(releaseNotes, /MockDouyin/i);
+  assert.match(resumeCopy, /Evidence/);
+  assert.match(resumeCopy, /SendGuard/);
+});

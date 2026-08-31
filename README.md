@@ -1,13 +1,24 @@
-# 电商 AI 智能客服 Demo｜Phase 05 发布收口
+# AIkefu｜多租户电商 AI 智能客服 Demo
 
-**版本：V1.0（冻结需求）**
+![CI](https://github.com/LYCMYT/AIkefu/actions/workflows/ci.yml/badge.svg?branch=main)
+![Container Images](https://github.com/LYCMYT/AIkefu/actions/workflows/container-images.yml/badge.svg?branch=main)
+
+**版本：[`v1.0.0-demo`](https://github.com/LYCMYT/AIkefu/releases/tag/v1.0.0-demo)｜Mock-only｜Synthetic Data**
+
+**交付基线：Phase 05 完整收口**
 
 **项目形态：Web-first、本地可复验的求职展示 Demo**
 **核心原则：核心状态机、持久化链路和 UI 使用真实实现；外部电商平台仅使用 Mock Adapter。**
 
 本仓库是一个合成数据 Demo，不是已上线的电商客服产品。默认运行不需要真实平台账号或模型密钥；需要真实 PostgreSQL / Redis / MinIO 验收时，必须显式启动 Docker 并打开 opt-in 开关。当前文档不声称在线部署、生产 SLA 或商业 KPI。
 
-## 本轮发布收口（2026-08-30）
+## 三分钟演示
+
+[![观看 AIkefu 三分钟演示](artifacts/showcase/showcase-overview.png)](https://github.com/LYCMYT/AIkefu/releases/download/v1.0.0-demo/aikefu-3min-demo.mp4)
+
+点击上图下载/播放 180 秒中文旁白演示。建议先从 `/showcase` 了解四条主链，再进入工作台、买家模拟器、AI 管理中心和场景实验室。发布说明见 [`docs/RELEASE_V1.0.0_DEMO.md`](docs/RELEASE_V1.0.0_DEMO.md)，简历与面试文案见 [`docs/PORTFOLIO_RESUME_COPY.md`](docs/PORTFOLIO_RESUME_COPY.md)。
+
+## 本轮发布收口（2026-08-31）
 
 本节只记录当前工作区已经落盘并在本地复验的能力；任何“通过”均不等同于公网部署、真实电商平台接入或生产验收。
 
@@ -20,14 +31,13 @@
 
 | 范围 | 当前状态 |
 | --- | --- |
-| API unit | 68 suites / 385 tests 通过 |
-| Web unit | 23 files / 107 tests 通过 |
+| Unit | 647 / 647 通过（Release hygiene、Contracts、Core、Mock、Web、API） |
 | API integration | 14 suites / 61 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
 | Contracts | 6 / 6 通过 |
-| 前端终态 Gate | Playwright 14 项：10 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0 |
+| 前端终态 Gate | Playwright 21 项：17 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0 |
 | Q0 生产回复评测 | 固定集：Offline 36 / 36、DeepSeek 36 / 36（21,463 / 2,540 Token，平均 2,326 ms）；独立 AUTO 集：Offline 10 / 10、DeepSeek 10 / 10（8,675 / 1,143 Token，平均 2,283 ms） |
 | 公网部署 | 未完成；没有把本地服务或容器验收表述为在线 Preview |
-| 3 分钟演示视频 | 未完成；现有演示脚本不是已录制、已验收的视频 |
+| 3 分钟演示视频 | 180 秒、1440×900、H.264 + AAC 中文旁白；作为 `v1.0.0-demo` Release asset 交付 |
 | 真实外部凭据 | DeepSeek Key 仅从仓库外服务端文件读取并已完成真实评测；真实电商平台凭据仍不在 V1 范围，任何 Secret 都不随仓库交付 |
 
 真实基础设施 Gate 已在本机 opt-in 环境通过，但尚未部署到公网。
@@ -48,7 +58,7 @@ flowchart LR
   O[("MinIO")] --- P
 ```
 
-截图基线由连接真实本地服务的 Playwright 流程生成。当前 1440×900 终态证据包括 [空店首页](artifacts/ui/final/empty-home.png)、[店铺概览](artifacts/ui/final/shop-overview.png)、[店铺聊天](artifacts/ui/final/shop-chat.png)、[基础设置](artifacts/ui/final/shop-settings.png)、[知识导入](artifacts/ui/final/knowledge-import.png)、[AI 管理中心](artifacts/ui/final/admin.png)、[Workflow](artifacts/ui/final/workflow.png)、[Buyer Simulator](artifacts/ui/final/buyer-simulator.png)、[实时联调](artifacts/ui/final/live-test.png) 与 [Scenario Lab](artifacts/ui/final/scenario-lab.png)。Workflow 图保持真实运营 Workspace 的空态，没有为截图制造工作流数据。在线 Demo 与演示视频尚无公网托管地址，不使用本地链接冒充公开 Preview。
+截图基线由连接真实本地服务的 Playwright 流程生成。当前 1440×900 终态证据包括 [空店首页](artifacts/ui/final/empty-home.png)、[店铺概览](artifacts/ui/final/shop-overview.png)、[店铺聊天](artifacts/ui/final/shop-chat.png)、[基础设置](artifacts/ui/final/shop-settings.png)、[知识导入](artifacts/ui/final/knowledge-import.png)、[AI 管理中心](artifacts/ui/final/admin.png)、[Workflow](artifacts/ui/final/workflow.png)、[Buyer Simulator](artifacts/ui/final/buyer-simulator.png)、[实时联调](artifacts/ui/final/live-test.png) 与 [Scenario Lab](artifacts/ui/final/scenario-lab.png)。Workflow 图保持真实运营 Workspace 的空态，没有为截图制造工作流数据。在线 Demo 尚无公网托管地址，不使用本地链接冒充公开 Preview；演示视频通过 GitHub Release 资产交付。
 
 ## 展示范围
 
@@ -199,9 +209,9 @@ Remove-Item Env:E2E_BASE_URL
 
 OpenAPI 与 WebSocket JSON schema 的引用、数组 items、discriminator 和 Phase05 DTO 由 Web contract tests 检查；它们不等同于在线部署或 E2E 全量验收。
 
-## 3 分钟演示
+## 演示复现
 
-仓库已提供 `/showcase` 引导页、四个可重复场景、真实运行截图和证据清单；尚未交付或验收最终 3 分钟录制视频，不能把脚本或截图表述为已录制视频。
+仓库提供 `/showcase` 引导页、四个可重复场景、真实运行截图、证据清单和可复现录制脚本；最终视频通过 `v1.0.0-demo` Release asset 发布，生成文件不进入 Git 源码历史。
 
 人工演示顺序、输入文本、预期状态和每一步的验证边界见 [`docs/18_DEMO_SCRIPT.md`](docs/18_DEMO_SCRIPT.md)。演示前至少执行：
 
