@@ -17,6 +17,7 @@ import type {
 } from '../workspaces/workspace.repository';
 
 type Transaction = Prisma.TransactionClient;
+const SEED_TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 30_000 } as const;
 
 @Injectable()
 export class PrismaWorkspaceRepository implements WorkspaceRepository {
@@ -49,7 +50,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
         workspace: this.workspaceView(workspace),
         tenant: { id: tenant.id, workspaceId: tenant.workspaceId, name: tenant.name },
       };
-    });
+    }, SEED_TRANSACTION_OPTIONS);
   }
 
   async authenticateAndTouch(
@@ -86,7 +87,7 @@ export class PrismaWorkspaceRepository implements WorkspaceRepository {
       await transaction.buyer.deleteMany({ where: normalizedScope });
       if (profile === 'SEEDED') await this.seedScope(transaction, normalizedScope, seed);
       return this.seedCounts(transaction, normalizedScope);
-    });
+    }, SEED_TRANSACTION_OPTIONS);
   }
 
   async getBootstrap(scope: WorkspaceScope): Promise<BootstrapView | null> {

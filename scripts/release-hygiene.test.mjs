@@ -63,15 +63,61 @@ test('CI has a non-skipped real infrastructure and browser gate', () => {
 
 test('portfolio release documentation is complete and does not advertise localhost as public', () => {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  const releaseNotes = readFileSync(new URL('../docs/RELEASE_V1.0.0_DEMO.md', import.meta.url), 'utf8');
+  const historicalReleaseNotes = readFileSync(new URL('../docs/RELEASE_V1.0.0_DEMO.md', import.meta.url), 'utf8');
+  const releaseNotes = readFileSync(new URL('../docs/RELEASE_V1.1.0_DEMO.md', import.meta.url), 'utf8');
   const resumeCopy = readFileSync(new URL('../docs/PORTFOLIO_RESUME_COPY.md', import.meta.url), 'utf8');
+  const publicDemoChecklist = readFileSync(new URL('../docs/PUBLIC_DEMO_CHECKLIST.md', import.meta.url), 'utf8');
+  const showcaseEvidence = readFileSync(new URL('../artifacts/showcase/SHOWCASE_EVIDENCE.md', import.meta.url), 'utf8');
+  const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
-  assert.match(readme, /v1\.0\.0-demo/);
-  assert.match(readme, /releases\/download\/v1\.0\.0-demo\/aikefu-3min-demo\.mp4/);
+  const unitCount = (content, label) => {
+    const match = content.match(/(\d+)\s*\/\s*\1[^\n]*(?:单元测试|Unit)|(?:单元测试|Unit)[^\n]*(\d+)\s*\/\s*\2/i);
+    assert.ok(match, `${label} must contain a passing Unit count`);
+    return Number(match[1] ?? match[2]);
+  };
+
+  assert.match(historicalReleaseNotes, /^# AIkefu v1\.0\.0-demo/m);
+  assert.match(historicalReleaseNotes, /647 \/ 647/);
+  assert.match(releaseNotes, /^# AIkefu v1\.1\.0-demo$/m);
+  assert.match(readme, /releases\/tag\/v1\.1\.0-demo/);
+  assert.match(readme, /releases\/download\/v1\.1\.0-demo\/aikefu-3min-demo\.mp4/);
+  for (const [label, content] of [['release notes', releaseNotes], ['README', readme], ['resume copy', resumeCopy], ['public checklist', publicDemoChecklist], ['showcase evidence', showcaseEvidence]]) {
+    assert.match(content, /v1\.1\.0-demo/, `${label} must identify the v1.1 release`);
+    assert.doesNotMatch(content, /本地候选|尚未发布|未发布/, `${label} must use formal release wording`);
+  }
   assert.doesNotMatch(readme, /public demo[^\n]*https?:\/\/(?:localhost|127\.0\.0\.1)/i);
-  assert.match(releaseNotes, /647 \/ 647/);
-  assert.match(releaseNotes, /61 \/ 61/);
+  const unitCounts = [unitCount(readme, 'README'), unitCount(releaseNotes, 'release notes'), unitCount(resumeCopy, 'resume copy')];
+  assert.ok(unitCounts.every((count) => count === unitCounts[0]), 'Unit count must stay aligned across release documents');
+  assert.deepEqual(unitCounts, [693, 693, 693]);
+  assert.match(releaseNotes, /63 \/ 63/);
+  assert.match(resumeCopy, /63 \/ 63/);
+  assert.match(releaseNotes, /25 项录制时间线/);
+  assert.match(releaseNotes, /27 (?:个|项)唯一/);
+  assert.match(releaseNotes, /真实环境[^\n]*23 passed[^\n]*4 skipped[^\n]*0 failed/);
+  assert.match(releaseNotes, /离线(?:模式|环境)[^\n]*6 passed[^\n]*21 skipped[^\n]*0 failed/);
+  assert.match(releaseNotes, /1920×1080/);
+  assert.match(releaseNotes, /30\s*fps/i);
+  assert.match(releaseNotes, /zh-CN-XiaoxiaoNeural/);
+  assert.match(releaseNotes, /\+50%/);
+  assert.match(releaseNotes, /26 (?:条|个|项)[^\n]*(?:cue|字幕)/i);
+  assert.match(releaseNotes, /硬字幕[^\n]*外部 SRT[^\n]*(?:无软字幕轨|不含软字幕轨)/i);
+  assert.match(releaseNotes, /13,831,390 bytes/);
+  assert.match(releaseNotes, /E64D832B7C67896424C13FAE785837545B89005BD172E500373CDD4E3564435C/i);
+  assert.match(releaseNotes, /SC01[–-]SC06/);
+  assert.match(publicDemoChecklist, /releases\/tag\/v1\.1\.0-demo/);
+  assert.match(showcaseEvidence, /releases\/download\/v1\.1\.0-demo\/aikefu-3min-demo\.mp4/);
+  assert.match(releaseNotes, /actions[^\n]*(?:核验|状态)/i);
+  assert.doesNotMatch(releaseNotes, /GitHub Actions[^\n]*(?:全部通过|均通过|成功)/i);
+  assert.doesNotMatch(releaseNotes, /GHCR[^\n]*(?:已发布|成功)/i);
   assert.match(releaseNotes, /MockDouyin/i);
   assert.match(resumeCopy, /Evidence/);
   assert.match(resumeCopy, /SendGuard/);
+
+  assert.equal(packageJson.scripts['legacy:demo:record'], 'node scripts/record-demo.mjs');
+  assert.equal(packageJson.scripts['legacy:demo:voiceover'], 'pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/generate-demo-voiceover.ps1');
+  assert.equal(packageJson.scripts['legacy:demo:build'], 'pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-demo-video.ps1');
+  assert.equal(packageJson.scripts['demo:record'], 'pnpm showcase:record');
+  assert.equal(packageJson.scripts['demo:voiceover'], 'pnpm showcase:voice');
+  assert.equal(packageJson.scripts['demo:build'], 'pnpm showcase:build');
+  assert.equal(packageJson.scripts['showcase:video'], 'pnpm showcase:record && pnpm showcase:build');
 });

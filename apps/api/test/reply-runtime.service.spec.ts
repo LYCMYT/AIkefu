@@ -49,6 +49,31 @@ describe('ReplyRuntimeService', () => {
   });
   const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' };
 
+  it('keeps the conversation product for a pronoun-only follow-up after checking current-turn text', async () => {
+    const repository = {
+      product: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'product-other-1', title: '柔软针织开衫' },
+          { id: 'product-other-2', title: '轻羽绒服' },
+          { id: 'product-other-3', title: '牛仔裤' },
+        ]),
+        findFirst: jest.fn().mockResolvedValue({ id: 'product-current', title: '轻薄连帽卫衣' }),
+      },
+    };
+    const service = new ReplyRuntimeService({} as never, {} as never, {} as never, {} as never, {} as never);
+
+    await expect((service as never as { contextCandidates: Function }).contextCandidates(
+      repository,
+      scope,
+      'buyer-a',
+      'PRODUCT',
+      { preferredId: 'product-current', text: '那白色呢？' },
+    )).resolves.toEqual([{ id: 'product-current', kind: 'PRODUCT', label: '轻薄连帽卫衣' }]);
+    expect(repository.product.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'product-current', ...scope },
+    }));
+  });
+
   it('treats a draft persistence race with a newly stale job as an idempotent stale result', async () => {
     const prisma = {
       replyJob: {
@@ -125,11 +150,30 @@ describe('ReplyRuntimeService', () => {
     };
     const drafts = { createWaitingHuman: jest.fn().mockResolvedValue({ id: 'draft-a', status: 'WAITING_HUMAN' }) };
     const outboxes = { enqueue: jest.fn() };
-    const service = new ReplyRuntimeService(prisma as never, knowledge as never, runtime as never, drafts as never, outboxes as never);
+    const traces = { record: jest.fn().mockResolvedValue({}) };
+    const service = new ReplyRuntimeService(
+      prisma as never,
+      knowledge as never,
+      runtime as never,
+      drafts as never,
+      outboxes as never,
+      undefined,
+      undefined,
+      traces as never,
+    );
 
     await expect(service.process(scope, 'reply-a')).resolves.toMatchObject({ status: 'WAITING_HUMAN', draftId: 'draft-a' });
+    await Promise.resolve();
 
     expect(knowledge.search).toHaveBeenCalledWith(scope, { shopId: 'shop-a', query: '请结合之前的对话说明新疆发货安排。', scope: 'STORE', topK: 3 });
+    expect(traces.record).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conversation-a', replyJobId: 'reply-a' }),
+      'reply-job:reply-a',
+      'EVIDENCE',
+      expect.objectContaining({
+        evidenceRefs: [{ itemId: 'knowledge-a', versionId: 'version-a', scope: 'STORE', productId: null }],
+      }),
+    );
     expect(prisma.replyEvidence.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
       workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', replyJobId: 'reply-a',
       knowledgeItemId: 'knowledge-a', knowledgeVersionId: 'version-a',

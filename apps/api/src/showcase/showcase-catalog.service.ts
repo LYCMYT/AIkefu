@@ -54,7 +54,7 @@ export class ShowcaseCatalogService {
 }
 
 function validateScenarios(value: unknown): ShowcaseScenario[] {
-  if (!Array.isArray(value) || value.length !== 4) throw new Error('SHOWCASE_SCENARIO_COUNT_INVALID');
+  if (!Array.isArray(value) || value.length !== 6) throw new Error('SHOWCASE_SCENARIO_COUNT_INVALID');
   const ids = new Set<string>();
   return value.map((entry, index) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('SHOWCASE_SCENARIO_INVALID');

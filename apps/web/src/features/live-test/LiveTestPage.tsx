@@ -6,6 +6,7 @@ import {
   Circle,
   Clock3,
   Edit3,
+  ImageIcon,
   MessageSquareText,
   Monitor,
   Package,
@@ -161,20 +162,50 @@ function messageRole(message: Message): string {
   return 'AI客服';
 }
 
-function MessageCard({ message, compact = false }: { message: Message; compact?: boolean }) {
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function messageContent(message: Message): Record<string, unknown> {
+  return objectValue(message.content) ?? objectValue(message.contentJson) ?? {};
+}
+
+export function MessageCard({ message, compact = false }: { message: Message; compact?: boolean }) {
   const removed = !isVisibleMessage(message);
   const isBuyer = message.role === 'BUYER';
   const product = message.product;
   const order = message.order;
+  const content = messageContent(message);
+  const analysis = objectValue(content.analysis);
+  const observation = Array.isArray(analysis?.observations)
+    ? analysis.observations.map(stringValue).find(Boolean)
+    : undefined;
+  const productCardTitle = product
+    ? productLabel(product)
+    : stringValue(content.title) ?? stringValue(content.externalProductId) ?? '商品卡片';
+  const productCardDetail = product ? productPrice(product) : '商品上下文已同步';
+  const orderCardTitle = order
+    ? orderLabel(order)
+    : stringValue(content.externalOrderId) ?? stringValue(content.orderId) ?? '订单卡片';
+  const orderCardStatus = order?.status ?? stringValue(content.status) ?? '订单上下文已同步';
+  const imageTitle = analysis?.scene === 'PRODUCT_DAMAGE' ? '商品破损图片' : '图片消息';
+  const imageDetail = observation
+    ?? (content.analysisStatus === 'READY' ? '图片分析已完成' : '图片已上传，等待分析');
 
   return (
     <article className={`live-message ${isBuyer ? 'is-buyer' : 'is-store'} ${message.role === 'SYSTEM' ? 'is-system' : ''} ${compact ? 'is-compact' : ''}`}>
       <div className="live-message-meta"><span>{messageRole(message)}</span><time>{readableTime(message.sentAt ?? message.createdAt)}</time>{message.status === 'EDITED' && <em>已编辑</em>}</div>
       <div className={`live-message-bubble ${removed ? 'is-removed' : ''}`}>
         {removed ? '此消息已从演示会话隐藏，审计记录仍保留。' : message.kind === 'GOODS_CARD' || message.kind === 'PRODUCT_CARD' ? (
-          <div className="live-card-message"><Package aria-hidden="true" size={20} /><div><strong>{productLabel(product)}</strong><span>{productPrice(product)}</span></div></div>
+          <div className="live-card-message"><Package aria-hidden="true" size={20} /><div><strong>{productCardTitle}</strong><span>{productCardDetail}</span></div></div>
         ) : message.kind === 'ORDER_CARD' ? (
-          <div className="live-card-message"><ReceiptText aria-hidden="true" size={20} /><div><strong>{orderLabel(order)}</strong><span>{order?.status ?? '订单状态待同步'}</span></div></div>
+          <div className="live-card-message"><ReceiptText aria-hidden="true" size={20} /><div><strong>{orderCardTitle}</strong><span>{orderCardStatus}</span></div></div>
+        ) : message.kind === 'IMAGE' ? (
+          <div className="live-card-message"><ImageIcon aria-hidden="true" size={20} /><div><strong>{imageTitle}</strong><span>{imageDetail}</span></div></div>
         ) : messageText(message) || '（空消息）'}
       </div>
     </article>

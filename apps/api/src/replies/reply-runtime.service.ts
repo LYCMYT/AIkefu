@@ -208,6 +208,12 @@ export class ReplyRuntimeService {
       void this.recordTrace(scope, job, 'EVIDENCE', {
         evidenceCount: evidence.length,
         knowledgeVersionIds: evidence.map((entry) => entry.versionId),
+        evidenceRefs: evidence.map((entry) => ({
+          itemId: entry.itemId,
+          versionId: entry.versionId,
+          scope: entry.scope,
+          productId: entry.productId,
+        })),
         conflicted: lookup.hasConflict,
         tasks: [...lookup.byTaskId.entries()].map(([taskId, entries]) => ({ taskId, knowledgeVersionIds: entries.map((entry) => entry.versionId) })),
       });
@@ -757,8 +763,17 @@ export class ReplyRuntimeService {
       }
       const rows = await repository.product.findMany({ where: { ...scope, ...(exactId ? { id: exactId } : {}) }, orderBy: { updatedAt: 'desc' }, take: exactId ? 1 : 25, select: { id: true, title: true } });
       const textMatches = explicitProductMatches(rows, options.text);
-      const selected = textMatches.length ? textMatches : rows.slice(0, 3);
-      return selected.map((row) => ({ id: row.id, kind, label: row.title }));
+      if (textMatches.length) return textMatches.map((row) => ({ id: row.id, kind, label: row.title }));
+      // Pronoun-only follow-ups such as “那白色呢” refer to the conversation's
+      // selected product.  An explicit product phrase above still wins, so a
+      // buyer can switch products without being pinned to stale context.
+      if (options.preferredId && repository.product.findFirst) {
+        const row = await repository.product.findFirst({
+          where: { id: options.preferredId, ...scope }, select: { id: true, title: true },
+        });
+        return row ? [{ id: row.id, kind, label: row.title }] : [];
+      }
+      return rows.slice(0, 3).map((row) => ({ id: row.id, kind, label: row.title }));
     }
     return [];
   }

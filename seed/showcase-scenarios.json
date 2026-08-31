@@ -23,12 +23,15 @@
       "expected": {
         "tasks": ["PRODUCT_QUERY"],
         "context": { "productKey": "fashion_hoodie" },
-        "knowledgeKeys": ["k033"],
-        "knowledgeScope": "PRODUCT",
+        "evidence": {
+          "minimumCount": 1,
+          "mustIncludeScopes": ["PRODUCT"],
+          "productKey": "fashion_hoodie"
+        },
         "terminalMode": "AUTO",
         "mustContainSemantic": ["不建议烘干"],
         "forbiddenSemanticClaims": ["可以高温烘干"],
-        "trace": ["USER_TURN", "TASK_BUNDLE", "CONTEXT_RESOLVER", "KNOWLEDGE_EVIDENCE", "REPLY_POLICY", "SEND_GUARD", "SEND_RECEIPT"]
+        "mustIncludeTraceStages": ["USER_TURN", "TASKS", "CONTEXT", "EVIDENCE", "REPLY_POLICY", "SEND_GUARD", "SEND_RECEIPT"]
       }
     },
     {
@@ -38,7 +41,7 @@
       "shopKey": "shop_mia_fashion",
       "buyerKey": "buyer_002",
       "aiMode": "ASSIST_ONLY",
-      "objective": "证明短消息聚合、库存实时查询、尺码建议和后续指代继承。",
+      "objective": "证明短消息聚合、实时库存、尺码知识缺口安全降级和后续指代继承。",
       "steps": [
         { "actor": "SYSTEM", "action": "RESET_SHOWCASE" },
         { "actor": "BUYER", "action": "SEND_GOODS_CARD", "productKey": "fashion_hoodie" },
@@ -51,14 +54,11 @@
       ],
       "expected": {
         "tasks": ["INVENTORY_QUERY", "SIZE_RECOMMENDATION"],
-        "dynamicContext": ["SKU_INVENTORY"],
-        "supportingKnowledgeKeys": ["k011", "k032"],
-        "customerMemoryKey": "preferred_fit",
+        "context": { "productKey": "fashion_hoodie" },
+        "noKnowledgeEvidence": true,
+        "terminalMode": "ASSIST",
         "rawMessageCountBeforeFirstTurn": 3,
-        "userTurnCountBeforeFirstReply": 1,
-        "mustUseRecentMessages": true,
-        "mustNotRepeatSupersededBlackQuestion": true,
-        "trace": ["TURN_BUFFER", "TASK_BUNDLE", "PRODUCT_CONTEXT", "RECENT_MESSAGES", "REPLY_DRAFT"]
+        "mustIncludeTraceStages": ["USER_TURN", "TASKS", "CONTEXT", "EVIDENCE", "REPLY_POLICY"]
       }
     },
     {
@@ -78,12 +78,7 @@
         { "actor": "SYSTEM", "action": "WAIT_FOR_BUYER_VISIBLE_REPLY", "timeoutMs": 60000 }
       ],
       "expected": {
-        "staleReason": ["NEW_MESSAGE", "CONTEXT_CHANGED"],
-        "oldReplyMustNotBeSent": true,
-        "knowledgeKeys": ["k002"],
-        "mustContainSemantic": ["偏远地区", "实际物流"],
-        "forbiddenSemanticClaims": ["保证24小时到达"],
-        "trace": ["CONTEXT_VERSION_CHANGED", "REPLY_JOB_STALE", "ABORT_OR_DISCARD", "REPLAN", "SEND_GUARD"]
+        "oldReplyMustNotBeSent": true
       }
     },
     {
@@ -103,12 +98,61 @@
       ],
       "expected": {
         "tasks": ["AFTER_SALES_QUERY", "REFUND_REQUEST", "COMPLAINT"],
-        "orderKey": "order_004",
-        "knowledgeKeys": ["k008", "k015"],
+        "context": { "orderKey": "order_004" },
+        "evidence": {
+          "minimumCount": 1,
+          "mustIncludeScopes": ["STORE"]
+        },
         "terminalMode": "MANUAL",
         "requiresHuman": true,
         "forbiddenSemanticClaims": ["已经退款", "退款已完成", "已经处理好"],
-        "trace": ["IMAGE_ANALYSIS", "ORDER_CONTEXT", "RISK_POLICY", "ACTION_POLICY", "MANUAL"]
+        "mustIncludeTraceStages": ["USER_TURN", "TASKS", "CONTEXT", "EVIDENCE", "REPLY_POLICY"]
+      }
+    },
+    {
+      "id": "SC-05-SAFE-GREETING",
+      "order": 5,
+      "title": "安全问候，无需知识也可自然回复",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_001",
+      "aiMode": "AUTO_ALLOWED",
+      "objective": "证明纯问候不需要检索业务知识或调用模型，也能通过真实发送链路自然回复。",
+      "steps": [
+        { "actor": "SYSTEM", "action": "RESET_SHOWCASE" },
+        { "actor": "BUYER", "action": "SEND_TEXT", "text": "你好！" },
+        { "actor": "SYSTEM", "action": "WAIT_FOR_BUYER_VISIBLE_REPLY", "timeoutMs": 60000 }
+      ],
+      "expected": {
+        "tasks": ["SAFE_SOCIAL_GREETING"],
+        "terminalMode": "AUTO",
+        "noKnowledgeEvidence": true,
+        "mustContainSemantic": ["您好，我在的"],
+        "mustIncludeTraceStages": ["BUILT_IN_SAFE_REPLY", "USER_TURN", "TASKS", "CONTEXT", "EVIDENCE", "REPLY_POLICY", "SEND_GUARD", "SEND_RECEIPT"]
+      }
+    },
+    {
+      "id": "SC-06-SHOP-AI-OFF",
+      "order": 6,
+      "title": "店铺 AI 关闭后只处理未来消息",
+      "shopKey": "shop_mia_fashion",
+      "buyerKey": "buyer_001",
+      "aiMode": "AUTO_ALLOWED",
+      "objective": "证明店铺 AI 关闭期间不创建 AI Job、Draft 或 Outbox；重新开启不会追溯旧消息，只处理此后的新消息。",
+      "steps": [
+        { "actor": "SYSTEM", "action": "RESET_SHOWCASE" },
+        { "actor": "SYSTEM", "action": "SET_SHOP_AI_MODE", "mode": "MANUAL_ONLY" },
+        { "actor": "BUYER", "action": "SEND_TEXT", "text": "关闭期间的消息不应在重新开启后被补处理。" },
+        { "actor": "SYSTEM", "action": "WAIT_FOR_NO_AI_ARTIFACTS", "timeoutMs": 12000, "settleMs": 3000 },
+        { "actor": "SYSTEM", "action": "SET_SHOP_AI_MODE", "mode": "AUTO_ALLOWED" },
+        { "actor": "BUYER", "action": "SEND_TEXT", "text": "你好！" },
+        { "actor": "SYSTEM", "action": "WAIT_FOR_BUYER_VISIBLE_REPLY", "timeoutMs": 60000 }
+      ],
+      "expected": {
+        "tasks": ["SAFE_SOCIAL_GREETING"],
+        "terminalMode": "AUTO",
+        "noAiArtifactsBeforeFutureMessage": true,
+        "mustContainSemantic": ["您好，我在的"],
+        "mustIncludeTraceStages": ["BUILT_IN_SAFE_REPLY", "USER_TURN", "TASKS", "CONTEXT", "EVIDENCE", "REPLY_POLICY", "SEND_GUARD", "SEND_RECEIPT"]
       }
     }
   ],

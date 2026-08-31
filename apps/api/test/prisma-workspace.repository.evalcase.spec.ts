@@ -4,6 +4,20 @@ import { SeedCatalog } from '../src/seed/seed-catalog';
 const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a' };
 
 describe('PrismaWorkspaceRepository frozen EvalCase seeding', () => {
+  it('gives deterministic workspace seeding enough transaction time for the fixed eval catalog', async () => {
+    const now = new Date('2026-08-31T00:00:00.000Z');
+    const tx = {
+      workspace: { create: jest.fn().mockResolvedValue({ id: 'workspace-a', status: 'ACTIVE', lastAccessedAt: now, expiresAt: now, createdAt: now }) },
+      tenant: { create: jest.fn().mockResolvedValue({ id: 'tenant-a', workspaceId: 'workspace-a', name: 'Anonymous Demo Tenant' }) },
+    };
+    const transaction = jest.fn(async (work: Function) => work(tx));
+    const repository = new PrismaWorkspaceRepository({ $transaction: transaction } as never);
+
+    await repository.createWithSeed({ tokenHash: 'hash-a', now, expiresAt: now, seed: {} as never, profile: 'EMPTY' });
+
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), { maxWait: 10_000, timeout: 30_000 });
+  });
+
   it('uses actual frozen shop keys and is idempotent across two production seedScope passes', async () => {
     const evalUpsert = jest.fn().mockResolvedValue({ id: 'eval-a' });
     const tx = {

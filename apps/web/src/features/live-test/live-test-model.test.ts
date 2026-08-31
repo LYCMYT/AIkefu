@@ -63,6 +63,25 @@ describe('Live Test projection model', () => {
     expect(stages[4]?.description).toContain('UNCERTAIN');
   });
 
+  it('marks AI processing complete when the final reply and SENT receipt are already visible', () => {
+    const response: Message = {
+      id: 'message-reply', conversationId: 'conversation-a', role: 'ASSISTANT', kind: 'TEXT', status: 'ACTIVE',
+      text: '不建议使用烘干机。', sequence: 2, sentAt: '2026-08-29T08:00:02.000Z',
+    };
+    const conversation: Conversation = {
+      id: 'conversation-a',
+      sendOutbox: {
+        id: 'outbox-a', replyJobId: 'job-a', idempotencyKey: 'reply-a',
+        expectedLastMessageId: 'message-buyer', expectedSequence: 1, status: 'SENT',
+      },
+    };
+
+    const stages = derivePipelineStages(conversation, [buyerMessage, response]);
+
+    expect(stages.map((stage) => stage.state)).toEqual(['done', 'done', 'done', 'done', 'done']);
+    expect(stages[2]?.description).toBe('本轮回复已完成');
+  });
+
   it('never mixes an old job or outbox into a newer buyer turn', () => {
     const latestBuyer = { ...buyerMessage, id: 'message-new', sequence: 4, text: '这一轮是新问题' };
     const conversation: Conversation = {

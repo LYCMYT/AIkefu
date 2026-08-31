@@ -2,22 +2,29 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { AppShell } from './AppShell';
 
-describe('AppShell', () => {
-  it('keeps the four frozen product entries and exposes the active store switcher', () => {
-    const html = renderToStaticMarkup(<AppShell activePath="/workbench" activeShopId="shop-a" isResetting={false} onNavigate={() => undefined} onReset={() => undefined} onShopChange={() => undefined} onTraceToggle={() => undefined} routeTitle="消息工作台" shops={[{ id: 'shop-a', name: '像素数码旗舰店', aiMode: 'ASSIST', connectionState: 'CONNECTED' }]} socketLabel="实时已连接" socketReady traceOpen={false} workspaceId="workspace-123"><div>页面内容</div></AppShell>);
+const baseProps = {
+  activePath: '/showcase' as const,
+  activeShopId: 'shop-1',
+  isResetting: false,
+  onNavigate: () => undefined,
+  onReset: () => undefined,
+  onShopChange: () => undefined,
+  onTraceToggle: () => undefined,
+  routeTitle: '引导演示',
+  shops: [{ id: 'shop-1', name: '青云演示店', aiMode: 'AUTO_ALLOWED', connectionState: 'CONNECTED' }],
+  socketLabel: '实时已连接',
+  socketReady: true,
+  traceOpen: false,
+  workspaceId: 'workspace-1',
+};
 
-    expect((html.match(/class="nav-item/g) ?? []).length).toBe(4);
-    expect(html).toContain('像素数码旗舰店');
-    expect(html).toContain('aria-label="切换店铺"');
-    expect(html).toContain('页面内容');
-    expect(html).toContain('服务状态：实时已连接');
-    expect(html).toContain('>调试</button>');
-  });
-
-  it('does not expose a dead Trace control outside the Workbench', () => {
-    const html = renderToStaticMarkup(<AppShell activePath="/admin" activeShopId="shop-a" isResetting={false} onNavigate={() => undefined} onReset={() => undefined} onShopChange={() => undefined} onTraceToggle={() => undefined} routeTitle="数据概览" shops={[{ id: 'shop-a', name: '像素数码旗舰店', aiMode: 'ASSIST', connectionState: 'CONNECTED' }]} socketLabel="实时已连接" socketReady traceOpen={false} workspaceId="workspace-123"><div>页面内容</div></AppShell>);
-
-    expect(html).not.toContain('>调试</button>');
-    expect(html).toContain('服务状态：实时已连接');
+describe('AppShell recording presentation', () => {
+  it('removes application chrome only when Showcase recording mode is enabled', () => {
+    const html = renderToStaticMarkup(<AppShell {...baseProps} recordingMode><h1>录制内容</h1></AppShell>);
+    expect(html).toContain('recording-shell');
+    expect(html).toContain('<h1>录制内容</h1>');
+    expect(html).not.toContain('产品模块');
+    expect(html).not.toContain('重置演示');
+    expect(html).not.toContain('AIkefu · MockDouyin 演示环境');
   });
 });

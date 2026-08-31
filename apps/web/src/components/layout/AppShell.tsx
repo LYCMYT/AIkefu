@@ -18,6 +18,7 @@ export interface AppShellProps {
   onNavigate: (path: AppPath) => void; onReset: () => void; onShopChange: (shopId: string) => void;
   onTraceToggle: () => void; routeTitle: string; shops: ShellShop[]; socketLabel: string;
   socketReady: boolean; traceOpen: boolean; workspaceId?: string;
+  recordingMode?: boolean;
 }
 
 function Brand({ dark = false, onNavigate }: { dark?: boolean; onNavigate: (path: AppPath) => void }) {
@@ -40,6 +41,7 @@ function TopActions(props: AppShellProps & { showTrace: boolean }) {
 
 export function AppShell(props: AppShellProps) {
   const { activePath, children, onNavigate, routeTitle, socketLabel, socketReady, workspaceId } = props;
+  if (props.recordingMode) return <main className="recording-shell">{children}</main>;
   const isAdmin = activePath.startsWith('/admin');
   const isWorkbench = activePath.startsWith('/workbench');
   if (isAdmin) return <main className="app-shell admin-shell"><aside aria-label="AI管理中心导航" className="sidebar admin-sidebar"><Brand onNavigate={onNavigate} /><div className="workspace-switcher"><span className="workspace-avatar">W</span><div><small>演示 Workspace</small><strong>{shortId(workspaceId)}</strong></div></div><nav className="admin-navigation">{adminGroups.map((group) => <section key={group.label}><span>{group.label}</span>{group.items.map(({ path, label, icon: Icon }) => { const selected = path === '/admin' ? activePath === '/admin' : activePath.startsWith(path); return <a aria-current={selected ? 'page' : undefined} className={selected ? 'is-active' : ''} href={path} key={path} onClick={(event) => { event.preventDefault(); onNavigate(path); }}><Icon aria-hidden="true" size={17} />{label}</a>; })}</section>)}</nav><button className="admin-return-workbench" onClick={() => onNavigate('/workbench')} type="button"><MessageSquareText size={17} />返回工作台</button><div className="sidebar-footer"><Activity aria-hidden="true" size={15} /><span className={`status-dot ${socketReady ? 'is-ready' : ''}`} /><span>{socketLabel}</span><small>MockDouyin</small></div></aside><section className="content admin-content"><header className="topbar admin-topbar"><div className="topbar-title"><div className="breadcrumb"><span>AI管理中心</span><i>/</i><span>{routeTitle}</span></div><h1>{routeTitle}</h1></div><TopActions {...props} showTrace={false} /></header>{children}<footer className="page-footer"><span>AIkefu AI管理中心</span><span>真实 Workspace 数据 · {socketLabel}</span></footer></section></main>;

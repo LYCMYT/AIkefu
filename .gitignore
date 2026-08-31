@@ -30,6 +30,7 @@ release-artifacts/
 # Generated review/video deliverables stay local or are uploaded as release assets.
 .review-export/
 artifacts/demo/
+artifacts/recording/
 
 # Original handoff inventories become stale once development starts.
 checksums.sha256

@@ -1,6 +1,6 @@
 # AIkefu 公网 Demo 上线检查表
 
-本清单适用于 `v1.0.0-demo` 的 Mock-only 求职展示。它不会把 GitHub Pages 描述为全栈部署，也不会把本地验证冒充公网可用性。需要的最低资源是一台可以运行 Docker Compose 的 Linux 主机、一个域名和 HTTPS 证书。
+本清单适用于 [`v1.1.0-demo`](https://github.com/LYCMYT/AIkefu/releases/tag/v1.1.0-demo) 的 Mock-only、Synthetic Data 求职展示。Release 视频不是公网全栈地址；GitHub Pages 也不能运行本项目后端。真正公开部署仍至少需要一台可以运行 Docker Compose 的 Linux 主机、一个域名和 HTTPS 证书。
 
 ## 1. 上线前必须决定
 
@@ -24,17 +24,22 @@
 
 ### 方式 A：服务器从源码构建
 
+先从 [`v1.1.0-demo` Release 页面](https://github.com/LYCMYT/AIkefu/releases/tag/v1.1.0-demo)核验 Tag，再执行：
+
 ```bash
 git clone https://github.com/LYCMYT/AIkefu.git
 cd AIkefu
-git checkout v1.0.0-demo
+git fetch --tags
+git checkout v1.1.0-demo
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build --wait
 ```
 
 ### 方式 B：使用 GitHub Container Registry 镜像
 
+镜像是否存在、是否公开及 digest 必须从对应 [GitHub Actions](https://github.com/LYCMYT/AIkefu/actions) 和 Packages 页面核验；Release 文档不等同于 GHCR 发布成功证明。
+
 ```bash
-export AIKEFU_IMAGE_TAG=v1.0.0-demo
+export AIKEFU_IMAGE_TAG=v1.1.0-demo
 docker compose --env-file .env.production \
   -f docker-compose.prod.yml \
   -f docker-compose.ghcr.yml \
@@ -63,7 +68,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail
 curl -fsS https://demo.example.com/healthz
 ```
 
-- [ ] `/showcase` 能创建隔离 Showcase Workspace 并运行四个场景。
+- [ ] `/showcase` 能创建隔离 Showcase Workspace 并运行六个场景。
 - [ ] `/workbench`、`/buyer-simulator`、`/admin`、`/scenario-lab` 均可访问。
 - [ ] 浏览器控制台无 error/warning，页面无 404 和全局横向滚动。
 - [ ] WebSocket `/ws/` 成功连接，买家消息能实时出现在工作台。
@@ -84,3 +89,4 @@ curl -fsS https://demo.example.com/healthz
 - [ ] 不展示真实手机号、客户数据、公司 Cookie、Token 或订单。
 - [ ] 不宣称真实平台已接入、真实客户使用、生产 SLA、商业收入或未经验证的模型准确率。
 - [ ] 公网 URL、视频 URL 和 GitHub tag 指向同一版本。
+- [ ] 新视频只上传到 `v1.1.0-demo`；不覆盖或删除旧 `v1.0.0-demo` 资产。

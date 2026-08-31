@@ -101,7 +101,14 @@ describe('synthetic seed catalog', () => {
     const knowledgeText = seed.knowledge.map((entry) => `${entry.key}\n${entry.question}\n${entry.answer}`).join('\n');
 
     expect(noAnswer.topics).toHaveLength(7);
-    expect(showcase.scenarios).toHaveLength(4);
+    expect(showcase.scenarios.map((scenario) => scenario.id)).toEqual([
+      'SC-01-PRODUCT-CARE',
+      'SC-02-MULTI-TURN',
+      'SC-03-STALE-REPLAN',
+      'SC-04-IMAGE-HUMAN',
+      'SC-05-SAFE-GREETING',
+      'SC-06-SHOP-AI-OFF',
+    ]);
     expect(showcase.rules).toEqual({
       resultsMustComeFromRuntime: true,
       hardcodedReplyForbidden: true,

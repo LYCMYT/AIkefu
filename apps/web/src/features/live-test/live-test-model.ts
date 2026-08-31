@@ -132,7 +132,9 @@ export function derivePipelineStages(conversation: Conversation | undefined, mes
   const received = Boolean(conversation?.id && buyerMessage);
   const jobStatus = job?.status;
 
-  const draftState: PipelineStageState = draft
+  const draftState: PipelineStageState = response
+    ? 'done'
+    : draft
     ? ['STALE', 'EXPIRED', 'FAILED', 'CANCELLED'].includes(draft.status) ? 'attention' : 'done'
     : jobStatus
       ? ['WAITING_HUMAN', 'FAILED', 'STALE', 'EXPIRED', 'CANCELLED'].includes(jobStatus) ? 'attention' : 'active'
@@ -159,7 +161,7 @@ export function derivePipelineStages(conversation: Conversation | undefined, mes
   return [
     { key: 'sent', label: '买家已发送', description: buyerMessage ? '事件已写入消息管线' : '等待买家发送事件', state: buyerMessage ? 'done' : 'idle' },
     { key: 'received', label: '店铺已收到', description: received ? '同一会话已同步' : '等待服务端创建会话', state: received ? 'done' : buyerMessage ? 'active' : 'idle' },
-    { key: 'draft', label: 'AI处理', description: draft ? '回复草稿已生成' : jobStatus ? `当前轮次：${readableJobStatus(jobStatus)}` : received ? '等待当前轮次回复任务' : '等待回复任务', state: draftState },
+    { key: 'draft', label: 'AI处理', description: response ? '本轮回复已完成' : draft ? '回复草稿已生成' : jobStatus ? `当前轮次：${readableJobStatus(jobStatus)}` : received ? '等待当前轮次回复任务' : '等待回复任务', state: draftState },
     { key: 'reply', label: '回复完成', description: response ? '店铺回复已进入时间线' : draft?.status === 'WAITING_HUMAN' || jobStatus === 'WAITING_HUMAN' ? '需要人工确认' : '等待自动或人工回复', state: replyState },
     { key: 'receipt', label: '发送回执', description: outbox ? `Outbox：${outbox.status}` : response ? '回复已持久化' : '等待外发结果', state: receiptState },
   ];

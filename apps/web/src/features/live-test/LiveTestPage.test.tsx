@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ShopSummary } from '../../api';
-import { LiveTestPage, productLearningPresentation } from './LiveTestPage';
+import { LiveTestPage, MessageCard, productLearningPresentation } from './LiveTestPage';
 
 const shop: ShopSummary = {
   id: 'shop-a',
@@ -51,5 +51,43 @@ describe('LiveTestPage', () => {
     expect(html).toContain('买家已发送');
     expect(html).toContain('发送回执');
     expect(html).toContain('左侧每次操作只调用一次真实 API');
+  });
+
+  it('renders analyzed image messages instead of an empty placeholder', () => {
+    const html = renderToStaticMarkup(<MessageCard message={{
+      id: 'image-a',
+      kind: 'IMAGE',
+      role: 'BUYER',
+      status: 'ACTIVE',
+      content: {
+        attachmentId: 'attachment-a',
+        analysisStatus: 'READY',
+        analysis: { scene: 'PRODUCT_DAMAGE', observations: ['疑似商品破损'] },
+      },
+    }} />);
+
+    expect(html).toContain('商品破损图片');
+    expect(html).toContain('疑似商品破损');
+    expect(html).not.toContain('（空消息）');
+  });
+
+  it('uses durable card content when expanded product and order projections are absent', () => {
+    const productHtml = renderToStaticMarkup(<MessageCard message={{
+      id: 'product-card-a', kind: 'GOODS_CARD', role: 'BUYER', status: 'ACTIVE',
+      content: { productId: 'product-a', externalProductId: 'MIA-HOODIE', title: '轻薄连帽卫衣' },
+    }} />);
+    const orderHtml = renderToStaticMarkup(<MessageCard message={{
+      id: 'order-card-a', kind: 'ORDER_CARD', role: 'BUYER', status: 'ACTIVE',
+      content: { orderId: 'order-a', externalOrderId: 'MIA-20260831-001', status: 'PAID' },
+    }} />);
+
+    expect(productHtml).toContain('轻薄连帽卫衣');
+    expect(productHtml).toContain('商品上下文已同步');
+    expect(productHtml).not.toContain('未命名商品');
+    expect(productHtml).not.toContain('价格待同步');
+    expect(orderHtml).toContain('MIA-20260831-001');
+    expect(orderHtml).toContain('PAID');
+    expect(orderHtml).not.toContain('未命名订单');
+    expect(orderHtml).not.toContain('订单状态待同步');
   });
 });

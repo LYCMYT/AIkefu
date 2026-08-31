@@ -23,7 +23,7 @@ export interface ShowcaseScenario {
   title: string;
   shopKey: string;
   buyerKey: string;
-  aiMode: 'AUTO_ALLOWED' | 'ASSIST_ONLY';
+  aiMode: 'AUTO_ALLOWED' | 'ASSIST_ONLY' | 'MANUAL_ONLY';
   objective: string;
   steps: ShowcaseStep[];
   expected: Record<string, unknown>;

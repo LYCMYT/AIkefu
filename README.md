@@ -3,7 +3,9 @@
 ![CI](https://github.com/LYCMYT/AIkefu/actions/workflows/ci.yml/badge.svg?branch=main)
 ![Container Images](https://github.com/LYCMYT/AIkefu/actions/workflows/container-images.yml/badge.svg?branch=main)
 
-**版本：[`v1.0.0-demo`](https://github.com/LYCMYT/AIkefu/releases/tag/v1.0.0-demo)｜Mock-only｜Synthetic Data**
+**当前版本：[`v1.1.0-demo`](https://github.com/LYCMYT/AIkefu/releases/tag/v1.1.0-demo)｜Mock-only｜Synthetic Data**
+
+**历史版本：[`v1.0.0-demo`](https://github.com/LYCMYT/AIkefu/releases/tag/v1.0.0-demo)**
 
 **交付基线：Phase 05 完整收口**
 
@@ -14,9 +16,11 @@
 
 ## 三分钟演示
 
-[![观看 AIkefu 三分钟演示](artifacts/showcase/showcase-overview.png)](https://github.com/LYCMYT/AIkefu/releases/download/v1.0.0-demo/aikefu-3min-demo.mp4)
+[![观看 AIkefu 三分钟演示](artifacts/showcase/showcase-overview.png)](https://github.com/LYCMYT/AIkefu/releases/download/v1.1.0-demo/aikefu-3min-demo.mp4)
 
-点击上图下载/播放 180 秒中文旁白演示。建议先从 `/showcase` 了解四条主链，再进入工作台、买家模拟器、AI 管理中心和场景实验室。发布说明见 [`docs/RELEASE_V1.0.0_DEMO.md`](docs/RELEASE_V1.0.0_DEMO.md)，简历与面试文案见 [`docs/PORTFOLIO_RESUME_COPY.md`](docs/PORTFOLIO_RESUME_COPY.md)。
+`v1.1.0-demo` 演示为 180 秒、1920×1080、30 fps、H.264/AAC、`zh-CN-XiaoxiaoNeural` `+50%` 旁白、26 条字幕 cue、画面硬字幕与同源外部 SRT，MP4 无软字幕轨。文件大小 13,831,390 bytes，SHA256 为 `E64D832B7C67896424C13FAE785837545B89005BD172E500373CDD4E3564435C`。
+
+建议先从 `/showcase` 了解六条主链，再进入工作台、买家模拟器、AI 管理中心和场景实验室。发布说明见 [`docs/RELEASE_V1.1.0_DEMO.md`](docs/RELEASE_V1.1.0_DEMO.md)，简历与面试文案见 [`docs/PORTFOLIO_RESUME_COPY.md`](docs/PORTFOLIO_RESUME_COPY.md)。
 
 ## 本轮发布收口（2026-08-31）
 
@@ -31,13 +35,13 @@
 
 | 范围 | 当前状态 |
 | --- | --- |
-| Unit | 647 / 647 通过（Release hygiene、Contracts、Core、Mock、Web、API） |
-| API integration | 14 suites / 61 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
+| Unit | 693 / 693 通过（Release hygiene、录制合同、Contracts、Core、Mock、Web、API） |
+| API integration | 15 suites / 63 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
 | Contracts | 6 / 6 通过 |
-| 前端终态 Gate | Playwright 21 项：17 passed、4 个互斥离线降级用例按环境设计 skipped、0 failed；console error/warn/pageerror、404、全局 overflow 均为 0 |
+| 前端终态 Gate | Playwright 共 27 个唯一用例；真实环境 23 passed、4 skipped、0 failed，离线模式 6 passed、21 skipped、0 failed；两种模式均按真实状态保留互斥 skip |
 | Q0 生产回复评测 | 固定集：Offline 36 / 36、DeepSeek 36 / 36（21,463 / 2,540 Token，平均 2,326 ms）；独立 AUTO 集：Offline 10 / 10、DeepSeek 10 / 10（8,675 / 1,143 Token，平均 2,283 ms） |
 | 公网部署 | 未完成；没有把本地服务或容器验收表述为在线 Preview |
-| 3 分钟演示视频 | 180 秒、1440×900、H.264 + AAC 中文旁白；作为 `v1.0.0-demo` Release asset 交付 |
+| 3 分钟演示视频 | [`v1.1.0-demo` Release asset](https://github.com/LYCMYT/AIkefu/releases/download/v1.1.0-demo/aikefu-3min-demo.mp4)；180 秒、1920×1080、30 fps、H.264 + AAC；Xiaoxiao `+50%`、26 条 cue、画面硬字幕 + 外部 SRT、MP4 无软字幕轨 |
 | 真实外部凭据 | DeepSeek Key 仅从仓库外服务端文件读取并已完成真实评测；真实电商平台凭据仍不在 V1 范围，任何 Secret 都不随仓库交付 |
 
 真实基础设施 Gate 已在本机 opt-in 环境通过，但尚未部署到公网。
@@ -58,7 +62,7 @@ flowchart LR
   O[("MinIO")] --- P
 ```
 
-截图基线由连接真实本地服务的 Playwright 流程生成。当前 1440×900 终态证据包括 [空店首页](artifacts/ui/final/empty-home.png)、[店铺概览](artifacts/ui/final/shop-overview.png)、[店铺聊天](artifacts/ui/final/shop-chat.png)、[基础设置](artifacts/ui/final/shop-settings.png)、[知识导入](artifacts/ui/final/knowledge-import.png)、[AI 管理中心](artifacts/ui/final/admin.png)、[Workflow](artifacts/ui/final/workflow.png)、[Buyer Simulator](artifacts/ui/final/buyer-simulator.png)、[实时联调](artifacts/ui/final/live-test.png) 与 [Scenario Lab](artifacts/ui/final/scenario-lab.png)。Workflow 图保持真实运营 Workspace 的空态，没有为截图制造工作流数据。在线 Demo 尚无公网托管地址，不使用本地链接冒充公开 Preview；演示视频通过 GitHub Release 资产交付。
+截图基线由连接真实本地服务的 Playwright 流程生成。当前 1440×900 终态证据包括 [空店首页](artifacts/ui/final/empty-home.png)、[店铺概览](artifacts/ui/final/shop-overview.png)、[店铺聊天](artifacts/ui/final/shop-chat.png)、[基础设置](artifacts/ui/final/shop-settings.png)、[知识导入](artifacts/ui/final/knowledge-import.png)、[AI 管理中心](artifacts/ui/final/admin.png)、[Workflow](artifacts/ui/final/workflow.png)、[Buyer Simulator](artifacts/ui/final/buyer-simulator.png)、[实时联调](artifacts/ui/final/live-test.png) 与 [Scenario Lab](artifacts/ui/final/scenario-lab.png)。Workflow 图保持真实运营 Workspace 的空态，没有为截图制造工作流数据。项目仍无公网全栈托管地址，不使用本地链接冒充公开 Preview；Release 视频是主要公开展示入口。
 
 ## 展示范围
 
@@ -69,7 +73,7 @@ flowchart LR
 - `/admin`：真实 Workspace 数据概览；子页包括 `/admin/shops`、`/admin/products`、`/admin/knowledge`、`/admin/workflows`、`/admin/quality`、`/admin/incidents`、`/admin/usage`、`/admin/privacy`。
 - `/scenario-lab`：固定 8 个 synthetic Scenario 的运行与重置。
 
-公开讲解和录屏的首选入口是 `/showcase`。它使用第三个独立的 `SEEDED` Showcase Workspace，会按顺序运行商品知识、多轮聚合、生成中补充信息和图片售后/人工接管四条真实 API/WebSocket 链路；不会改写运营 Workspace 或 Scenario Lab。页面明确标注模型 Provider、Mock 电商平台、合成数据和图片 Fixture 边界。
+公开讲解和录屏的首选入口是 `/showcase`。它使用第三个独立的 `SEEDED` Showcase Workspace，会按顺序运行商品知识、多轮聚合、生成中补充信息、图片售后/人工接管、安全问候和 AI 暂停/恢复六条真实 API/WebSocket 链路；不会改写运营 Workspace 或 Scenario Lab。页面明确标注模型 Provider、Mock 电商平台、合成数据和图片 Fixture 边界。
 
 Trace 默认隐藏。可直接打开 `/workbench?trace=1`，或在 Workbench 点击 Trace；只有显式开启时才请求 `trace=1` 的 Developer Trace 数据。Trace 面板只展示结构化、脱敏事件，不展示 prompt、私有推理或 Chain-of-Thought。
 
@@ -211,7 +215,7 @@ OpenAPI 与 WebSocket JSON schema 的引用、数组 items、discriminator 和 P
 
 ## 演示复现
 
-仓库提供 `/showcase` 引导页、四个可重复场景、真实运行截图、证据清单和可复现录制脚本；最终视频通过 `v1.0.0-demo` Release asset 发布，生成文件不进入 Git 源码历史。
+仓库提供 `/showcase` 引导页、SC01–SC06 六个可重复场景、真实运行截图、证据清单和可复现录制脚本；`v1.1.0-demo` Release 提供最终视频，生成文件不进入 Git 源码历史。
 
 人工演示顺序、输入文本、预期状态和每一步的验证边界见 [`docs/18_DEMO_SCRIPT.md`](docs/18_DEMO_SCRIPT.md)。演示前至少执行：
 
@@ -222,6 +226,15 @@ pnpm --filter @ai-customer-service/web build
 ```
 
 演示前打开 `/showcase`，确认 API/WS 已连接并点击“重置演示”。Showcase 与运营/Scenario 会话隔离；截图与 `artifacts/showcase/SHOWCASE_EVIDENCE.md` 是自动化验收证据，但仍不等同于最终录制视频或公网部署。
+
+录制与成片使用同一条 Showcase 链；`demo:*` 是当前 Showcase 命令的兼容别名，旧 1440×900 工具只保留在 `legacy:demo:*`：
+
+```powershell
+pnpm showcase:record
+pnpm showcase:build
+# 或在 API/Web 已启动时一键录制并构建：
+pnpm showcase:video
+```
 
 ## 安全与已知限制
 
