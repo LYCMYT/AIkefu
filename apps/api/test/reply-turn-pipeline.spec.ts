@@ -128,6 +128,40 @@ describe('durable UserTurn → ReplyJob pipeline', () => {
     expect(runtime.process).toHaveBeenCalledWith({ workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' }, 'reply-a');
   });
 
+  it('keeps the original UserTurn while rebasing the send cursor onto a welcome-only tail', async () => {
+    const outbox = {
+      id: 'outbox-plan-welcome', eventId: 'reply-plan:turn-welcome', workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: 'shop-a',
+      eventType: 'USER_TURN_READY',
+      payloadJson: { conversationId: 'conversation-a', userTurnId: 'turn-buyer-1', sourceLastMessageId: 'buyer-1', sourceSequence: 1, sourceContextVersion: 5 },
+    };
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      processingReceipt: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: 'receipt-welcome' }) },
+      processingOutbox: { findUnique: jest.fn().mockResolvedValue(outbox) },
+      conversation: { findFirst: jest.fn().mockResolvedValue({ lastCommittedSequence: 2, contextVersion: 5 }) },
+      message: { findFirst: jest.fn().mockResolvedValue({ id: 'welcome-2', sequence: 2 }) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED' }) },
+    };
+    const replyJobs = { createInTransaction: jest.fn().mockResolvedValue({ id: 'reply-welcome', status: 'PENDING' }) };
+    const app = new PrismaMessageApplication(
+      { $transaction: jest.fn((work: Function) => work(tx)) } as never,
+      { publish: jest.fn() } as never, {} as never, {} as never, {} as never, replyJobs as never,
+    );
+
+    await (app as any).consumeOutbox('reply-plan:turn-welcome');
+
+    expect(replyJobs.createInTransaction).toHaveBeenCalledWith(tx, { ...scope, shopId: 'shop-a' }, {
+      conversationId: 'conversation-a',
+      userTurnId: 'turn-buyer-1',
+      mode: 'AUTO',
+      sourceLastMessageId: 'welcome-2',
+      sourceSequence: 2,
+      sourceContextVersion: 5,
+      idempotencyKey: 'reply-plan:turn-welcome',
+      evidence: [],
+    }, { lockHeld: true });
+  });
+
   it('discards a delayed old turn when a later buyer message advanced context, while still allowing a welcome-only tail advance', async () => {
     const outbox = {
       id: 'outbox-plan-old', eventId: 'reply-plan:turn-old', workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: 'shop-a',

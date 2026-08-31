@@ -106,24 +106,94 @@ describeRealInfra('Showcase SC05/SC06 real service chain', () => {
           select: { id: true },
         });
         if (!conversation) return undefined;
-        const [buyer, job, task, outbox, reply] = await Promise.all([
+        const [buyer, job, task, reply] = await Promise.all([
           prisma.message.findFirst({
             where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId, conversationId: conversation.id, role: 'BUYER', contentJson: { path: ['text'], equals: '你好！' } },
             select: { id: true, sequence: true },
           }),
-          prisma.replyJob.findFirst({ where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId, conversationId: conversation.id }, select: { id: true, status: true, sourceLastMessageId: true, sourceSequence: true } }),
+          prisma.replyJob.findFirst({ where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId, conversationId: conversation.id }, select: { id: true, status: true, userTurnId: true, sourceLastMessageId: true, sourceSequence: true } }),
           prisma.task.findFirst({ where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId, conversationId: conversation.id, intent: 'SAFE_SOCIAL_GREETING' }, select: { id: true, intent: true } }),
-          prisma.sendOutbox.findFirst({ where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId, conversationId: conversation.id, status: 'SENT' }, select: { id: true, replyJobId: true, status: true } }),
           prisma.message.findFirst({ where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId, conversationId: conversation.id, role: 'ASSISTANT', contentJson: { path: ['text'], string_contains: '您好，我在的' } }, select: { id: true } }),
         ]);
-        return buyer && job && task && outbox && reply ? { conversationId: conversation.id, buyer, job, task, outbox } : undefined;
+        if (!buyer || !job || !task || !reply) return undefined;
+        const outbox = await prisma.sendOutbox.findFirst({
+          where: {
+            workspaceId: scope.workspaceId,
+            tenantId: scope.tenantId,
+            shopId: scope.shopId,
+            conversationId: conversation.id,
+            replyJobId: job.id,
+            status: 'SENT',
+          },
+          select: { id: true, replyJobId: true, status: true },
+        });
+        return outbox ? { conversationId: conversation.id, buyer, job, task, outbox } : undefined;
       });
 
-      expect(completed.job).toMatchObject({
-        status: 'SENT',
-        sourceLastMessageId: completed.buyer.id,
-        sourceSequence: completed.buyer.sequence,
+      const sourceTurn = await prisma.userTurn.findFirst({
+        where: {
+          id: completed.job.userTurnId,
+          workspaceId: scope.workspaceId,
+          tenantId: scope.tenantId,
+          shopId: scope.shopId,
+          conversationId: completed.conversationId,
+        },
+        select: { normalizedText: true, sourceMessageIdsJson: true },
       });
+      expect(sourceTurn).toMatchObject({
+        normalizedText: '你好！',
+        sourceMessageIdsJson: [completed.buyer.id],
+      });
+      expect(completed.job.status).toBe('SENT');
+      if (completed.job.sourceLastMessageId === completed.buyer.id) {
+        expect(completed.job.sourceSequence).toBe(completed.buyer.sequence);
+      } else {
+        // The scheduled welcome may win the race while the buyer turn is
+        // coalescing. It is the only legal cursor advance because it does not
+        // change conversation context; an arbitrary later message must never
+        // be accepted as the source of this buyer turn.
+        const sourceMessage = await prisma.message.findFirst({
+          where: {
+            id: completed.job.sourceLastMessageId ?? '',
+            workspaceId: scope.workspaceId,
+            tenantId: scope.tenantId,
+            shopId: scope.shopId,
+            conversationId: completed.conversationId,
+          },
+          select: { id: true, sequence: true, role: true, externalMessageId: true },
+        });
+        expect(sourceMessage).toMatchObject({
+          sequence: completed.buyer.sequence + 1,
+          role: 'ASSISTANT',
+          externalMessageId: expect.any(String),
+        });
+        const welcomeOutbox = await prisma.sendOutbox.findFirst({
+          where: {
+            id: sourceMessage?.externalMessageId ?? '',
+            workspaceId: scope.workspaceId,
+            tenantId: scope.tenantId,
+            shopId: scope.shopId,
+            conversationId: completed.conversationId,
+            status: 'SENT',
+            replyJobId: null,
+            idempotencyKey: { startsWith: 'scheduled-send:scheduled:welcome:' },
+          },
+          select: {
+            id: true,
+            expectedLastMessageId: true,
+            expectedSequence: true,
+            replyJobId: true,
+            status: true,
+          },
+        });
+        expect(welcomeOutbox).toMatchObject({
+          expectedLastMessageId: completed.buyer.id,
+          expectedSequence: completed.buyer.sequence,
+          replyJobId: null,
+          status: 'SENT',
+        });
+        expect(completed.job.sourceSequence).toBe(sourceMessage?.sequence);
+      }
       expect(completed.outbox).toMatchObject({ status: 'SENT', replyJobId: completed.job.id });
       await expect(prisma.replyEvidence.count({ where: { workspaceId: scope.workspaceId, tenantId: scope.tenantId, replyJobId: completed.job.id } })).resolves.toBe(0);
       const evidenceTrace = await waitFor(async () => (await prisma.traceEvent.findFirst({

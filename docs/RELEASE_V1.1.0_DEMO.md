@@ -12,7 +12,7 @@
 
 ## 可复验证据
 
-- Unit Test：693 / 693 通过（含 25 项录制时间线、字幕、转场与过期产物防误用合同）。
+- Unit Test：694 / 694 通过（含 25 项录制时间线、字幕、转场与过期产物防误用合同）。
 - Integration Test：15 suites，63 / 63 tests 通过，包含真实 PostgreSQL、pgvector、Redis 与 MinIO。
 - Playwright：共 27 个唯一用例；真实环境 23 passed、4 skipped、0 failed；离线模式 6 passed、21 skipped、0 failed。两种模式的 skip 来自互斥运行条件，不合并伪装成单次全通过。
 - 生产构建、Prisma validate/generate/migration status 与 AppModule DI 已在本地发布 Gate 中通过。

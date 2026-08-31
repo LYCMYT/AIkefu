@@ -12,7 +12,7 @@
 
 - 设计并实现多租户电商 AI 客服闭环，将连续买家消息聚合为 UserTurn，经 TaskBundle、动态商品/订单 Context、Knowledge Evidence 与 ReplyPolicy 生成可审计回复，并通过 SendGuard、Outbox、Receipt 和恢复机制约束重复发送及旧答案外发。
 - 实现 AUTO/人工接管、两轮澄清、动态库存失效、Workflow Human Approval、质量审核、Incident 与脱敏 Trace；高风险、证据不足或上下文失效时自动降级，避免模型越权执行退款等业务动作。
-- 建立可复现质量门禁：693 / 693 单元测试、63 / 63 集成测试；Playwright 覆盖 27 个唯一用例，真实环境为 23 passed / 4 skipped / 0 failed，离线模式为 6 passed / 21 skipped / 0 failed，并用真实 PostgreSQL/pgvector、Redis、MinIO 验证持久化链路；通过 [`v1.1.0-demo`](https://github.com/LYCMYT/AIkefu/releases/tag/v1.1.0-demo) 固定可复验版本与演示视频。
+- 建立可复现质量门禁：694 / 694 单元测试、63 / 63 集成测试；Playwright 覆盖 27 个唯一用例，真实环境为 23 passed / 4 skipped / 0 failed，离线模式为 6 passed / 21 skipped / 0 failed，并用真实 PostgreSQL/pgvector、Redis、MinIO 验证持久化链路；通过 [`v1.1.0-demo`](https://github.com/LYCMYT/AIkefu/releases/tag/v1.1.0-demo) 固定可复验版本与演示视频。
 
 ## 一句话介绍
 

@@ -35,7 +35,7 @@
 
 | 范围 | 当前状态 |
 | --- | --- |
-| Unit | 693 / 693 通过（Release hygiene、录制合同、Contracts、Core、Mock、Web、API） |
+| Unit | 694 / 694 通过（Release hygiene、录制合同、Contracts、Core、Mock、Web、API） |
 | API integration | 15 suites / 63 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
 | Contracts | 6 / 6 通过 |
 | 前端终态 Gate | Playwright 共 27 个唯一用例；真实环境 23 passed、4 skipped、0 failed，离线模式 6 passed、21 skipped、0 failed；两种模式均按真实状态保留互斥 skip |

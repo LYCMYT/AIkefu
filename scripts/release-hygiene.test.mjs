@@ -88,7 +88,7 @@ test('portfolio release documentation is complete and does not advertise localho
   assert.doesNotMatch(readme, /public demo[^\n]*https?:\/\/(?:localhost|127\.0\.0\.1)/i);
   const unitCounts = [unitCount(readme, 'README'), unitCount(releaseNotes, 'release notes'), unitCount(resumeCopy, 'resume copy')];
   assert.ok(unitCounts.every((count) => count === unitCounts[0]), 'Unit count must stay aligned across release documents');
-  assert.deepEqual(unitCounts, [693, 693, 693]);
+  assert.deepEqual(unitCounts, [694, 694, 694]);
   assert.match(releaseNotes, /63 \/ 63/);
   assert.match(resumeCopy, /63 \/ 63/);
   assert.match(releaseNotes, /25 项录制时间线/);
