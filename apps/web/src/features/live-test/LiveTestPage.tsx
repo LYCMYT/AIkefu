@@ -50,6 +50,7 @@ import {
   derivePipelineStages,
   deriveCurrentTurnLifecycle,
   eventConversationId,
+  liveTestRealtimeRefreshPlan,
   isVisibleMessage,
   liveTestRefreshKind,
   mergeLiveMessages,
@@ -394,14 +395,26 @@ export function LiveTestPage({
     if (!realtimeEvent || !shopId || !shouldRefreshLiveTest(realtimeEvent, shopId, conversationId)) return;
     const generation = ++conversationRequestGeneration.current;
     const revision = scopeRevisionRef.current;
-    const targetId = eventConversationId(realtimeEvent) || conversationId;
-    void Promise.all([getConversations(token, shopId), targetId ? getConversation(token, targetId) : Promise.resolve(undefined), getProducts(token, shopId)])
-      .then(([nextConversations, nextDetail, nextProducts]) => {
+    const plan = liveTestRealtimeRefreshPlan(realtimeEvent, conversationId);
+    void Promise.all([
+      plan.conversations ? getConversations(token, shopId) : Promise.resolve(undefined),
+      plan.conversationId ? getConversation(token, plan.conversationId) : Promise.resolve(undefined),
+      plan.products ? getProducts(token, shopId) : Promise.resolve(undefined),
+      plan.orders && buyerId ? getOrders(token, shopId, buyerId) : Promise.resolve(undefined),
+    ])
+      .then(([nextConversations, nextDetail, nextProducts, nextOrders]) => {
         if (generation !== conversationRequestGeneration.current || revision !== scopeRevisionRef.current) return;
-        setConversations(nextConversations);
-        setProducts(nextProducts);
+        if (nextConversations) setConversations(nextConversations);
+        if (nextProducts) setProducts(nextProducts);
+        if (nextOrders) {
+          setOrders(nextOrders);
+          setSelectedOrderId((selected) => nextOrders.some((order) => order.id === selected) ? selected : (nextOrders[0]?.id ?? ''));
+        }
         if (nextDetail) {
           setDetail(nextDetail);
+          setConversations((current) => current.some((entry) => entry.id === nextDetail.id)
+            ? current.map((entry) => entry.id === nextDetail.id ? { ...entry, ...nextDetail } : entry)
+            : [nextDetail, ...current]);
           if (!conversationId && nextDetail.buyerId === buyerId) setConversationId(nextDetail.id);
         }
       })

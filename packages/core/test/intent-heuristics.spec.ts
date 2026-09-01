@@ -5,6 +5,7 @@ describe('explicit customer-service intent inference', () => {
     ['新疆多久发货？', ['SHIPPING_POLICY']],
     ['这个可以烘干吗？', ['PRODUCT_QUERY']],
     ['黑色XL有吗？今天买多久发？', ['INVENTORY_QUERY', 'SHIPPING_POLICY']],
+    ['那白色呢？', ['INVENTORY_QUERY']],
     ['黑色静音键盘有吗？另外我昨天那个订单到哪了？', ['INVENTORY_QUERY', 'LOGISTICS_QUERY']],
     ['我要人工', ['HUMAN_REQUEST']],
     ['我要投诉你们', ['COMPLAINT']],
@@ -32,6 +33,9 @@ describe('explicit customer-service intent inference', () => {
     const [logistics] = mergeExplicitIntentTasks('我的快递怎么没动？\n键盘那个', [
       { intent: 'LOGISTICS_QUERY', riskLevel: 'LOW', requiredContext: [], requiredKnowledge: [], requiredTools: [] },
     ]);
+    const [colorFollowUp] = mergeExplicitIntentTasks('那白色呢？', [
+      { intent: 'UNKNOWN', riskLevel: 'LOW', requiredContext: [], requiredKnowledge: [], requiredTools: [] },
+    ]);
 
     expect(inventory).toMatchObject({
       intent: 'INVENTORY_QUERY',
@@ -42,6 +46,11 @@ describe('explicit customer-service intent inference', () => {
       intent: 'LOGISTICS_QUERY',
       requiredContext: ['ORDER'],
       requiredTools: ['GET_ORDER'],
+    });
+    expect(colorFollowUp).toMatchObject({
+      intent: 'INVENTORY_QUERY',
+      requiredContext: ['PRODUCT', 'SKU'],
+      requiredTools: ['GET_INVENTORY'],
     });
   });
 
@@ -65,6 +74,11 @@ describe('explicit customer-service intent inference', () => {
     ]);
   });
 
+  it('does not mistake the Chinese fabric word “呢” for a color inventory follow-up', () => {
+    expect(inferExplicitIntentTasks('这件白色呢子大衣好看吗').map((task) => task.intent)).not.toContain('INVENTORY_QUERY');
+    expect(inferExplicitIntentTasks('白色呢绒面料怎么样？').map((task) => task.intent)).not.toContain('INVENTORY_QUERY');
+  });
+
   it('does not turn an explicit shipping-policy question into order logistics', () => {
     const result = mergeExplicitIntentTasks('黑色XL有吗？今天买多久发？', [
       { intent: 'INVENTORY_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'], requiredTools: ['GET_INVENTORY'] },
@@ -76,10 +90,15 @@ describe('explicit customer-service intent inference', () => {
 
   it('maps sanitized image-analysis markers to conservative assist intents', () => {
     expect(inferExplicitIntentTasks('[图片 PRODUCT_DAMAGE] 疑似商品破损\n收到就是这样的')).toEqual([
-      { intent: 'AFTER_SALES_QUERY', riskLevel: 'MEDIUM', requiredContext: [], requiredTools: [] },
+      { intent: 'AFTER_SALES_QUERY', riskLevel: 'MEDIUM', requiredContext: ['ORDER'], requiredTools: [] },
     ]);
     expect(inferExplicitIntentTasks('[图片 SHIPPING_LABEL] 图片可能包含物流标签信息，已进行脱敏处理。\n帮我看看这个')).toEqual([
       { intent: 'ORDER_QUERY', riskLevel: 'MEDIUM', requiredContext: ['ORDER'], requiredTools: ['GET_ORDER'] },
+    ]);
+    expect(inferExplicitIntentTasks('收到商品破损，我要退款并投诉')).toEqual([
+      { intent: 'AFTER_SALES_QUERY', riskLevel: 'HIGH', requiredContext: ['ORDER'], requiredTools: ['TRANSFER_HUMAN'] },
+      { intent: 'COMPLAINT', riskLevel: 'HIGH', requiredContext: [], requiredTools: ['TRANSFER_HUMAN'] },
+      { intent: 'REFUND_REQUEST', riskLevel: 'HIGH', requiredContext: ['ORDER'], requiredTools: ['TRANSFER_HUMAN'] },
     ]);
   });
 });

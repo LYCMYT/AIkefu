@@ -64,6 +64,17 @@ type Case07Proof = {
   traceId: string;
 };
 
+type StaleReplanProof = {
+  oldReplyJobId: string;
+  newReplyJobId: string;
+  newReplyStatus: string;
+  evidenceCount: number;
+  sendOutboxId: string;
+  responseMessageId: string;
+  responseText: string;
+  traceStages: string[];
+};
+
 type Repository = Record<string, any>;
 
 const ACTIVE_REPLY_JOB_STATUSES = ['PENDING', 'FAST_PATH_READY', 'GENERATING', 'WAITING_HUMAN', 'CANCELLING', 'RECOVERY_PENDING'];
@@ -332,9 +343,21 @@ export class ScenarioLabService {
     }
     const before = await this.repo('conversation')?.findFirst?.({ where: { id: context.id, ...this.scope(scope) }, select: { contextVersion: true } });
     await this.sendText(scope, context, '我是新疆的', 2, `${operationId}:generation:follow-up`);
+    // PrismaMessageApplication invalidates the active generation in the same
+    // transaction that commits this buyer message. Observe that transition
+    // before flushing the replacement turn; incrementing context afterwards
+    // would immediately stale the newly created replacement job.
+    const updated = await this.observeMessageInvalidation(scope, context.id, initial.replyJobId);
     await this.flushConversation(context.id);
-    const updated = await this.bumpContextAndStale(scope, context.id, initial.replyJobId);
-    const next = await this.ensureReplyArtifacts(scope, context, operationId, resources);
+    const next = await this.ensureReplyArtifacts(scope, context, operationId, resources, {
+      minimumLastSequence: 2,
+      excludeUserTurnId: initial.userTurnId,
+    });
+    if (!initial.replyJobId || !next.replyJobId) throw new Error('SCENARIO_STALE_REPLAN_REPLY_JOB_MISSING');
+    if (!this.replyRuntime) throw new Error('SCENARIO_STALE_REPLAN_REPLY_RUNTIME_REQUIRED');
+    const processed = await this.processCase07Reply(scope, context.shopId, next.replyJobId);
+    const proof = await this.verifyStaleReplanProof(scope, context, initial.replyJobId, next.replyJobId, processed.status);
+    pushUnique(resources.sendOutboxIds, proof.sendOutboxId);
     return {
       resources,
       result: {
@@ -343,15 +366,83 @@ export class ScenarioLabService {
         contextVersion: updated?.contextVersion ?? null,
         oldReplyJobId: initial.replyJobId ?? null,
         newReplyJobId: next.replyJobId ?? null,
+        proof,
       },
       stepActual: {
         'initial-message': '首个 UserTurn 已接收',
         generation: initial.replyJobId ? '旧 ReplyJob GENERATING' : '等待 ReplyJob',
         'follow-up': '新疆地区补充消息已接收',
         invalidate: `contextVersion=${updated?.contextVersion ?? 'unknown'}；旧 Job STALE`,
-        replan: next.replyJobId ? '新 ReplyJob 已创建' : '等待新 ReplyJob',
+        replan: `${proof.evidenceCount} 条偏远地区 Evidence；新 Reply SENT；SendGuard / Receipt 完整`,
       },
     };
+  }
+
+  /** Durable SC03 proof: the old generation is not deliverable, while the
+   * replacement reaches evidence, SendGuard, transport receipt and buyer
+   * projection. Scenario completion is refused until all facts agree. */
+  private async verifyStaleReplanProof(
+    scope: ScenarioScope,
+    context: { id: string; shopId: string },
+    oldReplyJobId: string,
+    newReplyJobId: string,
+    processedStatus: string,
+  ): Promise<StaleReplanProof> {
+    const replyJobs = this.repo('replyJob');
+    const evidence = this.repo('replyEvidence');
+    const outboxes = this.repo('sendOutbox');
+    const messages = this.repo('message');
+    const traces = this.repo('traceEvent');
+    if (!replyJobs?.findFirst || !evidence?.findMany || !outboxes?.findMany || !messages?.findMany || !traces?.findMany) {
+      throw new Error('SCENARIO_STALE_REPLAN_PROOF_REPOSITORY_REQUIRED');
+    }
+    let lastState = processedStatus;
+    for (let attempt = 0; attempt < 400; attempt += 1) {
+      const [oldJob, newJob, evidenceRows, sendRows, messageRows, traceRows] = await Promise.all([
+        replyJobs.findFirst({ where: { id: oldReplyJobId, ...this.scope(scope), shopId: context.shopId }, select: { status: true } }),
+        replyJobs.findFirst({ where: { id: newReplyJobId, ...this.scope(scope), shopId: context.shopId }, select: { status: true } }),
+        evidence.findMany({ where: { ...this.scope(scope), shopId: context.shopId, replyJobId: newReplyJobId }, select: { id: true, scope: true, retrievedContentSnapshotJson: true } }),
+        outboxes.findMany({ where: { ...this.scope(scope), shopId: context.shopId, conversationId: context.id }, select: { id: true, replyJobId: true, status: true, receiptJson: true } }),
+        messages.findMany({ where: { ...this.scope(scope), shopId: context.shopId, conversationId: context.id }, orderBy: { sequence: 'asc' }, select: { id: true, role: true, sequence: true, externalMessageId: true, contentJson: true } }),
+        traces.findMany({ where: { ...this.scope(scope), shopId: context.shopId, conversationId: context.id, replyJobId: newReplyJobId, stage: { in: ['EVIDENCE', 'SEND_GUARD', 'SEND_RECEIPT'] } }, select: { stage: true } }),
+      ]);
+      if (oldJob?.status !== 'STALE') throw new Error(`SCENARIO_STALE_REPLAN_OLD_JOB_NOT_STALE:${String(oldJob?.status ?? 'MISSING')}`);
+      const oldSends = sendRows.filter((row: { replyJobId?: string }) => row.replyJobId === oldReplyJobId);
+      if (oldSends.some((row: { status?: string }) => ['PENDING', 'SENDING', 'SENT', 'UNCERTAIN'].includes(String(row.status)))) {
+        throw new Error('SCENARIO_STALE_REPLAN_OLD_REPLY_DELIVERABLE');
+      }
+      const oldExternalIds = new Set(oldSends.flatMap((row: { id?: string; receiptJson?: unknown }) => {
+        const receipt = isRecord(row.receiptJson) ? row.receiptJson : {};
+        return [row.id, typeof receipt.externalMessageId === 'string' ? receipt.externalMessageId : undefined].filter((value): value is string => Boolean(value));
+      }));
+      if (messageRows.some((row: { externalMessageId?: string }) => row.externalMessageId && oldExternalIds.has(row.externalMessageId))) {
+        throw new Error('SCENARIO_STALE_REPLAN_OLD_REPLY_PROJECTED');
+      }
+      lastState = String(newJob?.status ?? 'MISSING');
+      const send = sendRows.find((row: { replyJobId?: string; status?: string }) => row.replyJobId === newReplyJobId && row.status === 'SENT');
+      const receipt = isRecord(send?.receiptJson) ? send.receiptJson : {};
+      const externalIds = new Set([send?.id, typeof receipt.externalMessageId === 'string' ? receipt.externalMessageId : undefined].filter((value): value is string => Boolean(value)));
+      const response = [...messageRows].reverse().find((row: { role?: string; externalMessageId?: string }) => row.role === 'ASSISTANT' && row.externalMessageId && externalIds.has(row.externalMessageId));
+      const content = isRecord(response?.contentJson) ? response.contentJson : {};
+      const responseText = typeof content.text === 'string' ? content.text : '';
+      const traceStages = [...new Set((traceRows as Array<{ stage: string }>).map((row) => row.stage))].sort();
+      if (newJob?.status === 'SENT' && send?.id && response?.id && evidenceRows.length > 0
+        && /新疆|偏远地区|实际物流/.test(responseText)
+        && ['EVIDENCE', 'SEND_GUARD', 'SEND_RECEIPT'].every((stage) => traceStages.includes(stage))) {
+        return {
+          oldReplyJobId,
+          newReplyJobId,
+          newReplyStatus: newJob.status,
+          evidenceCount: evidenceRows.length,
+          sendOutboxId: send.id,
+          responseMessageId: response.id,
+          responseText,
+          traceStages,
+        };
+      }
+      if (attempt < 399) await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error(`SCENARIO_STALE_REPLAN_NEW_REPLY_NOT_DELIVERED:${lastState}`);
   }
 
   private async twoBuyers(scope: ScenarioScope, operationId: string, resources: ScenarioResources): Promise<ScenarioExecution> {
@@ -847,6 +938,7 @@ export class ScenarioLabService {
     context: { id: string; shopId: string; buyerId: string },
     operationId: string,
     resources: ScenarioResources,
+    options: { minimumLastSequence?: number; excludeUserTurnId?: string } = {},
   ): Promise<{ replyJobId?: string; userTurnId?: string }> {
     const repositories = {
       conversation: this.repo('conversation'),
@@ -858,10 +950,24 @@ export class ScenarioLabService {
     await this.drainMessagePipeline();
     const messages = await repositories.message.findMany({ where: { ...this.scope(scope), conversationId: context.id, role: 'BUYER', status: { not: 'RECALLED' } }, orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }] });
     if (!messages.length) return {};
-    const first = messages[0];
-    const last = messages.at(-1)!;
-    let turn = await repositories.userTurn.findFirst({ where: { ...this.scope(scope), conversationId: context.id }, orderBy: [{ lastSequence: 'desc' }, { updatedAt: 'desc' }] });
-    if (!turn) return {};
+    let turn: Record<string, any> | undefined;
+    const requiresSpecificTurn = options.minimumLastSequence !== undefined || options.excludeUserTurnId !== undefined;
+    const turnWhere = {
+      ...this.scope(scope),
+      conversationId: context.id,
+      ...(options.minimumLastSequence === undefined ? {} : { lastSequence: { gte: options.minimumLastSequence } }),
+      ...(options.excludeUserTurnId === undefined ? {} : { id: { not: options.excludeUserTurnId } }),
+    };
+    for (let attempt = 0; attempt < (requiresSpecificTurn ? 240 : 1); attempt += 1) {
+      turn = await repositories.userTurn.findFirst({ where: turnWhere, orderBy: [{ lastSequence: 'desc' }, { updatedAt: 'desc' }] });
+      if (turn) break;
+      await this.drainMessagePipeline();
+      if (attempt < 239) await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    if (!turn) {
+      if (requiresSpecificTurn) throw new Error('SCENARIO_STALE_REPLAN_NEW_USER_TURN_MISSING');
+      return {};
+    }
     pushUnique(resources.userTurnIds, turn.id);
     if (!repositories.replyJob?.findFirst) return { userTurnId: turn.id };
 
@@ -892,12 +998,21 @@ export class ScenarioLabService {
         if (attempt < 39) await new Promise<void>((resolve) => setTimeout(resolve, 25));
       }
     }
-    const active = await repositories.replyJob.findFirst({ where: { ...this.scope(scope), conversationId: context.id, status: { in: ACTIVE_REPLY_JOB_STATUSES } }, orderBy: { updatedAt: 'desc' } });
+    const active = await repositories.replyJob.findFirst({
+      where: {
+        ...this.scope(scope),
+        conversationId: context.id,
+        userTurnId: turn.id,
+        status: { in: ACTIVE_REPLY_JOB_STATUSES },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
     if (active) {
       pushUnique(resources.replyJobIds, active.id);
       return { userTurnId: turn.id, replyJobId: active.id };
     }
     const conversation = await repositories.conversation?.findFirst?.({ where: { id: context.id, ...this.scope(scope) }, select: { contextVersion: true } });
+    const turnLastMessage = messages.find((message: Record<string, any>) => message.sequence === turn.lastSequence) ?? messages.at(-1)!;
     if (!this.replyJobs) return { userTurnId: turn.id };
     const job = await this.replyJobs.create({
       ...this.scope(scope), shopId: context.shopId,
@@ -905,8 +1020,8 @@ export class ScenarioLabService {
       conversationId: context.id,
       userTurnId: turn.id,
       mode: 'ASSIST',
-      sourceLastMessageId: last.id,
-      sourceSequence: last.sequence,
+      sourceLastMessageId: turnLastMessage.id,
+      sourceSequence: turn.lastSequence,
       sourceContextVersion: conversation?.contextVersion ?? 1,
       idempotencyKey: `scenario-reply:${operationId}:${turn.id}`,
       evidence: [],
@@ -944,15 +1059,17 @@ export class ScenarioLabService {
     throw new Error(`SCENARIO_CONTINUOUS_INVARIANT_FAILED:${snapshot.messages}/${snapshot.userTurns}/${snapshot.tasks}/${snapshot.replyJobs}`);
   }
 
-  private async bumpContextAndStale(scope: ScenarioScope, conversationId: string, oldReplyJobId?: string) {
-    const repository = this.repo('conversation');
-    if (!repository?.updateMany) return undefined;
-    await repository.updateMany({ where: { id: conversationId, ...this.scope(scope) }, data: { contextVersion: { increment: 1 }, needsReplan: true } });
-    if (oldReplyJobId) {
-      await this.repo('replyJob')?.updateMany?.({ where: { id: oldReplyJobId, ...this.scope(scope), status: { in: ACTIVE_REPLY_JOB_STATUSES } }, data: { status: 'STALE', staleReason: 'NEW_MESSAGE' } });
-      await this.repo('sendOutbox')?.updateMany?.({ where: { ...this.scope(scope), replyJobId: oldReplyJobId, status: { in: ['PENDING', 'SENDING'] } }, data: { status: 'CANCELLED', failureCode: 'REPLY_JOB_STALE', failureReason: 'NEW_MESSAGE' } });
+  private async observeMessageInvalidation(scope: ScenarioScope, conversationId: string, oldReplyJobId?: string) {
+    if (!oldReplyJobId) throw new Error('SCENARIO_STALE_REPLAN_OLD_REPLY_JOB_MISSING');
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      await this.drainMessagePipeline();
+      const oldJob = await this.repo('replyJob')?.findFirst?.({ where: { id: oldReplyJobId, ...this.scope(scope) }, select: { status: true } });
+      if (oldJob?.status === 'STALE') {
+        return this.repo('conversation')?.findFirst?.({ where: { id: conversationId, ...this.scope(scope) }, select: { contextVersion: true, needsReplan: true } });
+      }
+      if (attempt < 299) await new Promise<void>((resolve) => setTimeout(resolve, 50));
     }
-    return repository.findFirst?.({ where: { id: conversationId, ...this.scope(scope) }, select: { contextVersion: true, needsReplan: true } });
+    throw new Error('SCENARIO_STALE_REPLAN_MESSAGE_INVALIDATION_TIMEOUT');
   }
 
   private async findBySeed(repositoryName: string, scope: ScenarioScope, seedKey: string) {

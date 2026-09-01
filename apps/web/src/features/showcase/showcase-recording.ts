@@ -4,10 +4,18 @@ import type { ShowcaseRunUpdate } from './showcase-runner';
 export interface ShowcaseRecordingQuery {
   enabled: boolean;
   closing: boolean;
+  version: 'none' | 'v1' | 'v2';
+  focus: ShowcaseRecordingFocus;
 }
 
+export type ShowcaseRecordingFocus = 'all' | 'buyer' | 'evidence' | 'turn' | 'stale' | 'risk' | 'quality' | 'trace';
+
+const RECORDING_FOCUS_STATES = new Set<ShowcaseRecordingFocus>([
+  'all', 'buyer', 'evidence', 'turn', 'stale', 'risk', 'quality', 'trace',
+]);
+
 export interface RecordingTraceRow {
-  key: 'raw' | 'turn' | 'tasks' | 'context' | 'evidence' | 'policy' | 'guard' | 'receipt';
+  key: 'raw' | 'turn' | 'tasks' | 'context' | 'evidence' | 'policy' | 'delivery';
   label: string;
   state: 'done' | 'pending';
   summary: string;
@@ -26,8 +34,7 @@ const TRACE_STAGES: Array<{
   { key: 'context', label: 'Context', stages: ['CONTEXT'] },
   { key: 'evidence', label: 'Evidence', stages: ['EVIDENCE'] },
   { key: 'policy', label: 'Policy', stages: ['REPLY_POLICY'] },
-  { key: 'guard', label: 'SendGuard', stages: ['SEND_GUARD'] },
-  { key: 'receipt', label: 'Receipt', stages: ['SEND_RECEIPT'] },
+  { key: 'delivery', label: 'SendGuard / Receipt', stages: ['SEND_GUARD', 'SEND_RECEIPT'] },
 ];
 
 const RUN_STEP: Record<ShowcaseRunUpdate['status'], string> = {
@@ -43,8 +50,22 @@ const RUN_STEP: Record<ShowcaseRunUpdate['status'], string> = {
 
 export function parseShowcaseRecordingQuery(search: string): ShowcaseRecordingQuery {
   const params = new URLSearchParams(search);
-  const enabled = params.get('recording') === '1';
-  return { enabled, closing: enabled && params.get('closing') === '1' };
+  const recording = params.get('recording');
+  const version = recording === 'v2' ? 'v2' : recording === '1' ? 'v1' : 'none';
+  const enabled = version !== 'none';
+  const requestedFocus = params.get('focus') as ShowcaseRecordingFocus | null;
+  const focus = requestedFocus && RECORDING_FOCUS_STATES.has(requestedFocus) ? requestedFocus : 'all';
+  return { enabled, closing: enabled && params.get('closing') === '1', version, focus };
+}
+
+export function showcaseRecordingClasses(recording: ShowcaseRecordingQuery): string {
+  if (!recording.enabled) return 'showcase-page';
+  return [
+    'showcase-page',
+    'is-recording',
+    recording.version === 'v2' ? 'is-recording-v2' : '',
+    recording.version === 'v2' ? `focus-${recording.focus}` : '',
+  ].filter(Boolean).join(' ');
 }
 
 function arrayLength(value: unknown): number {
@@ -66,8 +87,8 @@ function traceSummary(key: RecordingTraceRow['key'], payload: Record<string, unk
   if (key === 'context') return `${arrayLength(payload.contexts)} 个上下文已解析`;
   if (key === 'evidence') return `冻结 ${numeric(payload.evidenceCount)} 条证据`;
   if (key === 'policy') return `${text(payload.mode, '已完成')} 策略已决策`;
-  if (key === 'guard') return `${text(payload.phase, '发送前')} ${payload.allowed === true ? '允许发送' : '拒绝发送'}`;
-  return `${text(payload.status, '已记录')} 回执已投影`;
+  if (key === 'delivery') return `SendGuard ${payload.guardAllowed === true ? 'PASS' : 'BLOCK'} · ${text(payload.receiptStatus, '等待回执')}`;
+  return '已记录';
 }
 
 function safeList(value: unknown, keys: string[]): unknown[] | undefined {
@@ -86,8 +107,7 @@ export function recordingTraceDetails(key: RecordingTraceRow['key'], payload: Re
   if (key === 'context') return compact({ contexts: safeList(payload.contexts, ['taskId', 'status', 'entitySelected', 'manualRequired']) });
   if (key === 'evidence') return pick(payload, ['evidenceCount', 'sourceTypes', 'knowledgeVersionIds']);
   if (key === 'policy') return pick(payload, ['mode', 'reasons', 'evidenceCount', 'taskStatuses']);
-  if (key === 'guard') return pick(payload, ['allowed', 'phase', 'replyJobId', 'failureCode']);
-  return pick(payload, ['sendOutboxId', 'senderRole', 'status']);
+  return pick(payload, ['guardAllowed', 'guardPhase', 'guardReplyJobId', 'guardFailureCode', 'sendOutboxId', 'senderRole', 'receiptStatus']);
 }
 
 function compact(value: Record<string, unknown>): Record<string, unknown> {
@@ -100,6 +120,28 @@ function pick(value: Record<string, unknown>, keys: string[]): Record<string, un
 
 export function projectRecordingTrace(trace?: DeveloperTrace): RecordingTraceRow[] {
   return TRACE_STAGES.map((definition) => {
+    if (definition.key === 'delivery') {
+      const guard = [...(trace?.events ?? [])].reverse().find((candidate) => candidate.stage === 'SEND_GUARD');
+      const receipt = [...(trace?.events ?? [])].reverse().find((candidate) => candidate.stage === 'SEND_RECEIPT');
+      if (!guard || !receipt) return { key: definition.key, label: definition.label, state: 'pending', summary: '等待真实事件' };
+      const payload = {
+        guardAllowed: guard.payload.allowed,
+        guardPhase: guard.payload.phase,
+        guardReplyJobId: guard.payload.replyJobId,
+        guardFailureCode: guard.payload.failureCode,
+        sendOutboxId: receipt.payload.sendOutboxId,
+        senderRole: receipt.payload.senderRole,
+        receiptStatus: receipt.payload.status,
+      };
+      return {
+        key: definition.key,
+        label: definition.label,
+        state: 'done',
+        summary: traceSummary(definition.key, payload),
+        createdAt: receipt.createdAt,
+        payload,
+      };
+    }
     const event = [...(trace?.events ?? [])].reverse().find((candidate) => definition.stages.includes(candidate.stage));
     if (!event) return { key: definition.key, label: definition.label, state: 'pending', summary: '等待真实事件' };
     return {

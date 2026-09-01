@@ -86,10 +86,10 @@ Generated from the connected local stack on 2026-08-31. All six catalog scenario
 
 - Release: [`v1.1.0-demo`](https://github.com/LYCMYT/AIkefu/releases/tag/v1.1.0-demo).
 - Video: [`aikefu-3min-demo.mp4`](https://github.com/LYCMYT/AIkefu/releases/download/v1.1.0-demo/aikefu-3min-demo.mp4).
-- Media: exactly 180 seconds, 1920×1080, 30 fps, H.264 High video and AAC-LC 48 kHz stereo audio.
-- Voice: XiaoxiaoNeural at `+50%` rate.
-- Subtitles: 26 burned-in cues plus the matching external `artifacts/recording/AIkefu-demo-subtitles.srt`; the MP4 intentionally contains no soft-subtitle track.
-- SHA256: `E64D832B7C67896424C13FAE785837545B89005BD172E500373CDD4E3564435C`.
+- Media: exactly 174.933 seconds, 1920×1080, 30 fps, H.264 High video and AAC-LC 48 kHz stereo audio.
+- Voice: XiaoxiaoNeural online neural TTS at `+45%` rate; it is not represented as human narration.
+- Subtitles: 29 burned-in cues plus the matching external `artifacts/video-v2/AIkefu-demo-v2-subtitles.srt`; the MP4 intentionally contains no soft-subtitle track.
+- SHA256: `E8BFA8D0E41CBEEDC1F186C3497200BDDF46B682D7BBC0608764F70DF9CEB9DC`.
 - Publication boundary: this Release asset is the public presentation artifact, not a public full-stack deployment, production SLA or real-commerce integration claim.
 
 ## Honest limitations

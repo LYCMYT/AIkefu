@@ -19,9 +19,9 @@ export function inferExplicitIntentTasks(input: string): ExplicitIntentTask[] {
   };
   const imageDamage = /\[图片\s+PRODUCT_DAMAGE\]|疑似商品破损/iu.test(text);
   const imageShippingLabel = /\[图片\s+SHIPPING_LABEL\]|物流标签信息/iu.test(text);
-  if (imageDamage) add(task('AFTER_SALES_QUERY', 'MEDIUM', [], [], []));
+  if (imageDamage) add(task('AFTER_SALES_QUERY', 'MEDIUM', ['ORDER'], [], []));
   if (imageShippingLabel) add(task('ORDER_QUERY', 'MEDIUM', ['ORDER'], [], ['GET_ORDER']));
-  if (/(?:库存|有货|还有|还剩|现货|缺货|售罄|(?:黑色|白色|红色|蓝色|绿色|灰色|奶油色).{0,10}(?:有吗|有么|有货))/iu.test(text)) {
+  if (/(?:库存|有货|还有|还剩|现货|缺货|售罄|(?:黑色|白色|红色|蓝色|绿色|灰色|奶油色).{0,10}(?:有吗|有么|有货|呢(?:[\s，。！？?!,.]*$)))/iu.test(text)) {
     add(task('INVENTORY_QUERY', 'LOW', ['PRODUCT', 'SKU'], [], ['GET_INVENTORY']));
   }
   if (/(?:尺码|尺寸|大小|合身|身高|体重|公斤|(?:^|[\s，,])(?:XXL|XL|XS|L|M|S)\s*(?:呢|多大|适合|怎么选|推荐|穿|吗|？|\?|$))/iu.test(text)) {
@@ -44,13 +44,13 @@ export function inferExplicitIntentTasks(input: string): ExplicitIntentTask[] {
     add(task('FAQ_QUERY', 'LOW', [], ['STORE'], []));
   }
   if (/(?:收到|到货|衣服|商品).{0,10}(?:破了|破损|损坏|坏了)/iu.test(text)) {
-    add(task('AFTER_SALES_QUERY', 'HIGH', [], [], ['TRANSFER_HUMAN']));
+    add(task('AFTER_SALES_QUERY', 'HIGH', ['ORDER'], [], ['TRANSFER_HUMAN']));
   }
   if (/(?:投诉|举报|差评)/iu.test(text)) {
     add(task('COMPLAINT', 'HIGH', [], [], ['TRANSFER_HUMAN']));
   }
   if (/(?:退款|退钱|退货|取消订单)/iu.test(text)) {
-    add(task('REFUND_REQUEST', 'HIGH', [], [], ['TRANSFER_HUMAN']));
+    add(task('REFUND_REQUEST', 'HIGH', ['ORDER'], [], ['TRANSFER_HUMAN']));
   }
   if (/(?:人工|真人客服|转客服)/iu.test(text)) {
     add(task('HUMAN_REQUEST', 'HIGH', [], [], ['TRANSFER_HUMAN']));

@@ -1,0 +1,285 @@
+{
+  "schemaVersion": 1,
+  "target": {
+    "duration": 175,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "codec": "H.264 yuv420p"
+  },
+  "transitions": {
+    "type": "hard-cut",
+    "duration": 0
+  },
+  "clips": [
+    {
+      "clip": "raw/00-hook.webm",
+      "in": 0.947,
+      "out": 9.24,
+      "duration": 8,
+      "timeline": {
+        "start": 0,
+        "end": 8
+      },
+      "focus": "buyer",
+      "overlay": [],
+      "subtitleRange": [
+        1,
+        1
+      ],
+      "narrationRange": [
+        1,
+        1
+      ],
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 0.947
+        },
+        {
+          "name": "buyer-workbench-visible",
+          "at": 0.959
+        },
+        {
+          "name": "capture-end",
+          "at": 9.301
+        }
+      ],
+      "sourceDuration": 8.293000000000001,
+      "playbackSpeed": 1.0366
+    },
+    {
+      "clip": "raw/01-evidence-auto.webm",
+      "in": 1.03,
+      "out": 27.391,
+      "duration": 26,
+      "timeline": {
+        "start": 8,
+        "end": 34
+      },
+      "focus": "evidence",
+      "overlay": [],
+      "subtitleRange": [
+        2,
+        5
+      ],
+      "narrationRange": [
+        2,
+        5
+      ],
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 1.03
+        },
+        {
+          "name": "verified-outcome-visible",
+          "at": 9.052
+        },
+        {
+          "name": "capture-end",
+          "at": 27.391
+        }
+      ],
+      "sourceDuration": 26.360999999999997,
+      "playbackSpeed": 1.0139
+    },
+    {
+      "clip": "raw/02-multi-turn.webm",
+      "in": 1.466,
+      "out": 26.831,
+      "duration": 25,
+      "timeline": {
+        "start": 34,
+        "end": 59
+      },
+      "focus": "turn",
+      "overlay": [],
+      "subtitleRange": [
+        6,
+        9
+      ],
+      "narrationRange": [
+        6,
+        9
+      ],
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 1.466
+        },
+        {
+          "name": "verified-outcome-visible",
+          "at": 16.556
+        },
+        {
+          "name": "capture-end",
+          "at": 26.831
+        }
+      ],
+      "sourceDuration": 25.365,
+      "playbackSpeed": 1.0146
+    },
+    {
+      "clip": "raw/03-stale-replan.webm",
+      "in": 0.99,
+      "out": 38.32,
+      "duration": 37,
+      "timeline": {
+        "start": 59,
+        "end": 96
+      },
+      "focus": "stale",
+      "overlay": [
+        "STALE",
+        "OLD REPLY · NOT DELIVERED",
+        "SendGuard PASS"
+      ],
+      "subtitleRange": [
+        10,
+        15
+      ],
+      "narrationRange": [
+        10,
+        15
+      ],
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 0.99
+        },
+        {
+          "name": "verified-outcome-visible",
+          "at": 8.808
+        },
+        {
+          "name": "capture-end",
+          "at": 38.345
+        }
+      ],
+      "sourceDuration": 37.33,
+      "playbackSpeed": 1.0089
+    },
+    {
+      "clip": "raw/04-human-handoff.webm",
+      "in": 1.05,
+      "out": 25.415,
+      "duration": 24,
+      "timeline": {
+        "start": 96,
+        "end": 120
+      },
+      "focus": "risk",
+      "overlay": [
+        "Pipeline Fixture",
+        "HIGH RISK",
+        "MANUAL"
+      ],
+      "subtitleRange": [
+        16,
+        19
+      ],
+      "narrationRange": [
+        16,
+        19
+      ],
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 1.05
+        },
+        {
+          "name": "verified-outcome-visible",
+          "at": 8.964
+        },
+        {
+          "name": "capture-end",
+          "at": 25.415
+        }
+      ],
+      "sourceDuration": 24.365,
+      "playbackSpeed": 1.0152
+    },
+    {
+      "clip": "raw/05-quality-regression.webm",
+      "in": 0.768,
+      "out": 21.04,
+      "duration": 20,
+      "timeline": {
+        "start": 120,
+        "end": 140
+      },
+      "focus": "quality",
+      "overlay": [],
+      "subtitleRange": [
+        20,
+        23
+      ],
+      "narrationRange": [
+        20,
+        23
+      ],
+      "markers": [
+        {
+          "name": "quality-evidence-visible",
+          "at": 0.768
+        },
+        {
+          "name": "capture-end",
+          "at": 21.126
+        }
+      ],
+      "sourceDuration": 20.272,
+      "playbackSpeed": 1.0136
+    },
+    {
+      "clip": "raw/06-trace-closing.webm",
+      "in": 9.483,
+      "out": 44.76,
+      "duration": 35,
+      "timeline": {
+        "start": 140,
+        "end": 175
+      },
+      "focus": "trace",
+      "overlay": [],
+      "subtitleRange": [
+        24,
+        29
+      ],
+      "narrationRange": [
+        24,
+        29
+      ],
+      "markers": [
+        {
+          "name": "trace-seven-stages-visible",
+          "at": 9.483
+        },
+        {
+          "name": "closing-visible",
+          "at": 28.895
+        },
+        {
+          "name": "capture-end",
+          "at": 44.843
+        }
+      ],
+      "sourceDuration": 35.277,
+      "playbackSpeed": 1.0079
+    }
+  ],
+  "outputs": {
+    "visualMaster": "AIkefu-demo-v2-visual-master.mp4",
+    "noVoice": "AIkefu-demo-v2-no-voice.mp4",
+    "ttsDraft": "AIkefu-demo-v2-tts-draft.mp4",
+    "final": null,
+    "finalReason": "No verified human voiceover-final.wav was provided; neural TTS is labelled draft."
+  },
+  "voice": {
+    "kind": "ONLINE_NEURAL_TTS_DRAFT",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "+45%",
+    "segments": 29
+  }
+}

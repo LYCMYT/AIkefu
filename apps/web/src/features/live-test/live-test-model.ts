@@ -107,24 +107,44 @@ export function deriveCurrentTurnLifecycle(conversation: Conversation | undefine
   const senderRole = candidateOutbox?.payload && typeof candidateOutbox.payload === 'object'
     ? (candidateOutbox.payload as Record<string, unknown>).senderRole
     : undefined;
+  const buyerSequence = buyerMessage?.sequence;
+  const replyMessagesAfterBuyer = buyerMessage
+    && conversation?.id === buyerMessage.conversationId
+    && isCommittedSequence(buyerSequence)
+    ? [...messages].reverse().filter((message) =>
+        replyRoles.has(message.role ?? '')
+        && isVisibleMessage(message)
+        && message.conversationId === buyerMessage.conversationId
+        && isCommittedSequence(message.sequence)
+        && message.sequence > buyerSequence,
+      )
+    : [];
+  const receiptExternalMessageId = candidateOutbox?.receipt?.externalMessageId;
+  const receiptResponse = candidateOutbox?.status === 'SENT'
+    ? replyMessagesAfterBuyer.find((message) => Boolean(message.externalMessageId) && (
+        message.externalMessageId === candidateOutbox.id
+        || message.externalMessageId === receiptExternalMessageId
+      ))
+    : undefined;
   const outbox = buyerMessage && candidateOutbox && (
     (job?.id && candidateOutbox.replyJobId === job.id)
-    || (senderRole === 'HUMAN' && (
+    || Boolean(receiptResponse)
+    || (candidateOutbox.status !== 'SENT' && senderRole === 'HUMAN' && (
       candidateOutbox.expectedLastMessageId === buyerMessage.id
       || (buyerMessage.sequence !== undefined && candidateOutbox.expectedSequence === buyerMessage.sequence)
     ))
-    || (candidateOutbox.replyJobId && (
+    || (candidateOutbox.status !== 'SENT' && candidateOutbox.replyJobId && (
       candidateOutbox.expectedLastMessageId === buyerMessage.id
       || (buyerMessage.sequence !== undefined && candidateOutbox.expectedSequence === buyerMessage.sequence)
     ))
   ) ? candidateOutbox : undefined;
-  const responseCandidate = buyerMessage ? [...messages].reverse().find((message) =>
-    replyRoles.has(message.role ?? '')
-    && isVisibleMessage(message)
-    && (buyerMessage.sequence === undefined || message.sequence === undefined || message.sequence > buyerMessage.sequence),
-  ) : undefined;
-  const response = responseCandidate && (outbox?.status === 'SENT' || draft?.status === 'SENT') ? responseCandidate : undefined;
+  const responseCandidate = replyMessagesAfterBuyer[0];
+  const response = receiptResponse ?? (responseCandidate && draft?.status === 'SENT' ? responseCandidate : undefined);
   return { buyerMessage, job, draft, outbox, response };
+}
+
+function isCommittedSequence(value: number | undefined): value is number {
+  return Number.isSafeInteger(value) && (value ?? -1) >= 0;
 }
 
 export function derivePipelineStages(conversation: Conversation | undefined, messages: Message[]): PipelineStage[] {
@@ -234,4 +254,20 @@ export function shouldRefreshLiveTest(event: unknown, shopId: string, conversati
   if (scopedShop && scopedShop !== shopId) return false;
   const scopedConversation = eventConversationId(event);
   return !scopedConversation || !conversationId || scopedConversation === conversationId;
+}
+
+export interface LiveTestRealtimeRefreshPlan {
+  conversationId?: string;
+  conversations?: true;
+  products?: true;
+  orders?: true;
+}
+
+/** Convert one pushed event into the smallest canonical REST reconciliation. */
+export function liveTestRealtimeRefreshPlan(event: unknown, selectedConversationId = ''): LiveTestRealtimeRefreshPlan {
+  const type = eventType(event);
+  if (type === 'PRODUCT_UPDATED' || type === 'PRODUCT_LEARNING_UPDATED') return { products: true };
+  if (type === 'ORDER_UPDATED') return { orders: true };
+  const conversationId = eventConversationId(event) || selectedConversationId;
+  return conversationId ? { conversationId } : { conversations: true };
 }

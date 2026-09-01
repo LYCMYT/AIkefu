@@ -58,7 +58,21 @@ export class TraceService {
   private async toDeveloperTrace(scope: WorkspaceScope, traceId: string, input: { conversationId?: string; traceIds?: string[] }) {
     const where = { ...scope, ...(input.conversationId ? { conversationId: input.conversationId } : {}), ...(input.traceIds ? { traceId: { in: input.traceIds } } : {}) };
     const rows = await this.prisma.traceEvent.findMany({ where, orderBy: { createdAt: 'asc' } });
-    return { traceId, events: rows.map((row) => ({ id: row.id, stage: row.stage, createdAt: row.createdAt.toISOString(), payload: redactTracePayload(asRecord(row.payloadJson)) })) };
+    return {
+      traceId,
+      events: rows.map((row) => ({
+        id: row.id,
+        workspaceId: row.workspaceId,
+        tenantId: row.tenantId,
+        shopId: row.shopId,
+        conversationId: row.conversationId,
+        replyJobId: row.replyJobId,
+        traceId: row.traceId,
+        stage: row.stage,
+        createdAt: row.createdAt.toISOString(),
+        payload: redactTracePayload(asRecord(row.payloadJson)),
+      })),
+    };
   }
 
   private requireEnabled(enabled: boolean): void {

@@ -213,7 +213,7 @@ export async function runShowcaseScenario(
   conversationId ||= await resolveConversationId(port, shop.id, buyer.id, signal);
   const finalConversation = await port.conversation(conversationId);
   observeConversation(finalConversation, observedTaskIntents, observedCustomerFacingText);
-  const trace = await safeTrace(port, conversationId, requiredTraceStages(scenario));
+  const trace = await safeTrace(port, conversationId, requiredTraceStages(scenario), traceReplyJobId(finalConversation));
   await assertScenarioEvidence({
     scenario,
     conversation: finalConversation,
@@ -294,16 +294,21 @@ async function assertScenarioEvidence(input: ScenarioEvidenceInput): Promise<voi
   if (typeof expectedBuyerTexts === 'number' && firstReplyBuyerTextCount !== expectedBuyerTexts) {
     throw new Error(`SHOWCASE_RAW_MESSAGE_COUNT:${firstReplyBuyerTextCount ?? 0}/${expectedBuyerTexts}`);
   }
-  assertTraceStages(trace, requiredTraceStages(scenario));
-  assertExpectedContext(scenario, conversation, trace, bindings);
-  assertTerminalMode(scenario, trace);
+  const replyJobId = traceReplyJobId(conversation);
+  assertTraceStages(trace, requiredTraceStages(scenario), replyJobId);
+  assertExpectedContext(scenario, conversation, trace, bindings, replyJobId);
+  assertTerminalMode(scenario, trace, replyJobId);
   assertHumanRequirement(scenario, conversation);
   assertOldReplyWasNotSent(scenario, conversation);
   if (scenario.expected.noKnowledgeEvidence === true) {
-    const latestEvidence = latestTracePayload(trace, 'EVIDENCE');
+    const latestEvidence = latestTracePayload(trace, 'EVIDENCE', replyJobId);
     if (!latestEvidence || latestEvidence.evidenceCount !== 0) throw new Error('SHOWCASE_SAFE_REPLY_USED_KNOWLEDGE');
   }
-  assertExpectedEvidence(scenario, trace, bindings);
+  assertExpectedEvidence(scenario, trace, bindings, replyJobId);
+}
+
+function traceReplyJobId(conversation: Conversation): string | undefined {
+  return conversation.activeReplyJob?.id ?? conversation.sendOutbox?.replyJobId ?? undefined;
 }
 
 function assertVerifiableExpectations(scenario: ShowcaseScenario): void {
@@ -331,9 +336,10 @@ function requiredTraceStages(scenario: ShowcaseScenario): string[] {
   return [...required];
 }
 
-function assertTraceStages(trace: DeveloperTrace | undefined, required: string[]): void {
+function assertTraceStages(trace: DeveloperTrace | undefined, required: string[], replyJobId?: string): void {
+  const events = scopedTraceEvents(trace, replyJobId);
   for (const stage of required) {
-    if (!trace?.events.some((event) => event.stage === stage)) throw new Error(`SHOWCASE_EXPECTED_TRACE_MISSING:${stage}`);
+    if (!events.some((event) => event.stage === stage)) throw new Error(`SHOWCASE_EXPECTED_TRACE_MISSING:${stage}`);
   }
 }
 
@@ -342,19 +348,20 @@ function assertExpectedContext(
   conversation: Conversation,
   trace: DeveloperTrace | undefined,
   bindings: ScenarioResourceBindings,
+  replyJobId?: string,
 ): void {
   const expected = record(scenario.expected.context);
   if (!expected) return;
-  const selectedContext = latestTracePayload(trace, 'CONTEXT');
+  const selectedContext = latestTracePayload(trace, 'CONTEXT', replyJobId);
   const contexts = Array.isArray(selectedContext?.contexts) ? selectedContext.contexts : [];
   if (!contexts.some((entry) => record(entry)?.entitySelected === true)) throw new Error('SHOWCASE_CONTEXT_ENTITY_NOT_SELECTED');
   const productKey = stringValue(expected.productKey);
+  const orderKey = stringValue(expected.orderKey);
   if (productKey) {
     const productId = bindings.productIds.get(productKey);
     if (!productId) throw new Error(`SHOWCASE_CONTEXT_PRODUCT_RESOURCE_UNOBSERVED:${productKey}`);
     if (conversation.currentProductId !== productId) throw new Error('SHOWCASE_CONTEXT_PRODUCT_MISMATCH');
   }
-  const orderKey = stringValue(expected.orderKey);
   if (orderKey) {
     const orderId = bindings.orderIds.get(orderKey);
     if (!orderId) throw new Error(`SHOWCASE_CONTEXT_ORDER_RESOURCE_UNOBSERVED:${orderKey}`);
@@ -362,10 +369,10 @@ function assertExpectedContext(
   }
 }
 
-function assertTerminalMode(scenario: ShowcaseScenario, trace: DeveloperTrace | undefined): void {
+function assertTerminalMode(scenario: ShowcaseScenario, trace: DeveloperTrace | undefined, replyJobId?: string): void {
   const expected = expectedMode(scenario.expected.terminalMode);
   if (!expected) return;
-  const observed = expectedMode(latestTracePayload(trace, 'REPLY_POLICY')?.mode);
+  const observed = expectedMode(latestTracePayload(trace, 'REPLY_POLICY', replyJobId)?.mode);
   if (!observed) throw new Error('SHOWCASE_TERMINAL_POLICY_MISSING');
   if (observed !== expected) throw new Error(`SHOWCASE_TERMINAL_MODE_MISMATCH:${observed}/${expected}`);
 }
@@ -404,11 +411,12 @@ function assertExpectedEvidence(
   scenario: ShowcaseScenario,
   trace: DeveloperTrace | undefined,
   bindings: ScenarioResourceBindings,
+  replyJobId?: string,
 ): void {
   const expected = record(scenario.expected.evidence);
   if (!expected) return;
   const minimumCount = nonNegativeInteger(expected.minimumCount, 'SHOWCASE_EVIDENCE_MINIMUM_INVALID');
-  const payload = [...(trace?.events ?? [])]
+  const payload = [...scopedTraceEvents(trace, replyJobId)]
     .reverse()
     .filter((event) => event.stage === 'EVIDENCE')
     .map((event) => record(event.payload))
@@ -443,8 +451,13 @@ function assertScenarioLabSteps(snapshot: Scenario | undefined): void {
   }
 }
 
-function latestTracePayload(trace: DeveloperTrace | undefined, stage: string): Record<string, unknown> | undefined {
-  return record([...((trace?.events) ?? [])].reverse().find((event) => event.stage === stage)?.payload);
+function latestTracePayload(trace: DeveloperTrace | undefined, stage: string, replyJobId?: string): Record<string, unknown> | undefined {
+  return record([...scopedTraceEvents(trace, replyJobId)].reverse().find((event) => event.stage === stage)?.payload);
+}
+
+function scopedTraceEvents(trace: DeveloperTrace | undefined, replyJobId?: string): DeveloperTrace['events'] {
+  const events = trace?.events ?? [];
+  return replyJobId ? events.filter((event) => event.replyJobId === replyJobId) : events;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -574,13 +587,19 @@ function isHumanConversation(conversation: Conversation): boolean {
   return Boolean(conversation.humanActive || conversation.effectiveMode === 'MANUAL' || conversation.activeReplyJob?.status === 'WAITING_HUMAN');
 }
 
-async function safeTrace(port: ShowcaseRunnerPort, conversationId: string, requiredStages: string[] = []): Promise<DeveloperTrace | undefined> {
+async function safeTrace(
+  port: ShowcaseRunnerPort,
+  conversationId: string,
+  requiredStages: string[] = [],
+  replyJobId?: string,
+): Promise<DeveloperTrace | undefined> {
   let latest: DeveloperTrace | undefined;
   const attempts = requiredStages.length ? 25 : 10;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       latest = await port.trace(conversationId);
-      if (latest.events.length > 0 && requiredStages.every((stage) => latest!.events.some((event) => event.stage === stage))) return latest;
+      const events = scopedTraceEvents(latest, replyJobId);
+      if (events.length > 0 && requiredStages.every((stage) => events.some((event) => event.stage === stage))) return latest;
     } catch {
       // Trace projection is intentionally non-blocking. Give its durable
       // writer a short bounded window, then return the latest truthful state.

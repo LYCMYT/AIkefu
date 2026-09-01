@@ -7,6 +7,13 @@ const heartbeatIntervalMs = 30_000;
 
 export type WorkspaceSocketEvent = WorkspaceEventEnvelope | Record<string, unknown>;
 
+/** Pages with a scoped realtime reconciler must not also reload their whole
+ * snapshot for the same event. Explicit reset/reconnect refreshes still use
+ * the independent snapshot version counter. */
+export function shouldAdvanceGlobalSnapshotVersion(pathname: string, _event: WorkspaceSocketEvent): boolean {
+  return pathname !== '/showcase' && !pathname.startsWith('/live-test/');
+}
+
 const conversationSnapshotEventTypes = new Set([
   'CONVERSATION_UPDATED',
   'MESSAGE_RECEIVED',

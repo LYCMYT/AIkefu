@@ -191,6 +191,34 @@ class ScenarioProductionHarness {
     process: async (replyScope: Row, replyJobId: string) => {
       const job = this.row('replyJob', { ...replyScope, id: replyJobId });
       if (!job) throw new Error('reply job missing');
+      const conversation = this.row('conversation', { ...this.fixtureScope, id: job.conversationId });
+      if (String(conversation?.externalConversationId ?? '').includes('message_during_generation')) {
+        const evidenceId = `evidence-${replyJobId}`;
+        this.rows.replyEvidence.set(evidenceId, {
+          id: evidenceId, ...replyScope, replyJobId, knowledgeItemId: 'knowledge-mia-shipping',
+          knowledgeVersionId: 'knowledge-mia-shipping-v1', knowledgeVersionNumber: 1,
+          sourceType: 'MANUAL', scope: 'STORE', productId: null,
+          retrievedContentSnapshotJson: { question: '偏远地区多久发货？', answer: '新疆等偏远地区以实际物流信息为准。' },
+          createdAt: new Date(), updatedAt: new Date(),
+        });
+        const outboxId = `send-${replyJobId}`;
+        this.rows.sendOutbox.set(outboxId, {
+          id: outboxId, ...replyScope, conversationId: job.conversationId, replyJobId,
+          status: 'SENT', payloadJson: { text: '新疆等偏远地区以实际物流信息为准。' },
+          receiptJson: { externalMessageId: outboxId }, createdAt: new Date(), updatedAt: new Date(),
+        });
+        this.rows.message.set(`message-${this.rows.message.size + 1}`, {
+          id: `message-${this.rows.message.size + 1}`, ...replyScope, conversationId: job.conversationId,
+          role: 'ASSISTANT', sequence: 3, externalMessageId: outboxId,
+          contentJson: { text: '新疆等偏远地区以实际物流信息为准。' }, status: 'ACTIVE', createdAt: new Date(), updatedAt: new Date(),
+        });
+        for (const stage of ['EVIDENCE', 'SEND_GUARD', 'SEND_RECEIPT']) {
+          const id = `trace-${stage}-${replyJobId}`;
+          this.rows.traceEvent.set(id, { id, ...replyScope, conversationId: job.conversationId, replyJobId, traceId: `reply-job:${replyJobId}`, stage, payloadJson: {}, createdAt: new Date(), updatedAt: new Date() });
+        }
+        job.status = 'SENT';
+        return { status: 'SENT' as const };
+      }
       const isMia = replyScope.shopId === 'shop-mia';
       const knowledgeItemId = isMia ? 'knowledge-mia-shipping' : 'knowledge-pixel-shipping';
       const knowledgeVersionId = isMia ? 'knowledge-mia-shipping-v1' : 'knowledge-pixel-shipping-v1';
@@ -250,6 +278,10 @@ class ScenarioProductionHarness {
   private commitMessage(conversation: Row, message: Row): void {
     this.rows.message.set(message.id, message);
     conversation.lastCommittedSequence = message.sequence;
+    conversation.contextVersion += 1;
+    conversation.needsReplan = true;
+    this.rowsFor('replyJob', { ...this.fixtureScope, conversationId: conversation.id, status: { in: ['PENDING', 'FAST_PATH_READY', 'GENERATING', 'WAITING_HUMAN', 'CANCELLING', 'RECOVERY_PENDING'] } })
+      .forEach((job) => { job.status = 'STALE'; job.staleReason = 'NEW_BUYER_MESSAGE'; });
     conversation.updatedAt = new Date();
   }
 
@@ -346,10 +378,27 @@ describe('ScenarioLabService production-service harness', () => {
         break;
       }
       case 'message_during_generation': {
-        expect(harness.rows.message.size).toBe(2);
+        expect(harness.rows.message.size).toBe(3);
         expect([...harness.rows.replyJob.values()].some((job) => job.status === 'STALE')).toBe(true);
-        expect([...harness.rows.conversation.values()].some((conversation) => conversation.contextVersion === 2 && conversation.needsReplan)).toBe(true);
-        expect([...harness.rows.replyJob.values()].some((job) => job.status === 'PENDING')).toBe(true);
+        expect([...harness.rows.conversation.values()].some((conversation) => conversation.contextVersion === 3 && conversation.needsReplan)).toBe(true);
+        const sentJob = [...harness.rows.replyJob.values()].find((job) => job.status === 'SENT');
+        expect(sentJob).toBeDefined();
+        const staleJob = [...harness.rows.replyJob.values()].find((job) => job.status === 'STALE');
+        const replacementTurn = harness.row('userTurn', { id: sentJob?.userTurnId });
+        expect(sentJob?.userTurnId).not.toBe(staleJob?.userTurnId);
+        expect(replacementTurn).toMatchObject({ lastSequence: 2, normalizedText: expect.stringContaining('我是新疆的') });
+        expect([...harness.rows.replyEvidence.values()]).toEqual(expect.arrayContaining([
+          expect.objectContaining({ replyJobId: sentJob?.id, scope: 'STORE' }),
+        ]));
+        expect([...harness.rows.sendOutbox.values()]).toEqual(expect.arrayContaining([
+          expect.objectContaining({ replyJobId: sentJob?.id, status: 'SENT' }),
+        ]));
+        expect([...harness.rows.message.values()]).toEqual(expect.arrayContaining([
+          expect.objectContaining({ role: 'ASSISTANT', contentJson: expect.objectContaining({ text: expect.stringMatching(/新疆|偏远地区/) }) }),
+        ]));
+        expect([...harness.rows.sendOutbox.values()].some((outbox) => outbox.replyJobId === staleJob?.id && ['PENDING', 'SENDING', 'SENT'].includes(outbox.status))).toBe(false);
+        expect(new Set([...harness.rows.traceEvent.values()].filter((event) => event.replyJobId === sentJob?.id).map((event) => event.stage)))
+          .toEqual(new Set(['EVIDENCE', 'SEND_GUARD', 'SEND_RECEIPT']));
         break;
       }
       case 'two_buyers': {
@@ -392,7 +441,9 @@ describe('ScenarioLabService production-service harness', () => {
         expect(harness.row('productSku', { id: 'sku-hoodie-xl' })?.inventory).toBe(0);
         expect(harness.row('order', { id: 'order-001' })?.status).toBe('SHIPPED');
         expect([...harness.rows.replyJob.values()].some((job) => job.status === 'STALE')).toBe(true);
-        expect([...harness.rows.conversation.values()].some((conversation) => conversation.contextVersion === 3 && conversation.needsReplan)).toBe(true);
+        // The buyer turn advances v1→v2; inventory and order are two distinct
+        // durable fact revisions, so each invalidation advances the cursor.
+        expect([...harness.rows.conversation.values()].some((conversation) => conversation.contextVersion === 4 && conversation.needsReplan)).toBe(true);
         break;
       }
     }

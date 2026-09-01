@@ -3,6 +3,7 @@ import type { Conversation, Message, Product } from '../../api';
 import {
   derivePipelineStages,
   deriveCurrentTurnLifecycle,
+  liveTestRealtimeRefreshPlan,
   liveTestRefreshKind,
   mergeLiveMessages,
   resolveContextProduct,
@@ -66,13 +67,14 @@ describe('Live Test projection model', () => {
   it('marks AI processing complete when the final reply and SENT receipt are already visible', () => {
     const response: Message = {
       id: 'message-reply', conversationId: 'conversation-a', role: 'ASSISTANT', kind: 'TEXT', status: 'ACTIVE',
-      text: '不建议使用烘干机。', sequence: 2, sentAt: '2026-08-29T08:00:02.000Z',
+      externalMessageId: 'outbox-a', text: '不建议使用烘干机。', sequence: 2, sentAt: '2026-08-29T08:00:02.000Z',
     };
     const conversation: Conversation = {
       id: 'conversation-a',
       sendOutbox: {
         id: 'outbox-a', replyJobId: 'job-a', idempotencyKey: 'reply-a',
         expectedLastMessageId: 'message-buyer', expectedSequence: 1, status: 'SENT',
+        receipt: { externalMessageId: 'outbox-a' },
       },
     };
 
@@ -80,6 +82,87 @@ describe('Live Test projection model', () => {
 
     expect(stages.map((stage) => stage.state)).toEqual(['done', 'done', 'done', 'done', 'done']);
     expect(stages[2]?.description).toBe('本轮回复已完成');
+  });
+
+  it('correlates a sent reply by its durable receipt after a scheduled welcome rebases the cursor', () => {
+    const welcome: Message & { externalMessageId: string } = {
+      id: 'message-welcome', externalMessageId: 'outbox-welcome', conversationId: 'conversation-a', role: 'ASSISTANT',
+      kind: 'TEXT', status: 'ACTIVE', text: '欢迎光临。', sequence: 2, sentAt: '2026-08-29T08:00:01.000Z',
+    };
+    const response: Message & { externalMessageId: string } = {
+      id: 'message-reply', externalMessageId: 'outbox-reply', conversationId: 'conversation-a', role: 'ASSISTANT',
+      kind: 'TEXT', status: 'ACTIVE', text: '您好，我在的。', sequence: 3, sentAt: '2026-08-29T08:00:02.000Z',
+    };
+    const conversation: Conversation = {
+      id: 'conversation-a',
+      sendOutbox: {
+        id: 'outbox-reply', replyJobId: 'job-a', idempotencyKey: 'reply-a',
+        expectedLastMessageId: 'message-welcome', expectedSequence: 2, status: 'SENT',
+        receipt: { externalMessageId: 'outbox-reply' },
+      },
+    };
+
+    const lifecycle = deriveCurrentTurnLifecycle(conversation, [buyerMessage, welcome, response]);
+    const stages = derivePipelineStages(conversation, [buyerMessage, welcome, response]);
+
+    expect(lifecycle).toMatchObject({ outbox: { id: 'outbox-reply' }, response: { id: 'message-reply' } });
+    expect(stages.map((stage) => stage.state)).toEqual(['done', 'done', 'done', 'done', 'done']);
+    expect(stages[4]?.description).toContain('SENT');
+  });
+
+  it('does not correlate a receipt to an assistant message before the latest buyer turn', () => {
+    const oldResponse: Message & { externalMessageId: string } = {
+      id: 'message-old-reply', externalMessageId: 'outbox-old', conversationId: 'conversation-a', role: 'ASSISTANT',
+      kind: 'TEXT', status: 'ACTIVE', text: '上一轮回复', sequence: 1, sentAt: '2026-08-29T07:59:59.000Z',
+    };
+    const latestBuyer: Message = {
+      ...buyerMessage, id: 'message-new-buyer', sequence: 2, text: '新问题', sentAt: '2026-08-29T08:01:00.000Z',
+    };
+    const conversation: Conversation = {
+      id: 'conversation-a',
+      sendOutbox: {
+        id: 'outbox-old', replyJobId: 'job-old', idempotencyKey: 'old',
+        expectedLastMessageId: 'message-old-reply', expectedSequence: 1, status: 'SENT',
+        receipt: { externalMessageId: 'outbox-old' },
+      },
+    };
+
+    const lifecycle = deriveCurrentTurnLifecycle(conversation, [oldResponse, latestBuyer]);
+    const stages = derivePipelineStages(conversation, [oldResponse, latestBuyer]);
+
+    expect(lifecycle).toMatchObject({ buyerMessage: { id: 'message-new-buyer' } });
+    expect(lifecycle.outbox).toBeUndefined();
+    expect(lifecycle.response).toBeUndefined();
+    expect(stages[4]?.state).toBe('idle');
+  });
+
+  it('fails closed when receipt ordering or conversation scope cannot be proven', () => {
+    const oldResponse: Message & { externalMessageId: string } = {
+      id: 'message-old-reply', externalMessageId: 'outbox-old', conversationId: 'conversation-a', role: 'ASSISTANT',
+      kind: 'TEXT', status: 'ACTIVE', text: '上一轮回复', sequence: 1, sentAt: '2026-08-29T07:59:59.000Z',
+    };
+    const optimisticBuyer: Message = {
+      ...buyerMessage, id: 'message-optimistic', sequence: undefined, text: '新问题', sentAt: '2026-08-29T08:01:00.000Z',
+    };
+    const crossConversationReply: Message & { externalMessageId: string } = {
+      ...oldResponse, id: 'message-other-conversation', conversationId: 'conversation-b', sequence: 3,
+    };
+    const conversation: Conversation = {
+      id: 'conversation-a',
+      sendOutbox: {
+        id: 'outbox-old', replyJobId: 'job-old', idempotencyKey: 'old',
+        expectedLastMessageId: 'message-old-reply', expectedSequence: 1, status: 'SENT',
+        receipt: { externalMessageId: 'outbox-old' },
+      },
+    };
+
+    const optimisticLifecycle = deriveCurrentTurnLifecycle(conversation, [oldResponse, optimisticBuyer]);
+    const crossConversationLifecycle = deriveCurrentTurnLifecycle(conversation, [buyerMessage, crossConversationReply]);
+
+    expect(optimisticLifecycle.outbox).toBeUndefined();
+    expect(optimisticLifecycle.response).toBeUndefined();
+    expect(crossConversationLifecycle.outbox).toBeUndefined();
+    expect(crossConversationLifecycle.response).toBeUndefined();
   });
 
   it('never mixes an old job or outbox into a newer buyer turn', () => {
@@ -118,6 +201,18 @@ describe('Live Test projection model', () => {
     expect(shouldRefreshLiveTest({ eventType: 'PRODUCT_LEARNING_UPDATED', payload: { shopId: 'shop-a' } }, 'shop-a', 'conversation-a')).toBe(true);
     expect(shouldRefreshLiveTest({ eventType: 'MESSAGE_RECEIVED', payload: { shopId: 'shop-b', conversationId: 'conversation-a' } }, 'shop-a', 'conversation-a')).toBe(false);
     expect(shouldRefreshLiveTest({ eventType: 'KNOWLEDGE_UPDATED', payload: { shopId: 'shop-a' } }, 'shop-a', 'conversation-a')).toBe(false);
+  });
+
+  it('plans one scoped REST refresh per realtime event instead of reloading every live-test resource', () => {
+    expect(liveTestRealtimeRefreshPlan({
+      eventType: 'REPLY_JOB_STREAM', payload: { shopId: 'shop-a', conversationId: 'conversation-a' },
+    }, 'conversation-a')).toEqual({ conversationId: 'conversation-a' });
+    expect(liveTestRealtimeRefreshPlan({
+      eventType: 'PRODUCT_LEARNING_UPDATED', payload: { shopId: 'shop-a' },
+    }, 'conversation-a')).toEqual({ products: true });
+    expect(liveTestRealtimeRefreshPlan({
+      eventType: 'ORDER_UPDATED', payload: { shopId: 'shop-a' },
+    }, 'conversation-a')).toEqual({ orders: true });
   });
 
   it('keeps same-shop realtime refreshes in the background without resetting operator state', () => {

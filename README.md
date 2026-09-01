@@ -18,7 +18,7 @@
 
 [![观看 AIkefu 三分钟演示](artifacts/showcase/showcase-overview.png)](https://github.com/LYCMYT/AIkefu/releases/download/v1.1.0-demo/aikefu-3min-demo.mp4)
 
-`v1.1.0-demo` 演示为 180 秒、1920×1080、30 fps、H.264/AAC、`zh-CN-XiaoxiaoNeural` `+50%` 旁白、26 条字幕 cue、画面硬字幕与同源外部 SRT，MP4 无软字幕轨。文件大小 13,831,390 bytes，SHA256 为 `E64D832B7C67896424C13FAE785837545B89005BD172E500373CDD4E3564435C`。
+`v1.1.0-demo` 演示为 174.933 秒、1920×1080、30 fps、H.264/AAC、`zh-CN-XiaoxiaoNeural` `+45%` 在线神经语音、29 条字幕 cue、画面硬字幕与同源外部 SRT，MP4 无软字幕轨。文件大小 9,165,137 bytes，SHA256 为 `E8BFA8D0E41CBEEDC1F186C3497200BDDF46B682D7BBC0608764F70DF9CEB9DC`。语音明确属于 TTS 版本，不冒充真人配音。
 
 建议先从 `/showcase` 了解六条主链，再进入工作台、买家模拟器、AI 管理中心和场景实验室。发布说明见 [`docs/RELEASE_V1.1.0_DEMO.md`](docs/RELEASE_V1.1.0_DEMO.md)，简历与面试文案见 [`docs/PORTFOLIO_RESUME_COPY.md`](docs/PORTFOLIO_RESUME_COPY.md)。
 
@@ -35,13 +35,13 @@
 
 | 范围 | 当前状态 |
 | --- | --- |
-| Unit | 694 / 694 通过（Release hygiene、录制合同、Contracts、Core、Mock、Web、API） |
-| API integration | 15 suites / 63 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
+| Unit | 708 / 708 通过（Release hygiene、录制合同、Contracts、Core、Mock、Web、API） |
+| API integration | 15 suites / 64 tests 通过，使用本地真实 PostgreSQL、Redis、MinIO 与 pgvector |
 | Contracts | 6 / 6 通过 |
 | 前端终态 Gate | Playwright 共 27 个唯一用例；真实环境 23 passed、4 skipped、0 failed，离线模式 6 passed、21 skipped、0 failed；两种模式均按真实状态保留互斥 skip |
 | Q0 生产回复评测 | 固定集：Offline 36 / 36、DeepSeek 36 / 36（21,463 / 2,540 Token，平均 2,326 ms）；独立 AUTO 集：Offline 10 / 10、DeepSeek 10 / 10（8,675 / 1,143 Token，平均 2,283 ms） |
 | 公网部署 | 未完成；没有把本地服务或容器验收表述为在线 Preview |
-| 3 分钟演示视频 | [`v1.1.0-demo` Release asset](https://github.com/LYCMYT/AIkefu/releases/download/v1.1.0-demo/aikefu-3min-demo.mp4)；180 秒、1920×1080、30 fps、H.264 + AAC；Xiaoxiao `+50%`、26 条 cue、画面硬字幕 + 外部 SRT、MP4 无软字幕轨 |
+| 3 分钟演示视频 | [`v1.1.0-demo` Release asset](https://github.com/LYCMYT/AIkefu/releases/download/v1.1.0-demo/aikefu-3min-demo.mp4)；174.933 秒、1920×1080、30 fps、H.264 + AAC；Xiaoxiao `+45%` 在线神经语音、29 条 cue、画面硬字幕 + 外部 SRT、MP4 无软字幕轨 |
 | 真实外部凭据 | DeepSeek Key 仅从仓库外服务端文件读取并已完成真实评测；真实电商平台凭据仍不在 V1 范围，任何 Secret 都不随仓库交付 |
 
 真实基础设施 Gate 已在本机 opt-in 环境通过，但尚未部署到公网。

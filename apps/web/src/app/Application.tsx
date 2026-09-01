@@ -3,7 +3,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ApiError, createWorkspace, getBootstrap, isWorkspaceCredentialError, resetCurrentWorkspace,
 } from '../api';
-import { connectWorkspaceSocket, type WorkspaceSocketEvent, type WorkspaceSocketStatus } from '../workspace-socket';
+import {
+  connectWorkspaceSocket,
+  shouldAdvanceGlobalSnapshotVersion,
+  type WorkspaceSocketEvent,
+  type WorkspaceSocketStatus,
+} from '../workspace-socket';
 import { matchWorkbenchRoute, navIcons, navigationItems, resolveAppPath, type AppPath } from './routes';
 import {
   defaultNavigationItem, errorMessage, eventHasWorkspaceShape, isPhase03SnapshotEvent,
@@ -77,6 +82,8 @@ export default function Application() {
   const [isResetting, setIsResetting] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const settingsDirtyRef = useRef(false);
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
   const acceptedLocationRef = useRef({ pathname: locationPath(), index: historyIndex() });
   const restoringHistoryRef = useRef(false);
   const navigateRef = useRef(navigate);
@@ -241,7 +248,10 @@ export default function Application() {
 
   const handleSocketEvent = useCallback((event: WorkspaceSocketEvent) => {
     setRealtimeEvent(event);
-    if (eventHasWorkspaceShape(event) || isPhase03SnapshotEvent(event)) setSnapshotVersion((value) => value + 1);
+    if (
+      shouldAdvanceGlobalSnapshotVersion(pathnameRef.current, event)
+      && (eventHasWorkspaceShape(event) || isPhase03SnapshotEvent(event))
+    ) setSnapshotVersion((value) => value + 1);
   }, []);
 
   useEffect(() => {

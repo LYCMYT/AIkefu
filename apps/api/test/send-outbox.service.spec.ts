@@ -161,7 +161,8 @@ describe('SendOutboxService', () => {
       },
       replyJob: { findFirst: jest.fn().mockResolvedValue({ id: 'reply-a' }) },
     };
-    const service = new SendOutboxService({ $transaction: jest.fn((work: Function) => work(tx)) } as never);
+    const traces = { record: jest.fn().mockResolvedValue(undefined) };
+    const service = new SendOutboxService({ $transaction: jest.fn((work: Function) => work(tx)) } as never, undefined, traces as never);
 
     await expect(service.claim(scope, reply.id)).resolves.toMatchObject({ claimed: true, sendOutbox: { id: reply.id } });
     await expect(service.fenceBeforeTransport(scope, reply.id)).resolves.toBe(true);
@@ -169,6 +170,12 @@ describe('SendOutboxService', () => {
       where: expect.objectContaining({ id: welcome.id, status: 'SENT', idempotencyKey: { startsWith: 'scheduled-send:scheduled:welcome:' } }),
       select: expect.any(Object),
     });
+    expect(traces.record).toHaveBeenCalledWith(
+      { ...scope, conversationId: 'conversation-a', replyJobId: 'reply-a' },
+      expect.stringMatching(/^send:/),
+      'SEND_GUARD',
+      expect.objectContaining({ allowed: true }),
+    );
   });
 
   it('requires an AI outbox linked ReplyJob to remain FAST_PATH_READY at both claim and transport fence', async () => {

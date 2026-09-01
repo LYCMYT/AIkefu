@@ -1,0 +1,209 @@
+{
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": "+45%",
+  "segments": [
+    {
+      "index": 1,
+      "file": "segment-01.mp3",
+      "offsetMs": 300,
+      "endMs": 7600,
+      "text": "AIkefu 不只生成答案，更判断这条答案能不能安全发送。"
+    },
+    {
+      "index": 2,
+      "file": "segment-02.mp3",
+      "offsetMs": 8200,
+      "endMs": 14200,
+      "text": "买家先发送商品卡，问题绑定具体商品，不靠聊天文本猜对象。"
+    },
+    {
+      "index": 3,
+      "file": "segment-03.mp3",
+      "offsetMs": 14400,
+      "endMs": 20500,
+      "text": "系统检索商品知识，并把命中版本冻结为 Reply Evidence。"
+    },
+    {
+      "index": 4,
+      "file": "segment-04.mp3",
+      "offsetMs": 20700,
+      "endMs": 27500,
+      "text": "只有证据充分、风险可控，策略才允许进入 AUTO。"
+    },
+    {
+      "index": 5,
+      "file": "segment-05.mp3",
+      "offsetMs": 27700,
+      "endMs": 33700,
+      "text": "SendGuard 复核上下文后外发，买家收到不建议烘干的回复。"
+    },
+    {
+      "index": 6,
+      "file": "segment-06.mp3",
+      "offsetMs": 34200,
+      "endMs": 40000,
+      "text": "黑色、XL、身高体重，不应该触发三次互相打断的回复。"
+    },
+    {
+      "index": 7,
+      "file": "segment-07.mp3",
+      "offsetMs": 40200,
+      "endMs": 46700,
+      "text": "Turn Buffer 合并连续输入，再统一规划库存和尺码任务。"
+    },
+    {
+      "index": 8,
+      "file": "segment-08.mp3",
+      "offsetMs": 46900,
+      "endMs": 52700,
+      "text": "买家继续问白色，系统继承同一商品上下文。"
+    },
+    {
+      "index": 9,
+      "file": "segment-09.mp3",
+      "offsetMs": 52900,
+      "endMs": 58700,
+      "text": "尺码知识不足时只生成 ASSIST 草稿，不冒充已发送消息。"
+    },
+    {
+      "index": 10,
+      "file": "segment-10.mp3",
+      "offsetMs": 59200,
+      "endMs": 65200,
+      "text": "旧回复生成中，买家补充了会改变物流答案的新疆信息。"
+    },
+    {
+      "index": 11,
+      "file": "segment-11.mp3",
+      "offsetMs": 65400,
+      "endMs": 71800,
+      "text": "新消息提交后，contextVersion 立即增加。"
+    },
+    {
+      "index": 12,
+      "file": "segment-12.mp3",
+      "offsetMs": 72000,
+      "endMs": 78500,
+      "text": "旧 ReplyJob 转为 STALE，持久状态拒绝它继续发送。"
+    },
+    {
+      "index": 13,
+      "file": "segment-13.mp3",
+      "offsetMs": 78700,
+      "endMs": 84400,
+      "text": "数据库证明旧任务没有可投递 Outbox，也没有买家可见消息。"
+    },
+    {
+      "index": 14,
+      "file": "segment-14.mp3",
+      "offsetMs": 84600,
+      "endMs": 90400,
+      "text": "新的 UserTurn 重新检索偏远地区 Evidence。"
+    },
+    {
+      "index": 15,
+      "file": "segment-15.mp3",
+      "offsetMs": 90600,
+      "endMs": 95700,
+      "text": "新回复通过 SendGuard 和回执，再投影到买家端。"
+    },
+    {
+      "index": 16,
+      "file": "segment-16.mp3",
+      "offsetMs": 96200,
+      "endMs": 102000,
+      "text": "售后输入包含订单卡、破损图片 Fixture 和退款投诉。"
+    },
+    {
+      "index": 17,
+      "file": "segment-17.mp3",
+      "offsetMs": 102200,
+      "endMs": 108800,
+      "text": "系统识别售后、退款和投诉，并绑定订单上下文。"
+    },
+    {
+      "index": 18,
+      "file": "segment-18.mp3",
+      "offsetMs": 109000,
+      "endMs": 114500,
+      "text": "退款执行属于高风险动作，必须转人工。"
+    },
+    {
+      "index": 19,
+      "file": "segment-19.mp3",
+      "offsetMs": 114700,
+      "endMs": 119700,
+      "text": "消费者只看到接管提示，系统没有声称退款完成。"
+    },
+    {
+      "index": 20,
+      "file": "segment-20.mp3",
+      "offsetMs": 120300,
+      "endMs": 126000,
+      "text": "真实 E017 回归问题是：你们支持线下试穿吗？"
+    },
+    {
+      "index": 21,
+      "file": "segment-21.mp3",
+      "offsetMs": 126200,
+      "endMs": 131700,
+      "text": "旧失败用退货政策回答试穿，相关但没有回答问题。"
+    },
+    {
+      "index": 22,
+      "file": "segment-22.mp3",
+      "offsetMs": 131900,
+      "endMs": 136500,
+      "text": "两个 Gate 捕获它：无证据，而且没有回答问题。"
+    },
+    {
+      "index": 23,
+      "file": "segment-23.mp3",
+      "offsetMs": 136700,
+      "endMs": 139700,
+      "text": "当前结果不编造支持，安全转人工确认。"
+    },
+    {
+      "index": 24,
+      "file": "segment-24.mp3",
+      "offsetMs": 140300,
+      "endMs": 145000,
+      "text": "Trace 只展示结构化脱敏证据，不返回 Prompt 或思维链。"
+    },
+    {
+      "index": 25,
+      "file": "segment-25.mp3",
+      "offsetMs": 145200,
+      "endMs": 151000,
+      "text": "Raw Message 进入 UserTurn，再形成 TaskBundle。"
+    },
+    {
+      "index": 26,
+      "file": "segment-26.mp3",
+      "offsetMs": 151200,
+      "endMs": 157200,
+      "text": "Context 绑定实体，Evidence 固化依据，Policy 决定模式。"
+    },
+    {
+      "index": 27,
+      "file": "segment-27.mp3",
+      "offsetMs": 157400,
+      "endMs": 162200,
+      "text": "SendGuard 和 Receipt 闭合可靠发送链路。"
+    },
+    {
+      "index": 28,
+      "file": "segment-28.mp3",
+      "offsetMs": 162500,
+      "endMs": 169000,
+      "text": "有依据时自动处理，不确定时安全交给人。"
+    },
+    {
+      "index": 29,
+      "file": "segment-29.mp3",
+      "offsetMs": 169200,
+      "endMs": 174700,
+      "text": "演示使用 DeepSeek 和 Hybrid RAG，平台与业务数据均为模拟。"
+    }
+  ]
+}

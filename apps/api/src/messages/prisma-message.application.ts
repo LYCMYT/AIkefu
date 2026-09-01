@@ -239,7 +239,7 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
           where: { status: { in: ['PENDING', 'GENERATING', 'FAST_PATH_READY', 'WAITING_HUMAN', 'CANCELLING', 'RECOVERY_PENDING'] } },
           orderBy: { updatedAt: 'desc' }, take: 1, include: { draft: true, sendOutbox: true },
         },
-        sendOutboxes: { orderBy: { updatedAt: 'desc' }, take: 1 },
+        sendOutboxes: { orderBy: { updatedAt: 'desc' }, take: 10 },
       },
       orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
     });
@@ -264,7 +264,7 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
           include: { draft: true, sendOutbox: true, evidences: true },
         },
         tasks: { orderBy: { createdAt: 'asc' } },
-        sendOutboxes: { orderBy: { updatedAt: 'desc' }, take: 1 },
+        sendOutboxes: { orderBy: { updatedAt: 'desc' }, take: 10 },
       },
     });
     if (!conversation) throw missing('CONVERSATION_NOT_FOUND', 'Conversation not found in this Workspace');
@@ -335,7 +335,7 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
             currentDraft: conversation.replyJobs[0].draft ? this.toReplyDraft(conversation.replyJobs[0].draft) : null,
           }
         : { activeReplyJobId: null, activeReplyJob: null, currentDraft: null }),
-      sendOutbox: conversation.sendOutboxes?.[0] ? this.toSendOutbox(conversation.sendOutboxes[0]) : null,
+      sendOutbox: this.toConversationSendOutbox(conversation),
       taskBundle: this.toTaskBundle(
         conversation.tasks ?? [],
         conversation.replyJobs?.[0]?.userTurnId ?? conversation.tasks?.at(-1)?.userTurnId,
@@ -1579,7 +1579,7 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
           where: { status: { in: ['PENDING', 'GENERATING', 'FAST_PATH_READY', 'WAITING_HUMAN', 'CANCELLING', 'RECOVERY_PENDING'] } },
           orderBy: { updatedAt: 'desc' }, take: 1, include: { draft: true, sendOutbox: true },
         },
-        sendOutboxes: { orderBy: { updatedAt: 'desc' }, take: 1 },
+        sendOutboxes: { orderBy: { updatedAt: 'desc' }, take: 10 },
       },
     });
     if (!conversation) return;
@@ -1715,9 +1715,7 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
             currentDraft: conversation.replyJobs[0].draft ? this.toReplyDraft(conversation.replyJobs[0].draft) : null,
           }
         : { activeReplyJobId: null, activeReplyJob: null, currentDraft: null }),
-      sendOutbox: conversation.sendOutboxes?.[0]
-        ? this.toSendOutbox(conversation.sendOutboxes[0])
-        : conversation.replyJobs?.[0]?.sendOutbox ? this.toSendOutbox(conversation.replyJobs[0].sendOutbox) : null,
+      sendOutbox: this.toConversationSendOutbox(conversation),
       ...(last ? { lastMessage: this.toMessage(last, last._count?.versions ? last._count.versions + 1 : 1) } : {}),
     };
   }
@@ -1732,6 +1730,50 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
       currentDraft: raw.draft ? this.toReplyDraft(raw.draft) : null,
       sendOutbox: raw.sendOutbox ? this.toSendOutbox(raw.sendOutbox) : null,
     };
+  }
+
+  /**
+   * Project the outbox that belongs to the current visible reply lifecycle.
+   * Courtesy messages (welcome/closing) are deliberately not allowed to hide
+   * a reply receipt merely because their failure was updated a moment later.
+   */
+  private toConversationSendOutbox(conversation: any) {
+    const active = conversation.replyJobs?.[0]?.sendOutbox;
+    if (active) return this.toSendOutbox(active);
+    const outboxes = Array.isArray(conversation.sendOutboxes) ? conversation.sendOutboxes : [];
+    const messages = Array.isArray(conversation.messages) ? conversation.messages : [];
+    const buyerSequences = messages
+      .filter((message: any) => message.role === 'BUYER' && Number.isSafeInteger(message.sequence))
+      .map((message: any) => message.sequence as number);
+    const latestBuyerSequence = buyerSequences.length ? Math.max(...buyerSequences) : undefined;
+    const replyExternalIds = new Set(messages
+      .filter((message: any) => (
+        ['ASSISTANT', 'AI', 'HUMAN'].includes(message.role)
+        && typeof message.externalMessageId === 'string'
+        && (latestBuyerSequence === undefined || (Number.isSafeInteger(message.sequence) && message.sequence > latestBuyerSequence))
+      ))
+      .map((message: any) => message.externalMessageId as string));
+    const projected = outboxes.find((outbox: any) => {
+      const receipt = this.recordOrNull(outbox.receiptJson);
+      const receiptExternalId = typeof receipt?.externalMessageId === 'string' ? receipt.externalMessageId : undefined;
+      return replyExternalIds.has(outbox.id) || Boolean(receiptExternalId && replyExternalIds.has(receiptExternalId));
+    });
+    if (projected) return this.toSendOutbox(projected);
+    const latestBuyer = latestBuyerSequence === undefined
+      ? undefined
+      : messages.find((message: any) => message.role === 'BUYER' && message.sequence === latestBuyerSequence);
+    const pendingReply = outboxes.find((outbox: any) => {
+      const payload = this.recordOrNull(outbox.payloadJson);
+      const senderRole = payload?.senderRole;
+      const replyOwned = Boolean(outbox.replyJobId) || senderRole === 'HUMAN';
+      if (!replyOwned || !latestBuyer) return false;
+      return outbox.expectedLastMessageId === latestBuyer.id || outbox.expectedSequence === latestBuyer.sequence;
+    });
+    if (pendingReply) return this.toSendOutbox(pendingReply);
+    const newestReplyOwned = latestBuyerSequence === undefined
+      ? outboxes.find((outbox: any) => Boolean(outbox.replyJobId))
+      : undefined;
+    return newestReplyOwned ? this.toSendOutbox(newestReplyOwned) : null;
   }
 
   private toReplyDraft(raw: any) {

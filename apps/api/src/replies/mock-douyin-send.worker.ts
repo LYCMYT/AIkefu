@@ -84,7 +84,7 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
         const sentAt = typeof delivery.receipt.sentAt === 'string' ? delivery.receipt.sentAt : undefined;
         if (await this.persistVisibleMessage(scope, claim.sendOutbox.id, delivery.conversationId, delivery.text, delivery.senderRole, externalMessageId, sentAt)) {
           this.publishRefresh(scope, delivery.conversationId);
-          await this.recordReceiptTrace(scope, delivery.conversationId, externalMessageId, claim.sendOutbox.id, delivery.senderRole);
+          await this.recordReceiptTrace(scope, delivery.conversationId, externalMessageId, claim.sendOutbox.id, delivery.senderRole, claim.sendOutbox.replyJobId);
         }
         sent += 1;
       } catch (error) {
@@ -118,7 +118,7 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
       if (await this.persistVisibleMessage(scope, row.id, row.conversationId, text, senderRolePayload(row.payloadJson), externalMessageId, typeof receipt.sentAt === 'string' ? receipt.sentAt : undefined)) {
         repaired += 1;
         this.publishRefresh(scope, row.conversationId);
-        await this.recordReceiptTrace(scope, row.conversationId, externalMessageId, row.id, senderRolePayload(row.payloadJson));
+        await this.recordReceiptTrace(scope, row.conversationId, externalMessageId, row.id, senderRolePayload(row.payloadJson), row.replyJobId);
       }
     }
     return repaired;
@@ -192,11 +192,11 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async recordReceiptTrace(scope: { workspaceId: string; tenantId: string; shopId: string }, conversationId: string, externalMessageId: string | undefined, sendOutboxId: string, senderRole: 'AI' | 'HUMAN'): Promise<void> {
+  private async recordReceiptTrace(scope: { workspaceId: string; tenantId: string; shopId: string }, conversationId: string, externalMessageId: string | undefined, sendOutboxId: string, senderRole: 'AI' | 'HUMAN', replyJobId?: string | null): Promise<void> {
     if (!this.traces || !externalMessageId) return;
     try {
       const message = await this.prisma.message.findFirst({ where: { ...scope, platform: 'DOUYIN_DEMO', externalMessageId }, select: { id: true } });
-      if (message) await this.traces.record({ ...scope, conversationId }, `reply:${message.id}`, 'SEND_RECEIPT', { sendOutboxId, senderRole, status: 'SENT' });
+      if (message) await this.traces.record({ ...scope, conversationId, ...(replyJobId ? { replyJobId } : {}) }, `reply:${message.id}`, 'SEND_RECEIPT', { sendOutboxId, senderRole, status: 'SENT' });
     } catch { /* diagnostics must not affect a confirmed receipt */ }
   }
 }

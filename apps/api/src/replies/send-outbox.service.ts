@@ -238,7 +238,7 @@ export class SendOutboxService {
         forbiddenTermBlocked,
       });
       if (!guard.allowed) return this.rejectClaim(tx, scope, outbox.id, guard.failureCode);
-      void this.recordTrace(scope, outbox.conversationId, outbox.id, 'SEND_GUARD', { allowed: true, phase: 'CLAIM', replyJobId: outbox.replyJobId ?? null });
+      void this.recordTrace(scope, outbox.conversationId, outbox.id, outbox.replyJobId, 'SEND_GUARD', { allowed: true, phase: 'CLAIM', replyJobId: outbox.replyJobId ?? null });
       const claimed = await tx.sendOutbox.updateMany({
         where: { id: outbox.id, ...scope, status: 'PENDING' },
         data: { status: 'SENDING' },
@@ -293,7 +293,7 @@ export class SendOutboxService {
         });
         return false;
       }
-      void this.recordTrace(scope, outbox.conversationId, outbox.id, 'SEND_GUARD', { allowed: true, phase: 'TRANSPORT_FENCE', replyJobId: outbox.replyJobId ?? null });
+      void this.recordTrace(scope, outbox.conversationId, outbox.id, outbox.replyJobId, 'SEND_GUARD', { allowed: true, phase: 'TRANSPORT_FENCE', replyJobId: outbox.replyJobId ?? null });
       const started = await tx.sendOutbox.updateMany({
         where: { id: outbox.id, ...scope, status: 'SENDING', transportStartedAt: null },
         data: { transportStartedAt: new Date() },
@@ -438,8 +438,10 @@ export class SendOutboxService {
     return { claimed: false, failureCode };
   }
 
-  private async recordTrace(scope: ReplyJobScope, conversationId: string, sendOutboxId: string, stage: string, payload: Record<string, unknown>): Promise<void> {
-    try { await this.traces?.record({ ...scope, conversationId }, `send:${sendOutboxId}`, stage, payload); } catch { /* tracing cannot affect a delivery decision */ }
+  private async recordTrace(scope: ReplyJobScope, conversationId: string, sendOutboxId: string, replyJobId: string | null, stage: string, payload: Record<string, unknown>): Promise<void> {
+    try {
+      await this.traces?.record({ ...scope, conversationId, ...(replyJobId ? { replyJobId } : {}) }, `send:${sendOutboxId}`, stage, payload);
+    } catch { /* tracing cannot affect a delivery decision */ }
   }
 }
 

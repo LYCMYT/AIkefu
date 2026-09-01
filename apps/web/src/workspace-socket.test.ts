@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import websocketSchemaText from '../../../specs/websocket-events.json?raw';
 import { conversationModeOptionLabel, isConversationModeAllowed, sendOutboxStatusLabel } from './App';
-import { conversationSnapshotRefreshTarget, refreshConversationForWorkspaceEvent } from './workspace-socket';
+import {
+  conversationSnapshotRefreshTarget,
+  refreshConversationForWorkspaceEvent,
+  shouldAdvanceGlobalSnapshotVersion,
+} from './workspace-socket';
 
 type SchemaDefinition = {
   required?: string[];
@@ -74,6 +78,18 @@ describe('Phase 04 workspace event contract', () => {
     });
     expect(observed).toBe(true);
     expect(called).toEqual(['conversation-1']);
+  });
+
+  it('does not duplicate global snapshot reloads on pages that reconcile the same realtime event directly', () => {
+    const event = {
+      eventId: 'evt-scoped', eventType: 'REPLY_JOB_STREAM', workspaceId: 'workspace-1', entityType: 'REPLY_JOB',
+      entityId: 'reply-job-1', entityVersion: 4, occurredAt: '2026-08-27T10:00:03.000Z',
+      payload: { conversationId: 'conversation-1', replyJobId: 'reply-job-1' },
+    } as const;
+
+    expect(shouldAdvanceGlobalSnapshotVersion('/showcase', event)).toBe(false);
+    expect(shouldAdvanceGlobalSnapshotVersion('/live-test/shop-1', event)).toBe(false);
+    expect(shouldAdvanceGlobalSnapshotVersion('/workbench/shops/shop-1', event)).toBe(true);
   });
 
   it('validates ConversationUpdated against the emitted nested conversation snapshot shape', () => {

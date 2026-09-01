@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-01T05:01:31.813Z",
+  "baseUrl": "http://127.0.0.1:5173",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "provider": "DeepSeek",
+  "platform": "MockDouyinAdapter",
+  "dataBoundary": "Synthetic Data",
+  "imageBoundary": "Pipeline Fixture",
+  "traceBoundary": "Structured redacted metadata only",
+  "clips": [
+    {
+      "id": "hook",
+      "file": "raw/00-hook.webm",
+      "focus": "buyer",
+      "scenarioId": null,
+      "target": {
+        "start": 0,
+        "end": 8,
+        "duration": 8
+      },
+      "source": {
+        "duration": 9.24,
+        "in": 0.947,
+        "out": 9.24
+      },
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 0.947
+        },
+        {
+          "name": "buyer-workbench-visible",
+          "at": 0.959
+        },
+        {
+          "name": "capture-end",
+          "at": 9.301
+        }
+      ]
+    },
+    {
+      "id": "evidence-auto",
+      "file": "raw/01-evidence-auto.webm",
+      "focus": "evidence",
+      "scenarioId": "SC-01-PRODUCT-CARE",
+      "target": {
+        "start": 8,
+        "end": 34,
+        "duration": 26
+      },
+      "source": {
+        "duration": 27.52,
+        "in": 1.03,
+        "out": 27.391
+      },
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 1.03
+        },
+        {
+          "name": "verified-outcome-visible",
+          "at": 9.052
+        },
+        {
+          "name": "capture-end",
+          "at": 27.391
+        }
+      ]
+    },
+    {
+      "id": "multi-turn",
+      "file": "raw/02-multi-turn.webm",
+      "focus": "turn",
+      "scenarioId": "SC-02-MULTI-TURN",
+      "target": {
+        "start": 34,
+        "end": 59,
+        "duration": 25
+      },
+      "source": {
+        "duration": 27.8,
+        "in": 1.466,
+        "out": 26.831
+      },
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 1.466
+        },
+        {
+          "name": "verified-outcome-visible",
+          "at": 16.556
+        },
+        {
+          "name": "capture-end",
+          "at": 26.831
+        }
+      ]
+    },
+    {
+      "id": "stale-replan",
+      "file": "raw/03-stale-replan.webm",
+      "focus": "stale",
+      "scenarioId": "SC-03-STALE-REPLAN",
+      "target": {
+        "start": 59,
+        "end": 96,
+        "duration": 37
+      },
+      "source": {
+        "duration": 38.32,
+        "in": 0.99,
+        "out": 38.32
+      },
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 0.99
+        },
+        {
+          "name": "verified-outcome-visible",
+          "at": 8.808
+        },
+        {
+          "name": "capture-end",
+          "at": 38.345
+        }
+      ]
+    },
+    {
+      "id": "human-handoff",
+      "file": "raw/04-human-handoff.webm",
+      "focus": "risk",
+      "scenarioId": "SC-04-IMAGE-HUMAN",
+      "target": {
+        "start": 96,
+        "end": 120,
+        "duration": 24
+      },
+      "source": {
+        "duration": 25.44,
+        "in": 1.05,
+        "out": 25.415
+      },
+      "markers": [
+        {
+          "name": "capture-start",
+          "at": 1.05
+        },
+        {
+          "name": "verified-outcome-visible",
+          "at": 8.964
+        },
+        {
+          "name": "capture-end",
+          "at": 25.415
+        }
+      ]
+    },
+    {
+      "id": "quality-regression",
+      "file": "raw/05-quality-regression.webm",
+      "focus": "quality",
+      "scenarioId": null,
+      "target": {
+        "start": 120,
+        "end": 140,
+        "duration": 20
+      },
+      "source": {
+        "duration": 21.04,
+        "in": 0.768,
+        "out": 21.04
+      },
+      "markers": [
+        {
+          "name": "quality-evidence-visible",
+          "at": 0.768
+        },
+        {
+          "name": "capture-end",
+          "at": 21.126
+        }
+      ]
+    },
+    {
+      "id": "trace-closing",
+      "file": "raw/06-trace-closing.webm",
+      "focus": "trace",
+      "scenarioId": "SC-01-PRODUCT-CARE",
+      "target": {
+        "start": 140,
+        "end": 175,
+        "duration": 35
+      },
+      "source": {
+        "duration": 44.76,
+        "in": 9.483,
+        "out": 44.76
+      },
+      "markers": [
+        {
+          "name": "trace-seven-stages-visible",
+          "at": 9.483
+        },
+        {
+          "name": "closing-visible",
+          "at": 28.895
+        },
+        {
+          "name": "capture-end",
+          "at": 44.843
+        }
+      ]
+    }
+  ]
+}

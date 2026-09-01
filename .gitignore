@@ -32,6 +32,16 @@ release-artifacts/
 artifacts/demo/
 artifacts/recording/
 
+# Video V2 source evidence is versioned, while generated media/caches are
+# published as GitHub Release assets instead of entering Git history.
+artifacts/video-v2/.edge-tts-venv/
+artifacts/video-v2/edit/
+artifacts/video-v2/qa/
+artifacts/video-v2/raw/
+artifacts/video-v2/voice/
+artifacts/video-v2/*.mp4
+artifacts/video-v2/runtime-*.log
+
 # Original handoff inventories become stale once development starts.
 checksums.sha256
 package-manifest.json

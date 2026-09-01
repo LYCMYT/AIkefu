@@ -5,7 +5,7 @@ describe('TraceService', () => {
     const findMany = jest.fn().mockResolvedValue([
       { id: 'event-message', traceId: 'conversation:conversation-a', stage: 'MESSAGE_COMMITTED', payloadJson: { messageId: 'buyer-a' }, createdAt: new Date('2026-01-01') },
       { id: 'event-turn', traceId: 'conversation:conversation-a', stage: 'USER_TURN', payloadJson: { userTurnId: 'turn-a' }, createdAt: new Date('2026-01-01') },
-      { id: 'event-a', traceId: 'reply-job:job-a', stage: 'EVIDENCE', payloadJson: { evidenceCount: 1 }, createdAt: new Date('2026-01-01') },
+      { id: 'event-a', workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', conversationId: 'conversation-a', replyJobId: 'job-a', traceId: 'reply-job:job-a', stage: 'EVIDENCE', payloadJson: { evidenceCount: 1 }, createdAt: new Date('2026-01-01') },
       { id: 'event-b', traceId: 'reply-job:job-a', stage: 'POLICY', payloadJson: { outcome: 'ASSIST', prompt: 'secret prompt', phone: '13800138000' }, createdAt: new Date('2026-01-01') },
       { id: 'event-guard', traceId: 'send:outbox-a', stage: 'SEND_GUARD', payloadJson: { allowed: true }, createdAt: new Date('2026-01-01') },
       { id: 'event-c', traceId: 'reply:reply-a', stage: 'SEND_RECEIPT', payloadJson: { status: 'SENT' }, createdAt: new Date('2026-01-01') },
@@ -17,7 +17,7 @@ describe('TraceService', () => {
       traceId: 'reply:reply-a', events: expect.arrayContaining([
         expect.objectContaining({ stage: 'MESSAGE_COMMITTED', payload: { messageId: 'buyer-a' } }),
         expect.objectContaining({ stage: 'USER_TURN', payload: { userTurnId: 'turn-a' } }),
-        expect.objectContaining({ stage: 'EVIDENCE', payload: { evidenceCount: 1 } }),
+        expect.objectContaining({ stage: 'EVIDENCE', workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', conversationId: 'conversation-a', replyJobId: 'job-a', traceId: 'reply-job:job-a', payload: { evidenceCount: 1 } }),
         expect.objectContaining({ stage: 'POLICY', createdAt: '2026-01-01T00:00:00.000Z', payload: { outcome: 'ASSIST' } }),
         expect.objectContaining({ stage: 'SEND_GUARD', payload: { allowed: true } }),
         expect.objectContaining({ stage: 'SEND_RECEIPT', payload: { status: 'SENT' } }),

@@ -60,9 +60,11 @@ test('recording mode is a clean 1920x1080 capture surface with an honest closing
   expect(await page.evaluate(() => ({ width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }))).toEqual({ width: 1920, height: 1080 });
 
   await page.goto('/showcase?recording=1&closing=1');
-  await expect(page.getByRole('heading', { level: 2, name: '让每一次 AI 回复都可追踪、可降级、可恢复' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('合成演示数据', { exact: true })).toBeVisible();
-  await expect(page.getByText('MockDouyin', { exact: true })).toBeVisible();
+  const closing = page.getByRole('region', { name: '有依据时自动处理，不确定时安全交给人。' });
+  await expect(page.getByRole('heading', { level: 2, name: '有依据时自动处理，不确定时安全交给人。' })).toBeVisible({ timeout: 30_000 });
+  await expect(closing).toContainText('Synthetic Data');
+  await expect(closing).toContainText('MockDouyinAdapter');
+  await expect(closing).toContainText('Frozen Eval ≠ Open-domain Accuracy');
   if (providerLabel.includes('DeepSeek')) await expect(page.getByText('DeepSeek（服务端配置）', { exact: true })).toBeVisible();
   else await expect(page.getByText('DeepSeek（服务端配置）', { exact: true })).toHaveCount(0);
   await expectNoGlobalOverflow(page);

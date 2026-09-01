@@ -540,6 +540,43 @@ describe('PrismaMessageApplication Phase 04 snapshot projection', () => {
     }));
   });
 
+  it('does not let a later scheduled welcome hide the durable reply receipt', async () => {
+    const now = new Date('2026-08-30T00:00:00.000Z');
+    const answerOutbox = {
+      id: 'send-answer', conversationId: 'conversation-receipt', replyJobId: 'reply-final', idempotencyKey: 'reply-send:reply-final',
+      payloadJson: { text: '你好，有什么可以帮你？', senderRole: 'AI' }, expectedLastMessageId: 'buyer-1', expectedSequence: 1,
+      expectedContextVersion: 2, status: 'SENT', receiptJson: { externalMessageId: 'send-answer' }, failureCode: null,
+      failureReason: null, createdAt: now, updatedAt: now,
+    };
+    const scheduledWelcome = {
+      id: 'send-welcome', conversationId: 'conversation-receipt', replyJobId: null,
+      idempotencyKey: 'scheduled-send:scheduled:welcome:conversation-receipt', payloadJson: { text: '欢迎光临', senderRole: 'AI' },
+      expectedLastMessageId: 'buyer-1', expectedSequence: 1, expectedContextVersion: 2, status: 'FAILED', receiptJson: null,
+      failureCode: 'SEND_CONFLICT', failureReason: 'Conversation advanced', createdAt: now,
+      updatedAt: new Date(now.getTime() + 1_000),
+    };
+    const conversation = {
+      id: 'conversation-receipt', ...scope, shopId: 'shop-1', buyerId: 'buyer-1', externalConversationId: 'external-receipt',
+      state: 'ACTIVE', mode: 'AUTO', overrideMode: null, syncState: 'CONNECTED', contextVersion: 2, lastCommittedSequence: 2,
+      activeTopic: null, currentProductId: null, currentOrderId: null, humanActive: false, needsReplan: false, idleExpiresAt: null,
+      createdAt: now, updatedAt: now, unreadCount: 0, shop: { aiMode: 'AUTO_ALLOWED' },
+      buyer: { id: 'buyer-1', workspaceId: scope.workspaceId, tenantId: scope.tenantId, displayName: '买家', avatar: null, tagsJson: [] },
+      messages: [{
+        id: 'reply-message', conversationId: 'conversation-receipt', role: 'ASSISTANT', kind: 'TEXT', status: 'ACTIVE', sequence: 2,
+        externalMessageId: 'send-answer', contentJson: { text: '你好，有什么可以帮你？' }, sentAt: now, receivedAt: now,
+        createdAt: now, _count: { versions: 0 },
+      }],
+      turnBuffer: null, userTurns: [], currentProduct: null, currentOrder: null, memory: null, replyJobs: [], tasks: [],
+      sendOutboxes: [scheduledWelcome, answerOutbox],
+    };
+    const prisma = { conversation: { findFirst: jest.fn().mockResolvedValue(conversation) } };
+    const app = new PrismaMessageApplication(prisma as never, { publish: jest.fn() } as never, {} as never, {} as never, {} as never);
+
+    await expect(app.getConversation(scope, 'conversation-receipt')).resolves.toMatchObject({
+      sendOutbox: { id: 'send-answer', replyJobId: 'reply-final', status: 'SENT' },
+    });
+  });
+
   it('caps an AUTO conversation override to the shop ASSIST_ONLY ceiling in its snapshot', async () => {
     const now = new Date('2026-08-30T00:00:00.000Z');
     const conversation = {

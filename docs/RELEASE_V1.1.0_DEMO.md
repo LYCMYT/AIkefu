@@ -12,8 +12,8 @@
 
 ## 可复验证据
 
-- Unit Test：694 / 694 通过（含 25 项录制时间线、字幕、转场与过期产物防误用合同）。
-- Integration Test：15 suites，63 / 63 tests 通过，包含真实 PostgreSQL、pgvector、Redis 与 MinIO。
+- Unit Test：708 / 708 通过（含 25 项录制时间线、字幕、转场与过期产物防误用合同）。
+- Integration Test：15 suites，64 / 64 tests 通过，包含真实 PostgreSQL、pgvector、Redis 与 MinIO。
 - Playwright：共 27 个唯一用例；真实环境 23 passed、4 skipped、0 failed；离线模式 6 passed、21 skipped、0 failed。两种模式的 skip 来自互斥运行条件，不合并伪装成单次全通过。
 - 生产构建、Prisma validate/generate/migration status 与 AppModule DI 已在本地发布 Gate 中通过。
 - GitHub 自动化状态必须以 [Actions 页面](https://github.com/LYCMYT/AIkefu/actions)核验；本说明本身不是本 Tag 的 Actions 或 GHCR 运行结果。
@@ -22,11 +22,12 @@
 
 - [Release 页面](https://github.com/LYCMYT/AIkefu/releases/tag/v1.1.0-demo)
 - [下载 `aikefu-3min-demo.mp4`](https://github.com/LYCMYT/AIkefu/releases/download/v1.1.0-demo/aikefu-3min-demo.mp4)
-- 文件大小：13,831,390 bytes
-- SHA256：`E64D832B7C67896424C13FAE785837545B89005BD172E500373CDD4E3564435C`
-- 画面：180 秒，1920×1080，30 fps，H.264 High
-- 音频：AAC LC，48 kHz 双声道；`zh-CN-XiaoxiaoNeural`，语速 `+50%`
-- 字幕：26 条字幕 cue；画面硬字幕与外部 SRT 同源，MP4 无软字幕轨
+- 文件大小：9,165,137 bytes
+- SHA256：`E8BFA8D0E41CBEEDC1F186C3497200BDDF46B682D7BBC0608764F70DF9CEB9DC`
+- 画面：174.933 秒，1920×1080，30 fps，H.264 High
+- 音频：AAC LC，48 kHz 双声道；`zh-CN-XiaoxiaoNeural` 在线神经语音，语速 `+45%`；不冒充真人配音
+- 字幕：29 条字幕 cue；画面硬字幕与外部 SRT 同源，MP4 无软字幕轨
+- 内容：SC01–SC04 四条核心业务链、E017 质量回归、脱敏 Trace 与真实能力边界；完整 `/showcase` 目录仍提供 SC01–SC06 六场景
 
 ## 快速体验
 

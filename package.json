@@ -38,6 +38,11 @@
     "showcase:voice": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/generate-showcase-voiceover.ps1",
     "showcase:build": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-showcase-video.ps1",
     "showcase:video": "pnpm showcase:record && pnpm showcase:build",
+    "video:v2:assets": "node scripts/video-v2/write-assets.mjs",
+    "video:v2:record": "node scripts/video-v2/record.mjs && node scripts/video-v2/write-assets.mjs",
+    "video:v2:compose": "node scripts/video-v2/write-assets.mjs && node scripts/video-v2/compose.mjs",
+    "video:v2:verify": "node scripts/video-v2/verify.mjs",
+    "test:video:v2": "node --test scripts/video-v2/spec.test.mjs",
     "release:archive": "node scripts/create-source-archive.mjs"
   },
   "devDependencies": {

@@ -138,6 +138,8 @@ export type ConversationMode = 'AUTO' | 'ASSIST' | 'MANUAL' | 'HOLD' | (string &
 
 export interface Message {
   id: string;
+  /** Durable platform/outbox correlation id returned by the message projection. */
+  externalMessageId?: string;
   conversationId?: string;
   buyerId?: string;
   shopId?: string;

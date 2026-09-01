@@ -166,6 +166,119 @@ describe('showcase runner', () => {
       .rejects.toThrow('SHOWCASE_CONTEXT_PRODUCT_MISMATCH');
   });
 
+  it('rejects a durable product pointer when the reply task never selected an entity', async () => {
+    const api = port();
+    vi.mocked(api.conversation).mockResolvedValue({
+      id: 'conversation-a', buyerId: 'buyer-a', currentProductId: 'product-a', messages: [
+        { id: 'buyer-message', role: 'BUYER', kind: 'TEXT', status: 'ACTIVE', sequence: 1, content: { text: '这个可以放烘干机吗？' } },
+        { id: 'reply-message', role: 'ASSISTANT', kind: 'TEXT', status: 'ACTIVE', sequence: 2, content: { text: '不建议使用烘干机。' } },
+      ], taskBundle: { tasks: [{ intent: 'PRODUCT_QUERY' }] },
+    } as never);
+    vi.mocked(api.trace).mockResolvedValue({
+      traceId: 'trace-context-empty',
+      events: [
+        { id: 'tasks', stage: 'TASKS', payload: { tasks: [{ intent: 'PRODUCT_QUERY', status: 'RESOLVED' }] }, createdAt: new Date().toISOString() },
+        { id: 'context', stage: 'CONTEXT', payload: { contexts: [{ entitySelected: false, status: 'FAILED' }] }, createdAt: new Date().toISOString() },
+      ],
+    } as never);
+    const contextScenario = {
+      ...scenario,
+      expected: {
+        tasks: ['PRODUCT_QUERY'],
+        context: { productKey: 'fashion_hoodie' },
+        mustIncludeTraceStages: ['TASKS', 'CONTEXT'],
+      },
+    };
+
+    await expect(runShowcaseScenario(api, { ...catalog, scenarios: [contextScenario] }, contextScenario, () => undefined))
+      .rejects.toThrow('SHOWCASE_CONTEXT_ENTITY_NOT_SELECTED');
+  });
+
+  it('waits for the final active ReplyJob trace instead of accepting previous-turn stages', async () => {
+    const api = port();
+    vi.mocked(api.conversation).mockResolvedValue({
+      id: 'conversation-a', buyerId: 'buyer-a', currentProductId: 'product-a',
+      activeReplyJob: {
+        id: 'job-final', conversationId: 'conversation-a', userTurnId: 'turn-final', status: 'WAITING_HUMAN', mode: 'ASSIST',
+      },
+      currentDraft: {
+        id: 'draft-final', replyJobId: 'job-final', aiDraft: '请人工确认商品信息。', humanFinal: null,
+        editType: null, sourceContextVersion: 2, status: 'WAITING_HUMAN',
+      },
+      messages: [
+        { id: 'buyer-message', role: 'BUYER', kind: 'TEXT', status: 'ACTIVE', sequence: 1, content: { text: '这个商品呢？' } },
+        { id: 'reply-message', role: 'ASSISTANT', kind: 'TEXT', status: 'ACTIVE', sequence: 2, content: { text: '请人工确认商品信息。' } },
+      ],
+      taskBundle: { tasks: [{ intent: 'PRODUCT_QUERY' }] },
+    } as never);
+    const oldEvents = [
+      { id: 'old-tasks', replyJobId: 'job-old', traceId: 'reply-job:job-old', stage: 'TASKS', payload: { tasks: [{ intent: 'PRODUCT_QUERY', status: 'RESOLVED' }] }, createdAt: new Date().toISOString() },
+      { id: 'old-context', replyJobId: 'job-old', traceId: 'reply-job:job-old', stage: 'CONTEXT', payload: { contexts: [{ entitySelected: true, status: 'RESOLVED' }] }, createdAt: new Date().toISOString() },
+      { id: 'old-policy', replyJobId: 'job-old', traceId: 'reply-job:job-old', stage: 'REPLY_POLICY', payload: { mode: 'AUTO' }, createdAt: new Date().toISOString() },
+    ];
+    const finalEvents = [
+      { id: 'final-tasks', replyJobId: 'job-final', traceId: 'reply-job:job-final', stage: 'TASKS', payload: { tasks: [{ intent: 'PRODUCT_QUERY', status: 'FAILED' }] }, createdAt: new Date().toISOString() },
+      { id: 'final-context', replyJobId: 'job-final', traceId: 'reply-job:job-final', stage: 'CONTEXT', payload: { contexts: [{ entitySelected: true, status: 'RESOLVED' }] }, createdAt: new Date().toISOString() },
+      { id: 'final-policy', replyJobId: 'job-final', traceId: 'reply-job:job-final', stage: 'REPLY_POLICY', payload: { mode: 'ASSIST' }, createdAt: new Date().toISOString() },
+    ];
+    vi.mocked(api.trace)
+      .mockResolvedValueOnce({ traceId: 'conversation:conversation-a', events: oldEvents } as never)
+      .mockResolvedValue({ traceId: 'conversation:conversation-a', events: [...oldEvents, ...finalEvents] } as never);
+    const finalScenario = {
+      ...scenario,
+      expected: {
+        tasks: ['PRODUCT_QUERY'],
+        context: { productKey: 'fashion_hoodie' },
+        terminalMode: 'ASSIST',
+        mustIncludeTraceStages: ['TASKS', 'CONTEXT', 'REPLY_POLICY'],
+      },
+    };
+
+    await expect(runShowcaseScenario(api, { ...catalog, scenarios: [finalScenario] }, finalScenario, () => undefined))
+      .resolves.toMatchObject({ status: 'COMPLETED', conversationId: 'conversation-a' });
+    expect(api.trace).toHaveBeenCalledTimes(2);
+  });
+
+  it('scopes terminal SENT traces through the durable outbox ReplyJob instead of accepting an older job', async () => {
+    const api = port();
+    vi.mocked(api.conversation).mockResolvedValue({
+      id: 'conversation-a', buyerId: 'buyer-a', currentProductId: 'product-a', activeReplyJob: null,
+      sendOutbox: {
+        id: 'send-final', replyJobId: 'job-final', idempotencyKey: 'reply-send:job-final',
+        expectedLastMessageId: 'buyer-message', expectedSequence: 1, status: 'SENT',
+      },
+      messages: [
+        { id: 'buyer-message', role: 'BUYER', kind: 'TEXT', status: 'ACTIVE', sequence: 1, content: { text: '这个商品呢？' } },
+        { id: 'reply-message', role: 'ASSISTANT', kind: 'TEXT', status: 'ACTIVE', sequence: 2, content: { text: '请人工确认商品信息。' } },
+      ],
+      taskBundle: { tasks: [{ intent: 'PRODUCT_QUERY' }] },
+    } as never);
+    const oldEvents = [
+      { id: 'old-tasks', replyJobId: 'job-old', traceId: 'reply-job:job-old', stage: 'TASKS', payload: { tasks: [{ intent: 'PRODUCT_QUERY', status: 'RESOLVED' }] }, createdAt: new Date().toISOString() },
+      { id: 'old-context', replyJobId: 'job-old', traceId: 'reply-job:job-old', stage: 'CONTEXT', payload: { contexts: [{ entitySelected: true, status: 'RESOLVED' }] }, createdAt: new Date().toISOString() },
+      { id: 'old-policy', replyJobId: 'job-old', traceId: 'reply-job:job-old', stage: 'REPLY_POLICY', payload: { mode: 'AUTO' }, createdAt: new Date().toISOString() },
+    ];
+    const finalEvents = [
+      { id: 'final-tasks', replyJobId: 'job-final', traceId: 'reply-job:job-final', stage: 'TASKS', payload: { tasks: [{ intent: 'PRODUCT_QUERY', status: 'RESOLVED' }] }, createdAt: new Date().toISOString() },
+      { id: 'final-context', replyJobId: 'job-final', traceId: 'reply-job:job-final', stage: 'CONTEXT', payload: { contexts: [{ entitySelected: true, status: 'RESOLVED' }] }, createdAt: new Date().toISOString() },
+      { id: 'final-policy', replyJobId: 'job-final', traceId: 'reply-job:job-final', stage: 'REPLY_POLICY', payload: { mode: 'ASSIST' }, createdAt: new Date().toISOString() },
+    ];
+    vi.mocked(api.trace)
+      .mockResolvedValueOnce({ traceId: 'conversation:conversation-a', events: oldEvents } as never)
+      .mockResolvedValue({ traceId: 'conversation:conversation-a', events: [...oldEvents, ...finalEvents] } as never);
+    const finalScenario = {
+      ...scenario,
+      expected: {
+        tasks: ['PRODUCT_QUERY'], context: { productKey: 'fashion_hoodie' }, terminalMode: 'ASSIST',
+        mustIncludeTraceStages: ['TASKS', 'CONTEXT', 'REPLY_POLICY'],
+      },
+    };
+
+    await expect(runShowcaseScenario(api, { ...catalog, scenarios: [finalScenario] }, finalScenario, () => undefined))
+      .resolves.toMatchObject({ status: 'COMPLETED', conversationId: 'conversation-a' });
+    expect(api.trace).toHaveBeenCalledTimes(2);
+  });
+
   it('validates product evidence from immutable trace refs when the current knowledge projection is empty', async () => {
     const api = port() as ShowcaseRunnerPort & { knowledge: ReturnType<typeof vi.fn> };
     api.knowledge = vi.fn().mockResolvedValue([]);

@@ -3,8 +3,8 @@ import { ArrowLeft, ArrowRight, BookOpenCheck, Bot, Braces, CheckCircle2, Play, 
 import { getShowcaseCatalog, type DeveloperTrace, type ShopSummary, type ShowcaseCatalog, type ShowcaseRunStatus } from '../../api';
 import type { WorkspaceSocketEvent, WorkspaceSocketStatus } from '../../workspace-socket';
 import { LiveTestPage } from '../live-test/LiveTestPage';
-import { ShowcaseClosingFrame, ShowcaseRecordingStatus, ShowcaseRecordingTrace } from './ShowcaseRecording';
-import { parseShowcaseRecordingQuery } from './showcase-recording';
+import { ShowcaseClosingFrame, ShowcaseQualityRegression, ShowcaseRecordingStatus, ShowcaseRecordingTrace } from './ShowcaseRecording';
+import { parseShowcaseRecordingQuery, showcaseRecordingClasses } from './showcase-recording';
 import { createShowcaseRunnerPort, runShowcaseScenario, type ShowcaseRunUpdate } from './showcase-runner';
 import './showcase.css';
 
@@ -126,10 +126,10 @@ export function ShowcasePage(props: ShowcasePageProps) {
   if (error && !catalog) return <section className="showcase-load-error" role="alert"><strong>无法打开引导演示</strong><p>{error}</p><button type="button" onClick={() => window.location.reload()}>重新加载</button></section>;
   if (!catalog || !scenario) return <section className="showcase-loading" aria-busy="true"><span className="loading-spinner" /><strong>正在准备引导演示</strong></section>;
   const providerLabel = catalog.providerMode === 'REAL' ? 'DeepSeek' : catalog.providerMode === 'OFFLINE' ? '显式离线模式' : '真实模型未配置';
-  if (recording.closing) return <section className="showcase-page is-recording is-closing"><ShowcaseClosingFrame providerMode={catalog.providerMode} providerLabel={providerLabel} /></section>;
+  if (recording.closing) return <section className={`${showcaseRecordingClasses(recording)} is-closing`}><ShowcaseClosingFrame providerMode={catalog.providerMode} providerLabel={providerLabel} /></section>;
 
   return (
-    <section className={`showcase-page ${recording.enabled ? 'is-recording' : ''}`}>
+    <section className={showcaseRecordingClasses(recording)}>
       <header className="showcase-hero">
         <div><span className="showcase-kicker"><Sparkles aria-hidden="true" size={14} />{recording.enabled ? 'AIKEFU · LIVE SHOWCASE' : 'GUIDED SHOWCASE'}</span><HeroHeading>多店铺电商 AI 客服与 Agent 协同平台</HeroHeading><p>结合企业知识、商品与订单上下文，实现有据回复、人工协同与可靠消息处理。</p></div>
         <div className="showcase-boundaries" aria-label="演示运行边界">
@@ -149,7 +149,7 @@ export function ShowcasePage(props: ShowcasePageProps) {
         {catalog.scenarios.map((entry, index) => <button aria-current={index === selectedIndex ? 'step' : undefined} className={index === selectedIndex ? 'is-active' : ''} data-scenario-id={entry.id} disabled={busy} key={entry.id} onClick={() => selectScenario(index)} type="button"><span>{index + 1}</span><strong>{entry.title}</strong></button>)}
       </nav>
 
-      {recording.enabled && <ShowcaseRecordingStatus selectedIndex={selectedIndex} title={scenario.title} total={catalog.scenarios.length} run={run} />}
+      {recording.enabled && recording.focus !== 'quality' && <ShowcaseRecordingStatus selectedIndex={selectedIndex} title={scenario.title} total={catalog.scenarios.length} run={run} />}
 
       <section className="showcase-runbar" aria-live="polite">
         <div><span className={`showcase-run-status is-${run.status.toLowerCase()}`}>{statusCopy[run.status]}</span><strong>场景 {selectedIndex + 1}/{catalog.scenarios.length} · {scenario.title}</strong><p>{run.message === statusCopy.NOT_STARTED ? scenario.objective : run.message}</p></div>
@@ -166,9 +166,11 @@ export function ShowcasePage(props: ShowcasePageProps) {
         {scenario.id === 'SC-04-IMAGE-HUMAN' && catalog.multimodalMode === 'FIXTURE' && <p className="showcase-fixture-note">多模态管线演示（Fixture），用于验证上传、分析、上下文和人工分流，不代表真实视觉准确率。</p>}
       </section>
 
-      <div className="showcase-live-surface">
-        <LiveTestPage token={props.token} shops={props.shops} activeShopId={props.activeShopId} requestedShopId={requestedShopId} requestedBuyerExternalId={requestedBuyerExternalId} onShopChange={props.onShopChange} refreshKey={props.refreshKey + localRefresh} realtimeEvent={props.realtimeEvent} socketStatus={props.socketStatus} onOpenWorkbench={props.onNavigateProduct} />
-      </div>
+      {recording.version === 'v2' && recording.focus === 'quality'
+        ? <ShowcaseQualityRegression />
+        : <div className="showcase-live-surface">
+          <LiveTestPage token={props.token} shops={props.shops} activeShopId={props.activeShopId} requestedShopId={requestedShopId} requestedBuyerExternalId={requestedBuyerExternalId} onShopChange={props.onShopChange} refreshKey={props.refreshKey + localRefresh} realtimeEvent={props.realtimeEvent} socketStatus={props.socketStatus} onOpenWorkbench={props.onNavigateProduct} />
+        </div>}
 
       {traceOpen && <div className="showcase-trace-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setTraceOpen(false); window.setTimeout(() => traceTriggerRef.current?.focus(), 0); } }} role="presentation"><aside aria-label="Developer Trace" className={`showcase-trace ${recording.enabled ? 'is-recording-trace' : ''}`} role="dialog" aria-modal="true">{recording.enabled ? <><button className="recording-trace-close" ref={traceCloseRef} aria-label="关闭 Developer Trace" onClick={() => { setTraceOpen(false); window.setTimeout(() => traceTriggerRef.current?.focus(), 0); }} type="button"><X aria-hidden="true" size={18} /></button><ShowcaseRecordingTrace trace={trace} /></> : <><header><div><span>DEVELOPER TRACE</span><strong>真实技术证据</strong></div><button ref={traceCloseRef} aria-label="关闭 Developer Trace" onClick={() => { setTraceOpen(false); window.setTimeout(() => traceTriggerRef.current?.focus(), 0); }} type="button"><X aria-hidden="true" size={18} /></button></header><div className="showcase-trace-events">{trace?.events.length ? trace.events.map((event) => <article key={event.id}><span>{event.stage}</span><time>{new Date(event.createdAt).toLocaleTimeString('zh-CN')}</time><pre>{JSON.stringify(event.payload, null, 2)}</pre></article>) : <p>当前会话尚无可展示 Trace。</p>}</div><footer><CheckCircle2 aria-hidden="true" size={15} />仅展示结构化脱敏元数据，不展示 Prompt 或思维链。</footer></>}</aside></div>}
     </section>

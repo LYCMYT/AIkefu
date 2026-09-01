@@ -12,7 +12,7 @@ describe('MockDouyinSendWorker', () => {
     }));
     const missing = {
       id: 'send-missing', status: 'SENT', projectedAt: null, ...scope,
-      conversationId: 'conversation-a', payloadJson: { text: 'new missing projection' },
+      conversationId: 'conversation-a', replyJobId: 'job-a', payloadJson: { text: 'new missing projection' },
       receiptJson: { externalMessageId: 'platform-missing', sentAt: projectedAt.toISOString() },
       updatedAt: new Date('2026-08-30T00:00:00.000Z'),
     };
@@ -35,10 +35,12 @@ describe('MockDouyinSendWorker', () => {
           .filter((row) => row.status === where.status && (where.projectedAt !== null || row.projectedAt === null))
           .slice(0, take)),
       },
+      message: { findFirst: jest.fn().mockResolvedValue({ id: 'message-projected' }) },
       conversation: { findFirst: jest.fn().mockResolvedValue({ buyerId: 'buyer-a' }) },
       $transaction: jest.fn(async (work: Function) => work(tx)),
     };
-    const worker = new MockDouyinSendWorker(prisma as never, {} as never, {} as never);
+    const traces = { record: jest.fn().mockResolvedValue(undefined) };
+    const worker = new MockDouyinSendWorker(prisma as never, {} as never, {} as never, undefined, traces as never);
 
     await expect(worker.recoverReceiptProjections()).resolves.toBe(1);
     expect(tx.message.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -48,6 +50,12 @@ describe('MockDouyinSendWorker', () => {
       where: { id: 'send-missing', ...scope, status: 'SENT', projectedAt: null },
       data: { projectedAt: expect.any(Date), projectionFailureCode: null },
     });
+    expect(traces.record).toHaveBeenCalledWith(
+      { ...scope, conversationId: 'conversation-a', replyJobId: 'job-a' },
+      'reply:message-projected',
+      'SEND_RECEIPT',
+      { sendOutboxId: 'send-missing', senderRole: 'AI', status: 'SENT' },
+    );
   });
 
   it('claims with SendGuard before the synthetic transport and stores a receipt only after acknowledgement', async () => {

@@ -128,6 +128,63 @@ describeRealInfra('Scenario Lab real PostgreSQL boundary', () => {
     expect({ messages, userTurns, tasks, replyJobs }).toEqual({ messages: 3, userTurns: 1, tasks: 2, replyJobs: 1 });
   }, 30_000);
 
+  it('Case05 proves stale old generation is not deliverable and the replacement is grounded, guarded, sent, and projected', async () => {
+    const mia = await prisma.shop.findFirstOrThrow({ where: { workspaceId, seedKey: 'shop_mia_fashion' }, select: { id: true, tenantId: true } });
+    await request(app.getHttpServer())
+      .patch(`/api/shops/${mia.id}/ai-mode`)
+      .set('X-Demo-Workspace-Token', token)
+      .send({ mode: 'AUTO_ALLOWED' })
+      .expect(200);
+
+    const runResponse = await request(app.getHttpServer())
+      .post('/api/scenarios/message_during_generation/run')
+      .set('X-Demo-Workspace-Token', token);
+    if (runResponse.status !== 202) {
+      const failure = await prisma.traceEvent.findFirst({
+        where: { workspaceId, stage: 'SCENARIO_SNAPSHOT', traceId: { contains: ':message_during_generation:' } },
+        orderBy: { createdAt: 'desc' }, select: { payloadJson: true },
+      });
+      throw new Error(`Case05 failed with ${runResponse.status}: ${JSON.stringify(failure?.payloadJson ?? runResponse.body)}`);
+    }
+
+    const conversation = await prisma.conversation.findFirstOrThrow({
+      where: { workspaceId, tenantId: mia.tenantId, shopId: mia.id, externalConversationId: { startsWith: 'scenario:message_during_generation:' } },
+      select: { id: true, contextVersion: true },
+    });
+    const jobs = await prisma.replyJob.findMany({
+      where: { workspaceId, tenantId: mia.tenantId, shopId: mia.id, conversationId: conversation.id },
+      orderBy: { createdAt: 'asc' }, select: { id: true, status: true, staleReason: true },
+    });
+    const oldJob = jobs.find((job) => job.status === 'STALE');
+    const newJob = jobs.find((job) => job.status === 'SENT');
+    expect(oldJob).toMatchObject({ status: 'STALE', staleReason: 'NEW_BUYER_MESSAGE' });
+    expect(newJob).toBeDefined();
+    expect(conversation.contextVersion).toBeGreaterThan(1);
+
+    const [oldOutboxes, newOutbox, evidence, trace, messages] = await Promise.all([
+      prisma.sendOutbox.findMany({ where: { workspaceId, tenantId: mia.tenantId, replyJobId: oldJob!.id }, select: { status: true } }),
+      prisma.sendOutbox.findFirstOrThrow({ where: { workspaceId, tenantId: mia.tenantId, replyJobId: newJob!.id, status: 'SENT' }, select: { id: true, receiptJson: true } }),
+      prisma.replyEvidence.findMany({ where: { workspaceId, tenantId: mia.tenantId, replyJobId: newJob!.id }, select: { scope: true, retrievedContentSnapshotJson: true } }),
+      prisma.traceEvent.findMany({ where: { workspaceId, tenantId: mia.tenantId, replyJobId: newJob!.id, stage: { in: ['EVIDENCE', 'SEND_GUARD', 'SEND_RECEIPT'] } }, select: { stage: true } }),
+      prisma.message.findMany({ where: { workspaceId, tenantId: mia.tenantId, conversationId: conversation.id }, orderBy: { sequence: 'asc' }, select: { role: true, externalMessageId: true, contentJson: true } }),
+    ]);
+    expect(oldOutboxes.some((outbox) => ['PENDING', 'SENDING', 'SENT', 'UNCERTAIN'].includes(outbox.status))).toBe(false);
+    expect(evidence.length).toBeGreaterThan(0);
+    expect(evidence.some((entry) => {
+      const snapshot = entry.retrievedContentSnapshotJson as { question?: unknown; answer?: unknown };
+      return /新疆|偏远地区/.test(`${String(snapshot.question ?? '')} ${String(snapshot.answer ?? '')}`);
+    })).toBe(true);
+    expect(new Set(trace.map((entry) => entry.stage))).toEqual(new Set(['EVIDENCE', 'SEND_GUARD', 'SEND_RECEIPT']));
+    const receipt = newOutbox.receiptJson as { externalMessageId?: unknown };
+    expect(messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        role: 'ASSISTANT',
+        externalMessageId: typeof receipt.externalMessageId === 'string' ? receipt.externalMessageId : newOutbox.id,
+        contentJson: expect.objectContaining({ text: expect.stringMatching(/新疆|偏远地区|实际物流/) }),
+      }),
+    ]));
+  }, 45_000);
+
   it('Case07 persists grounded per-shop replies, evidence snapshots, and scoped trace without cross-shop knowledge', async () => {
     const runResponse = await request(app.getHttpServer())
       .post('/api/scenarios/two_shops/run')
@@ -189,11 +246,16 @@ describeRealInfra('Scenario Lab real PostgreSQL boundary', () => {
     expect(evidence.every((entry) => entry.scope === 'STORE' && itemShop.get(entry.knowledgeItemId) === entry.shopId)).toBe(true);
     expect(new Set(evidence.map((entry) => entry.knowledgeItemId)).size).toBeGreaterThanOrEqual(2);
 
-    const drafts = await prisma.replyDraft.findMany({
-      where: { workspaceId, tenantId, replyJobId: { in: replyJobIds }, status: 'WAITING_HUMAN' },
-      select: { replyJobId: true, aiDraft: true },
-    });
-    expect(drafts).toHaveLength(2);
+    const [drafts, sendOutboxes] = await Promise.all([
+      prisma.replyDraft.findMany({
+        where: { workspaceId, tenantId, replyJobId: { in: replyJobIds }, status: { in: ['WAITING_HUMAN', 'SENT'] } },
+        select: { replyJobId: true, aiDraft: true, humanFinal: true },
+      }),
+      prisma.sendOutbox.findMany({
+        where: { workspaceId, tenantId, replyJobId: { in: replyJobIds }, status: { in: ['PENDING', 'SENDING', 'SENT'] } },
+        select: { replyJobId: true, payloadJson: true },
+      }),
+    ]);
     const answerFor = (entry: typeof evidence[number]) => {
       const snapshot = entry.retrievedContentSnapshotJson as { answer?: unknown };
       return typeof snapshot.answer === 'string' ? snapshot.answer : '';
@@ -201,11 +263,27 @@ describeRealInfra('Scenario Lab real PostgreSQL boundary', () => {
     // Retrieval is TopK and the database query intentionally has no ordering
     // contract.  A grounded reply may therefore use any frozen Evidence row
     // for its ReplyJob, rather than whichever row PostgreSQL returns first.
-    expect(drafts.every((draft) => evidence
-      .filter((entry) => entry.replyJobId === draft.replyJobId)
-      .map(answerFor)
-      .filter(Boolean)
-      .some((answer) => draft.aiDraft.includes(answer)))).toBe(true);
+    // Each shop may legitimately finish as an ASSIST draft or an AUTO
+    // SendOutbox depending on its live mode/readiness.  Both are production
+    // response artifacts and must remain grounded in that ReplyJob's frozen
+    // STORE evidence.
+    for (const replyJobId of replyJobIds) {
+      const responseTexts = [
+        ...drafts
+          .filter((draft) => draft.replyJobId === replyJobId)
+          .map((draft) => draft.humanFinal ?? draft.aiDraft),
+        ...sendOutboxes
+          .filter((outbox) => outbox.replyJobId === replyJobId)
+          .map((outbox) => (outbox.payloadJson as { text?: unknown }).text)
+          .filter((text): text is string => typeof text === 'string'),
+      ];
+      const evidenceAnswers = evidence
+        .filter((entry) => entry.replyJobId === replyJobId)
+        .map(answerFor)
+        .filter(Boolean);
+      expect(responseTexts.length).toBeGreaterThanOrEqual(1);
+      expect(responseTexts.some((text) => evidenceAnswers.some((answer) => text.includes(answer)))).toBe(true);
+    }
 
     const traces = await prisma.traceEvent.findMany({
       where: { workspaceId, tenantId, stage: 'SCENARIO_CASE07_EVIDENCE', replyJobId: { in: replyJobIds } },
