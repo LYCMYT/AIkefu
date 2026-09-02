@@ -45,3 +45,6 @@ artifacts/video-v2/runtime-*.log
 # Original handoff inventories become stale once development starts.
 checksums.sha256
 package-manifest.json
+
+# Isolated feature worktrees created by the development workflow.
+.worktrees/
