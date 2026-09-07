@@ -105,7 +105,7 @@ const DYNAMIC_RELATIVE_COMMITMENT =
   /(?:(?:今天|明天|后天|周末|本周|下周|近期|马上|即将|预计|当前|现在)[^。；;\n]{0,10}(?:发货|发出|送达|到达|配送|到货|补货|到账|优惠|促销|折扣|降价)|(?:发货|发出|送达|到达|配送|到货|补货|到账|优惠|促销|折扣|降价)[^。；;\n]{0,10}(?:今天|明天|后天|周末|本周|下周|近期|马上|即将|预计|当前|现在)|(?:当前|限时)\s*(?:优惠|促销|折扣|活动价)|(?:优惠|促销|折扣)(?:中|截止|到期))/i;
 
 const DYNAMIC_FULFILLMENT_FACT =
-  /(?:(?:多久|几天|什么时候|何时)(?:能)?\s*(?:到货|送达|到达)|(?:什么时候|何时)(?:能)?\s*发货|发货(?:了|了吗|没|状态)|配送[^。；;\n]{0,8}(?:什么时候|何时|多久|几天)[^。；;\n]{0,4}(?:到|送达|到达)|运费\s*(?:多少|几元|多少钱|价格|金额)|物流[^。；;\n]{0,12}(?:什么时候|何时|多久|几天)[^。；;\n]{0,6}(?:更新|到|送达|到达))/i;
+  /(?:(?:多久|几天|什么时候|何时)(?:能)?\s*(?:到货|送达|到达)|发货(?:了|了吗|没|状态)|配送[^。；;\n]{0,8}(?:什么时候|何时|多久|几天)[^。；;\n]{0,4}(?:到|送达|到达)|运费\s*(?:多少|几元|多少钱|价格|金额)|物流[^。；;\n]{0,12}(?:什么时候|何时|多久|几天)[^。；;\n]{0,6}(?:更新|到|送达|到达))/i;
 
 // Presale fulfillment is tied to a live product batch and must not be frozen
 // into knowledge, even when the promise omits words such as “预计”.
@@ -229,6 +229,15 @@ export function requiresDynamicFactLookup(query: string): boolean {
   return DYNAMIC_RUNTIME_QUERY.test(query) || containsDynamicCommerceFact(query);
 }
 
+/** A deictic product capability question cannot use generic STORE routing
+ * knowledge as if it were evidence for an unidentified product. */
+export function requiresProductDisambiguation(query: string, productId?: string): boolean {
+  if (productId?.trim()) return false;
+  const normalized = normalizeKnowledgeText(query);
+  return /(?:这个|这款|该款|它)/u.test(normalized)
+    && /(?:支持|兼容|材质|版型|尺码|季节|洗|烘干|防水|接口|系统)/iu.test(normalized);
+}
+
 export function tokenizeKnowledge(value: string): string[] {
   const normalized = normalizeKnowledgeText(value).toLowerCase();
   const latin = normalized.match(/[a-z0-9]+/g) ?? [];
@@ -261,10 +270,15 @@ export function inferKnowledgeScope(productId?: string, explicitScope?: Knowledg
  */
 export function rankKnowledgeCandidates(candidates: readonly RagCandidate[], input: RagSearchInput): RankedRagCandidate[] {
   const now = input.now ?? new Date();
-  const queryTokens = expandBm25QueryTerms(input.query);
+  const reviewedExpansions = reviewedQueryExpansions(input.query);
+  const expandedQuery = reviewedExpansions.length ? `${input.query} ${reviewedExpansions.join(' ')}` : input.query;
+  const queryTokens = expandBm25QueryTerms(expandedQuery);
   if (queryTokens.size === 0) return [];
   const queryEmbedding = input.queryEmbedding ?? deterministicKnowledgeEmbedding(input.query);
-  const relevanceTerms = meaningfulRelevanceTerms(input.query);
+  const relevanceTermGroups = [
+    meaningfulRelevanceTerms(input.query),
+    ...reviewedExpansions.flatMap((expansion) => expansion.split(/\s+/u).map((term) => meaningfulRelevanceTerms(term))),
+  ].filter((terms) => terms.length > 0);
 
   // Metadata filtering happens before corpus statistics.  Besides enforcing
   // tenancy, this stops another shop's document frequencies from influencing
@@ -275,7 +289,7 @@ export function rankKnowledgeCandidates(candidates: readonly RagCandidate[], inp
       if (candidate.businessStatus !== 'ENABLED' || candidate.indexStatus !== 'READY') return false;
       if (candidate.effectiveFrom > now || (candidate.effectiveTo && candidate.effectiveTo <= now)) return false;
       if (candidate.scope === 'PRODUCT') return Boolean(input.productId) && candidate.productId === input.productId;
-      return candidate.productId === null;
+      return candidate.productId === null && candidateSupportsQualifiedQuery(input.query, candidate);
     });
   if (eligible.length === 0) return [];
 
@@ -314,8 +328,8 @@ export function rankKnowledgeCandidates(candidates: readonly RagCandidate[], inp
       const scopePriority = candidate.scope === 'PRODUCT' ? 0.08 : 0;
       const priorityScore = sourcePriority + scopePriority;
       const documentText = normalizeKnowledgeText(`${candidate.question}\n${candidate.answer}`);
-      const lexicalCoverage = relevanceTerms.length
-        ? relevanceTerms.filter((term) => documentText.includes(term)).length / relevanceTerms.length
+      const lexicalCoverage = relevanceTermGroups.length
+        ? Math.max(...relevanceTermGroups.map((terms) => terms.filter((term) => documentText.includes(term)).length / terms.length))
         : 0;
       return {
         ...candidate,
@@ -358,6 +372,32 @@ const BM25_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
   '保温': ['保暖'],
   '保暖': ['保温'],
 };
+
+const REVIEWED_QUERY_EXPANSIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/(?:干衣机|机器烘干)/u, '烘干机'],
+  [/(?:吵不吵|吵吗|噪音|安静)/u, '声音 静音'],
+  [/(?:不想要|不要了)/u, '退货 退换'],
+  [/(?:出库)/u, '发货'],
+  [/(?:适配|接笔记本|接口)/u, '兼容 接口 USB-C HDMI 设备'],
+  [/(?:松一点|修身|合身)/u, '宽松 版型 尺码'],
+  [/(?:支持什么系统|什么系统)/u, 'Windows macOS 系统'],
+  [/(?:便携屏.*(?:特点|介绍)|介绍.*便携屏)/u, '分辨率 面板 USB-C HDMI 兼容'],
+];
+
+function reviewedQueryExpansions(query: string): string[] {
+  return REVIEWED_QUERY_EXPANSIONS
+    .filter(([pattern]) => pattern.test(query))
+    .map(([, expansion]) => expansion);
+}
+
+function candidateSupportsQualifiedQuery(query: string, candidate: RagCandidate): boolean {
+  const normalizedQuery = normalizeKnowledgeText(query);
+  const document = normalizeKnowledgeText(`${candidate.question}\n${candidate.answer}`);
+  if (/(?:新疆|西藏|偏远)/u.test(normalizedQuery) && !/(?:新疆|西藏|偏远)/u.test(document)) return false;
+  if (/终身/u.test(normalizedQuery) && !/终身/u.test(document)) return false;
+  if (/(?:所有|全部)/u.test(normalizedQuery) && !/(?:所有|全部)/u.test(document)) return false;
+  return true;
+}
 
 function expandBm25QueryTerms(query: string): Set<string> {
   const terms = new Set(tokenizeKnowledgeForBm25(query));

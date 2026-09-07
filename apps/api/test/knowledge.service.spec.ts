@@ -239,6 +239,18 @@ describe('KnowledgeService hard scope boundaries', () => {
     expect(prisma.knowledgeItem.findMany).not.toHaveBeenCalled();
   });
 
+  it('returns AMBIGUOUS for a deictic product question without an exact product context', async () => {
+    const prisma = fakePrisma([]);
+    const service = new KnowledgeService(prisma as never, { load: jest.fn() } as never);
+
+    await expect(service.search(scope, { shopId: 'shop-a', query: '这个支持Mac吗？' })).resolves.toEqual({
+      status: 'AMBIGUOUS',
+      evidence: [],
+      conflictItemIds: [],
+    });
+    expect(prisma.knowledgeItem.findMany).not.toHaveBeenCalled();
+  });
+
   it('commits import rows independently: one failed row is ERROR while earlier success remains committed', async () => {
     const now = new Date('2026-08-28T00:00:00.000Z');
     const rows = [

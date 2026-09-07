@@ -33,7 +33,7 @@ describeReal('Workspace reset against real PostgreSQL', () => {
       buyers: 4,
       products: 10,
       orders: 10,
-      knowledge: 80,
+      knowledge: 81,
       workflows: 2,
     });
     const seededShops = await repository.listShops(created);

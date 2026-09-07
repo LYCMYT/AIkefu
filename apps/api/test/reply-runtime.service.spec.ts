@@ -1,5 +1,84 @@
 import { ConflictException } from '@nestjs/common';
-import { ReplyRuntimeService, customerFacingHandoffText, explicitOrderMatches, explicitProductMatches, explicitSkuMatches } from '../src/replies/reply-runtime.service';
+import { ReplyRuntimeService, customerFacingHandoffText, evidenceTaskBindingKey, explicitOrderMatches, explicitProductMatches, explicitSkuMatches, intentInferenceText, knowledgeRetrievalQuery, knowledgeScopesForTask, productCatalogReply, productQuestionNeedsLiveFact, requestedColorInventory, selectEvidenceReply, shippingPromiseBoundaryReply, taskBoundReusableEvidence } from '../src/replies/reply-runtime.service';
+
+describe('knowledgeScopesForTask', () => {
+  it('reuses frozen evidence only for the task that originally retrieved it', () => {
+    const shippingKey = evidenceTaskBindingKey({
+      intent: 'SHIPPING_POLICY', requiredContext: [], requiredKnowledge: ['STORE'],
+    });
+    const invoiceKey = evidenceTaskBindingKey({
+      intent: 'FAQ_QUERY', requiredContext: [], requiredKnowledge: ['STORE'],
+    });
+    const evidence = [
+      {
+        taskKey: shippingKey, itemId: 'shipping', versionId: 'shipping-v1', version: 1,
+        source: 'MANUAL' as const, scope: 'STORE' as const, productId: null,
+        contentSnapshot: { question: '多久发货？', answer: '24小时内发货。' }, retrievalScore: 1,
+      },
+      {
+        taskKey: invoiceKey, itemId: 'invoice', versionId: 'invoice-v1', version: 1,
+        source: 'MANUAL' as const, scope: 'STORE' as const, productId: null,
+        contentSnapshot: { question: '能开发票吗？', answer: '支持电子发票。' }, retrievalScore: 1,
+      },
+      {
+        itemId: 'legacy', versionId: 'legacy-v1', version: 1,
+        source: 'MANUAL' as const, scope: 'STORE' as const, productId: null,
+        contentSnapshot: { question: '旧证据', answer: '不能跨任务复用。' }, retrievalScore: 1,
+      },
+    ];
+
+    expect(taskBoundReusableEvidence(evidence, shippingKey, ['STORE'])).toEqual([evidence[0]]);
+    expect(taskBoundReusableEvidence(evidence, invoiceKey, ['STORE'])).toEqual([evidence[1]]);
+    expect(shippingKey).not.toBe(invoiceKey);
+    expect(evidenceTaskBindingKey({
+      intent: 'SHIPPING_POLICY', requiredContext: ['SKU', 'PRODUCT'], requiredKnowledge: ['PRODUCT', 'STORE'],
+    })).toBe(evidenceTaskBindingKey({
+      intent: 'SHIPPING_POLICY', requiredContext: ['PRODUCT', 'SKU'], requiredKnowledge: ['STORE', 'PRODUCT'],
+    }));
+  });
+
+  it('honors an explicit policy-evidence requirement on a dynamic or transactional task', () => {
+    expect(knowledgeScopesForTask({ intent: 'ORDER_QUERY', requiredKnowledge: ['STORE'] }, undefined)).toEqual(['STORE']);
+    expect(knowledgeScopesForTask({ intent: 'REFUND_REQUEST', requiredKnowledge: ['STORE'] }, undefined)).toEqual(['STORE']);
+    expect(knowledgeScopesForTask({ intent: 'SHIPPING_POLICY', requiredKnowledge: ['STORE'] }, undefined)).toEqual(['STORE']);
+  });
+
+  it('removes transport card markers without discarding sanitized image observations', () => {
+    expect(knowledgeRetrievalQuery('[商品卡]\n这个适合冬天吗？')).toBe('这个适合冬天吗？');
+    expect(knowledgeRetrievalQuery('今天下单什么时候发货？')).toBe('什么时候发货？');
+    expect(knowledgeRetrievalQuery('黑色XL有吗？今天下单什么时候发货？')).toBe('黑色XL有吗？什么时候发货？');
+    expect(knowledgeRetrievalQuery('黑色XL有吗？今天下单什么时候发货？', 'SHIPPING_POLICY')).toBe('多久发货');
+    expect(knowledgeRetrievalQuery('黑色XL有吗？今天下单什么时候发？', 'SHIPPING_POLICY')).toBe('多久发货');
+    expect(knowledgeRetrievalQuery('什么时候发货？支持退货吗？', 'AFTER_SALES_QUERY')).toBe('支持退货');
+    expect(knowledgeRetrievalQuery('这个能烘干吗？黑色XL还有吗？', 'PRODUCT_QUERY')).toBe('可以烘干吗');
+    expect(knowledgeRetrievalQuery('帮我查物流，我还想退款。', 'REFUND_REQUEST')).toBe('可以退款吗');
+    expect(knowledgeRetrievalQuery('你们能保证周五之前送到吗？')).toBe('多久发货');
+    expect(knowledgeRetrievalQuery('那水洗呢？')).toBe('怎么洗');
+    expect(knowledgeRetrievalQuery('[订单卡]\n[图片 PRODUCT_DAMAGE] 疑似商品破损\n收到就是这样的'))
+      .toBe('疑似商品破损 收到就是这样的');
+    expect(shippingPromiseBoundaryReply('你们能保证周五之前送到吗？')).toContain('不能保证具体到达日期');
+    expect(shippingPromiseBoundaryReply('什么时候发货？')).toBeUndefined();
+    expect(productQuestionNeedsLiveFact('这个能烘干吗？')).toBe(false);
+    expect(productQuestionNeedsLiveFact('这个现在还能买吗？')).toBe(true);
+    expect(productCatalogReply('这个商品有什么特点？', {
+      description: '70%棉、30%聚酯纤维，宽松版型，适合春秋日常穿着。',
+    })).toBe('这款商品的主要特点是：70%棉、30%聚酯纤维，宽松版型，适合春秋日常穿着。');
+    expect(productCatalogReply('这个是什么材质？', { description: '70%棉、30%聚酯纤维。' })).toBeUndefined();
+  });
+});
+
+describe('intentInferenceText', () => {
+  it('adds only the previous buyer ask for an elliptical follow-up', () => {
+    const recentMessages = [
+      { role: 'BUYER', text: '昨天那单呢？', sequence: 2 },
+      { role: 'ASSISTANT', text: '这笔订单已发货。', sequence: 3 },
+      { role: 'BUYER', text: '还是它。', sequence: 4 },
+    ];
+
+    expect(intentInferenceText('还是它。', recentMessages)).toBe('昨天那单呢？\n还是它。');
+    expect(intentInferenceText('我想问物流', recentMessages)).toBe('我想问物流');
+  });
+});
 
 describe('explicitOrderMatches', () => {
   const orders = [
@@ -14,6 +93,17 @@ describe('explicitOrderMatches', () => {
 });
 
 describe('customer-facing resolver copy', () => {
+  it('prefers the most query-specific frozen evidence answer over a generic higher-ranked answer', () => {
+    expect(selectEvidenceReply([
+      {
+        contentSnapshot: { question: '多久发货？', answer: '普通现货商品通常在24小时内发出。' },
+      },
+      {
+        contentSnapshot: { question: '偏远地区多久发货？', answer: '新疆、西藏等偏远地区的履约时效以实际物流信息为准。' },
+      },
+    ], '新疆多久发货？')).toBe('新疆、西藏等偏远地区的履约时效以实际物流信息为准。');
+  });
+
   it('uses an explicit product phrase to exclude unrelated same-color SKUs', () => {
     const rows = [
       { externalSkuId: 'P-T-001-BLACK', attributesJson: { color: '黑色', switch: '静音轴' }, product: { title: 'SilentKey 84 静音键盘' } },
@@ -21,6 +111,18 @@ describe('customer-facing resolver copy', () => {
     ];
 
     expect(explicitSkuMatches(rows, '黑色静音键盘有吗？')).toEqual([rows[0]]);
+  });
+
+  it('aggregates multiple requested colors from the current product only', () => {
+    const inventory = requestedColorInventory([
+      { productId: 'product-current', inventory: 0, attributesJson: { color: '黑色', size: 'M' } },
+      { productId: 'product-current', inventory: 0, attributesJson: { color: '黑色', size: 'L' } },
+      { productId: 'product-current', inventory: 2, attributesJson: { color: '白色', size: 'M' } },
+      { productId: 'product-current', inventory: 5, attributesJson: { color: '白色', size: 'L' } },
+      { productId: 'product-other', inventory: 99, attributesJson: { color: '黑色', size: 'M' } },
+    ], 'product-current', '黑色和白色哪个有货？');
+
+    expect(inventory).toEqual({ 黑色: 0, 白色: 7 });
   });
 
   it('separates customer handoff copy from internal reasons without claiming an action completed', () => {
@@ -72,6 +174,97 @@ describe('ReplyRuntimeService', () => {
     expect(repository.product.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'product-current', ...scope },
     }));
+  });
+
+  it('treats two different current-turn goods cards as an ambiguity instead of falling back to currentProductId', async () => {
+    const repository = {
+      message: { findMany: jest.fn().mockResolvedValue([
+        { kind: 'GOODS_CARD', contentJson: { productId: 'product-a' } },
+        { kind: 'GOODS_CARD', contentJson: { productId: 'product-b' } },
+      ]) },
+      product: { findMany: jest.fn().mockResolvedValue([
+        { id: 'product-a', title: '轻量键盘 A' },
+        { id: 'product-b', title: '轻量键盘 B' },
+      ]) },
+    };
+    const service = new ReplyRuntimeService({ message: repository.message, product: repository.product } as never, {} as never, {} as never, {} as never, {} as never);
+
+    const contexts = await (service as never as { resolveTaskContexts: Function }).resolveTaskContexts(
+      scope,
+      {
+        sourceContextVersion: 5,
+        conversation: { id: 'conversation-a', contextVersion: 5, buyerId: 'buyer-a', currentProductId: 'product-b' },
+        userTurn: { normalizedText: '这两个型号哪个更轻？', sourceMessageIdsJson: ['card-a', 'card-b'] },
+      },
+      [{ id: 'weight', riskLevel: 'LOW', requiredContext: ['PRODUCT'] }],
+    );
+
+    expect(contexts.get('weight')).toMatchObject({
+      status: 'AMBIGUOUS', entity: null,
+      clarification: { requests: [expect.objectContaining({ kind: 'PRODUCT', question: '请问您咨询的是哪件商品？' })] },
+    });
+  });
+
+  it('asks for a product before SKU when an inventory question has no current product or goods card', async () => {
+    const repository = {
+      message: { findMany: jest.fn().mockResolvedValue([]) },
+      product: { findMany: jest.fn().mockResolvedValue([
+        { id: 'product-a', title: '轻薄连帽卫衣' },
+        { id: 'product-b', title: '宽松针织开衫' },
+      ]) },
+      productSku: { findMany: jest.fn().mockResolvedValue([
+        { id: 'sku-a-black', productId: 'product-a', externalSkuId: 'P-F-001-BLACK', inventory: 3, price: 99, attributesJson: { color: '黑色' } },
+        { id: 'sku-b-black', productId: 'product-b', externalSkuId: 'P-F-002-BLACK', inventory: 3, price: 99, attributesJson: { color: '黑色' } },
+      ]) },
+    };
+    const service = new ReplyRuntimeService({ message: repository.message, product: repository.product, productSku: repository.productSku } as never, {} as never, {} as never, {} as never, {} as never);
+
+    const contexts = await (service as never as { resolveTaskContexts: Function }).resolveTaskContexts(
+      scope,
+      {
+        sourceContextVersion: 5,
+        conversation: { id: 'conversation-a', contextVersion: 5, buyerId: 'buyer-a', currentProductId: null },
+        userTurn: { normalizedText: '黑色和白色都有货吗？', sourceMessageIdsJson: [] },
+      },
+      [{ id: 'inventory', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'] }],
+    );
+
+    expect(contexts.get('inventory')).toMatchObject({
+      status: 'AMBIGUOUS', entity: null,
+      clarification: { requests: [expect.objectContaining({ kind: 'PRODUCT', question: '请问您咨询的是哪件商品？' })] },
+    });
+    expect(repository.productSku.findMany).not.toHaveBeenCalled();
+  });
+
+  it('continues from a uniquely named product to its matching SKU in the same inventory turn', async () => {
+    const repository = {
+      message: { findMany: jest.fn().mockResolvedValue([]) },
+      product: { findMany: jest.fn().mockResolvedValue([
+        { id: 'product-keyboard', title: 'SilentKey 84 静音键盘' },
+        { id: 'product-mouse', title: 'AirMouse 轻量无线鼠标' },
+      ]) },
+      productSku: { findMany: jest.fn().mockResolvedValue([
+        { id: 'sku-keyboard-black', productId: 'product-keyboard', externalSkuId: 'P-T-001-BLACK', inventory: 9, price: 299, attributesJson: { color: '黑色', switch: '静音轴' }, product: { title: 'SilentKey 84 静音键盘' } },
+        { id: 'sku-mouse-black', productId: 'product-mouse', externalSkuId: 'P-T-004-BLACK', inventory: 13, price: 169, attributesJson: { color: '黑色' }, product: { title: 'AirMouse 轻量无线鼠标' } },
+      ]) },
+    };
+    const service = new ReplyRuntimeService({ message: repository.message, product: repository.product, productSku: repository.productSku } as never, {} as never, {} as never, {} as never, {} as never);
+
+    const contexts = await (service as never as { resolveTaskContexts: Function }).resolveTaskContexts(
+      scope,
+      {
+        sourceContextVersion: 5,
+        conversation: { id: 'conversation-a', contextVersion: 5, buyerId: 'buyer-a', currentProductId: null },
+        userTurn: { normalizedText: '黑色静音键盘有吗？另外我昨天那个订单到哪了？', sourceMessageIdsJson: [] },
+      },
+      [{ id: 'inventory', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'] }],
+    );
+
+    expect(contexts.get('inventory')).toMatchObject({
+      status: 'RESOLVED',
+      entity: { id: 'sku-keyboard-black', kind: 'SKU' },
+    });
+    expect(repository.productSku.findMany).toHaveBeenCalled();
   });
 
   it('treats a draft persistence race with a newly stale job as an idempotent stale result', async () => {
@@ -176,9 +369,10 @@ describe('ReplyRuntimeService', () => {
     );
     expect(prisma.replyEvidence.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
       workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', replyJobId: 'reply-a',
+      taskKey: evidenceTaskBindingKey({ intent: 'SHIPPING_POLICY', requiredContext: [], requiredKnowledge: ['STORE'] }),
       knowledgeItemId: 'knowledge-a', knowledgeVersionId: 'version-a',
       retrievedContentSnapshotJson: { question: '偏远地区多久发货？', answer: '偏远地区通常 72 小时内发货。' },
-    })] });
+    })], skipDuplicates: true });
     expect(runtime.runStructured).toHaveBeenCalledWith(scope, expect.objectContaining({
       purpose: 'REPLY_GENERATION', schema: 'ReplyGeneration', allowedDataClasses: ['turn', 'tasks', 'realtimeFacts', 'evidence', 'recentMessages', 'structuredFacts', 'summary', 'customerMemory', 'shopSettings', 'channel'],
       evidence: expect.arrayContaining([expect.objectContaining({ itemId: 'knowledge-a', versionId: 'version-a' })]),
@@ -484,10 +678,11 @@ describe('ReplyRuntimeService', () => {
           id: 'reply-a', status: 'PENDING', mode: 'AUTO', conversationId: 'conversation-a', userTurnId: 'turn-a',
           sourceLastMessageId: 'message-8', sourceSequence: 8, sourceContextVersion: 5, evidences: [],
           conversation: { id: 'conversation-a', contextVersion: 5, humanActive: true, state: 'ACTIVE' },
-          userTurn: { normalizedText: '什么时候发货？' },
+          userTurn: { normalizedText: '我想问物流' },
         }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      task: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     const knowledge = { search: jest.fn() };
     const runtime = { runStructured: jest.fn() };
@@ -505,6 +700,12 @@ describe('ReplyRuntimeService', () => {
     expect(runtime.runStructured).not.toHaveBeenCalled();
     expect(runtime.runStructured).not.toHaveBeenCalledWith(scope, expect.objectContaining({ purpose: 'REPLY_GENERATION' }));
     expect(outboxes.enqueue).not.toHaveBeenCalled();
+    expect(prisma.task.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({
+        intent: 'LOGISTICS_QUERY', status: 'CANCELLED', errorCode: 'HUMAN_ACTIVE',
+        requiredToolsJson: ['GET_ORDER', 'GET_LOGISTICS'],
+      })],
+    }));
   });
 
   it('fails closed to human review when scoped knowledge reports a conflict, without composing or enqueueing', async () => {
@@ -562,11 +763,61 @@ describe('ReplyRuntimeService', () => {
       .mockResolvedValueOnce({ output: { riskLevel: 'LOW', recommendedMode: 'ASSIST', reasons: [] } }),
     };
     const outboxes = { enqueue: jest.fn() };
-    const service = new ReplyRuntimeService(prisma as never, { search: jest.fn().mockResolvedValue({ status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] }) } as never, runtime as never, { createWaitingHuman: jest.fn().mockResolvedValue({ id: 'draft-transfer' }) } as never, outboxes as never);
+    const drafts = { createWaitingHuman: jest.fn().mockResolvedValue({ id: 'draft-transfer' }) };
+    const service = new ReplyRuntimeService(prisma as never, { search: jest.fn().mockResolvedValue({ status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] }) } as never, runtime as never, drafts as never, outboxes as never);
 
     await expect(service.process(scope, 'reply-transfer')).resolves.toMatchObject({ status: 'WAITING_HUMAN' });
     expect(outboxes.enqueue).not.toHaveBeenCalled();
     expect(prisma.replyJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ staleReason: expect.stringContaining('USER_REQUESTED_HUMAN') }) }));
+    expect(drafts.createWaitingHuman).toHaveBeenCalledWith(scope, expect.objectContaining({
+      aiDraft: expect.stringMatching(/投诉.*人工/),
+    }));
+  });
+
+  it('records an all-task NO_EVIDENCE refusal as MANUAL rather than an assist draft', async () => {
+    const prisma = {
+      replyJob: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'reply-no-evidence', status: 'PENDING', mode: 'AUTO', conversationId: 'conversation-a', userTurnId: 'turn-a',
+          sourceLastMessageId: 'message-8', sourceSequence: 8, sourceContextVersion: 5, evidences: [],
+          conversation: { contextVersion: 5, humanActive: false, state: 'ACTIVE', syncState: 'CONNECTED', overrideMode: null, buyerId: 'buyer-a' },
+          userTurn: { normalizedText: '你们有会员积分吗？' },
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      replyEvidence: { createMany: jest.fn() },
+      task: { createMany: jest.fn() },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
+      shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
+    };
+    const runtime = { runStructured: jest.fn()
+      .mockResolvedValueOnce({ output: { tasks: [{ intent: 'UNKNOWN', riskLevel: 'LOW', requiredContext: [], requiredTools: [] }] } })
+      .mockResolvedValueOnce({ output: { riskLevel: 'LOW', recommendedMode: 'AUTO', reasons: [] } }),
+    };
+    const drafts = { createWaitingHuman: jest.fn().mockResolvedValue({ id: 'draft-no-evidence' }) };
+    const outboxes = { enqueue: jest.fn() };
+    const traces = { record: jest.fn().mockResolvedValue(undefined) };
+    const service = new ReplyRuntimeService(
+      prisma as never,
+      { search: jest.fn().mockResolvedValue({ status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] }) } as never,
+      runtime as never,
+      drafts as never,
+      outboxes as never,
+      undefined,
+      undefined,
+      traces as never,
+    );
+
+    await expect(service.process(scope, 'reply-no-evidence')).resolves.toMatchObject({
+      status: 'WAITING_HUMAN', reason: 'NO_EVIDENCE', draftId: 'draft-no-evidence',
+    });
+    expect(traces.record).toHaveBeenCalledWith(
+      expect.objectContaining({ replyJobId: 'reply-no-evidence' }),
+      'reply-job:reply-no-evidence',
+      'REPLY_POLICY',
+      { mode: 'MANUAL', reasons: ['NO_EVIDENCE'], evidenceCount: 0, taskStatuses: ['FAILED'] },
+    );
+    expect(outboxes.enqueue).not.toHaveBeenCalled();
   });
 
   it('converts a configured intent/risk runtime failure into a durable human-review draft and never enqueues', async () => {
@@ -583,13 +834,23 @@ describe('ReplyRuntimeService', () => {
     };
     const drafts = { createWaitingHuman: jest.fn().mockResolvedValue({ id: 'draft-fallback' }) };
     const outboxes = { enqueue: jest.fn() };
-    const service = new ReplyRuntimeService(prisma as never, { search: jest.fn().mockResolvedValue({ status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] }) } as never, { runStructured: jest.fn().mockRejectedValue(new Error('configured provider unavailable')) } as never, drafts as never, outboxes as never);
+    const traces = { record: jest.fn().mockResolvedValue(undefined) };
+    const service = new ReplyRuntimeService(prisma as never, { search: jest.fn().mockResolvedValue({ status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] }) } as never, { runStructured: jest.fn().mockRejectedValue(new Error('configured provider unavailable')) } as never, drafts as never, outboxes as never, undefined, undefined, traces as never);
 
     await expect(service.process(scope, 'reply-runtime-failed')).resolves.toMatchObject({ status: 'WAITING_HUMAN', draftId: 'draft-fallback', reason: 'AI_RUNTIME_FAILED' });
     expect(drafts.createWaitingHuman).toHaveBeenCalledWith(scope, expect.objectContaining({ replyJobId: 'reply-runtime-failed', aiDraft: expect.stringContaining('人工') }));
     expect(prisma.task.createMany).toHaveBeenCalledWith(expect.objectContaining({
-      data: [expect.objectContaining({ intent: 'SHIPPING_POLICY', status: 'FAILED', errorCode: 'AI_RUNTIME_FAILED' })],
+      data: [expect.objectContaining({
+        intent: 'SHIPPING_POLICY', status: 'FAILED', errorCode: 'AI_RUNTIME_FAILED',
+        requiredToolsJson: ['TRANSFER_HUMAN'],
+      })],
     }));
+    expect(traces.record).toHaveBeenCalledWith(
+      expect.objectContaining({ replyJobId: 'reply-runtime-failed' }),
+      'reply-job:reply-runtime-failed',
+      'REPLY_POLICY',
+      { mode: 'MANUAL', reasons: ['AI_RUNTIME_FAILED'] },
+    );
     expect(outboxes.enqueue).not.toHaveBeenCalled();
   });
 
@@ -721,8 +982,47 @@ describe('ReplyRuntimeService', () => {
     expect(prisma.conversation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'conversation-a', ...scope, contextVersion: 5 }, data: expect.objectContaining({ currentProductId: 'product-a' }),
     }));
-    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '这个规格目前库存较少，建议尽快下单。' }));
+    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '黑色目前库存较少，建议尽快下单。' }));
     expect(runtime.runStructured).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders two requested colors from the current product without combining another product inventory', async () => {
+    const prisma = {
+      replyJob: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce({
+            id: 'reply-color-inventory', status: 'PENDING', mode: 'AUTO', conversationId: 'conversation-a', userTurnId: 'turn-a',
+            sourceLastMessageId: 'message-8', sourceSequence: 8, sourceContextVersion: 5, evidences: [],
+            conversation: { id: 'conversation-a', contextVersion: 5, humanActive: false, state: 'ACTIVE', syncState: 'CONNECTED', overrideMode: null, buyerId: 'buyer-a', currentProductId: 'product-current' },
+            userTurn: { normalizedText: '黑色和白色哪个有货？', sourceMessageIdsJson: [] },
+          })
+          .mockResolvedValueOnce({ id: 'reply-color-inventory', status: 'GENERATING', sourceContextVersion: 5, conversation: { contextVersion: 5, humanActive: false, state: 'ACTIVE' } }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      conversation: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      replyEvidence: { createMany: jest.fn() }, task: { createMany: jest.fn() },
+      productSku: { findMany: jest.fn().mockResolvedValue([
+        { id: 'sku-current-black-m', productId: 'product-current', externalSkuId: 'current-black-m', inventory: 0, price: 99, attributesJson: { color: '黑色', size: 'M' } },
+        { id: 'sku-current-black-l', productId: 'product-current', externalSkuId: 'current-black-l', inventory: 0, price: 99, attributesJson: { color: '黑色', size: 'L' } },
+        { id: 'sku-current-white-m', productId: 'product-current', externalSkuId: 'current-white-m', inventory: 2, price: 99, attributesJson: { color: '白色', size: 'M' } },
+        { id: 'sku-current-white-l', productId: 'product-current', externalSkuId: 'current-white-l', inventory: 5, price: 99, attributesJson: { color: '白色', size: 'L' } },
+        { id: 'sku-other-black', productId: 'product-other', externalSkuId: 'other-black', inventory: 99, price: 99, attributesJson: { color: '黑色', size: 'M' } },
+      ]) },
+      shop: { findFirst: jest.fn().mockResolvedValue({ aiMode: 'AUTO_ALLOWED', seedKey: 'shop_mia_fashion', productLearningJobs: [{ status: 'SUCCEEDED' }] }) },
+      shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [], transferKeywordsJson: [] }) },
+    };
+    const runtime = { runStructured: jest.fn()
+      .mockResolvedValueOnce({ output: { tasks: [{ intent: 'SKU_INVENTORY', riskLevel: 'LOW', requiredContext: ['SKU'], requiredTools: [] }] } })
+      .mockResolvedValueOnce({ output: { riskLevel: 'LOW', recommendedMode: 'AUTO', reasons: [] } }),
+    };
+    const outboxes = { enqueue: jest.fn().mockResolvedValue({ id: 'send-color-inventory' }) };
+    const service = new ReplyRuntimeService(prisma as never, { search: jest.fn().mockResolvedValue({ status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] }) } as never, runtime as never, { createWaitingHuman: jest.fn() } as never, outboxes as never);
+
+    await expect(service.process(scope, 'reply-color-inventory')).resolves.toMatchObject({ status: 'READY_TO_SEND' });
+    expect(prisma.productSku.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.productSku.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: scope }));
+    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '黑色目前暂时缺货；白色目前有现货，可以正常下单。' }));
+    expect(outboxes.enqueue.mock.calls[0][1].text).not.toMatch(/0|7|99/);
   });
 
   it('treats currentProductId as a productId fallback, never as a productSku id when Prisma findFirst exists', async () => {
@@ -758,7 +1058,7 @@ describe('ReplyRuntimeService', () => {
     await expect(service.process(scope, 'reply-preferred-sku')).resolves.toMatchObject({ status: 'READY_TO_SEND' });
     expect(prisma.productSku.findFirst).not.toHaveBeenCalled();
     expect(prisma.productSku.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { ...scope, productId: 'product-a' } }));
-    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '这个规格目前库存较少，建议尽快下单。' }));
+    expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({ text: '黑色目前库存较少，建议尽快下单。' }));
   });
 
   it('forces partial multi-task work to ASSIST and exposes the unresolved task to the composer instead of AUTO-sending a subset', async () => {
@@ -827,7 +1127,8 @@ describe('ReplyRuntimeService', () => {
       };
       const outboxes = { enqueueInTransaction: jest.fn().mockResolvedValue({ id: 'send-clarify' }), enqueue: jest.fn() };
       const drafts = { createWaitingHuman: jest.fn().mockResolvedValue({ id: 'draft-manual' }) };
-      return { tx, prisma, runtime, outboxes, drafts, service: new ReplyRuntimeService(prisma as never, { search: jest.fn().mockResolvedValue({ status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] }) } as never, runtime as never, drafts as never, outboxes as never) };
+      const knowledge = { search: jest.fn().mockResolvedValue({ status: 'NO_EVIDENCE', evidence: [], conflictItemIds: [] }) };
+      return { tx, prisma, runtime, outboxes, drafts, knowledge, service: new ReplyRuntimeService(prisma as never, knowledge as never, runtime as never, drafts as never, outboxes as never) };
     };
     const first = make({});
     await expect(first.service.process(scope, 'reply-clarify')).resolves.toMatchObject({ status: 'READY_TO_SEND' });

@@ -31,6 +31,11 @@ release-artifacts/
 .review-export/
 artifacts/demo/
 artifacts/recording/
+artifacts/eval-v2/
+artifacts/eval/reply-eval-production_offline-20*.json
+artifacts/eval/reply-eval-production_offline-20*.md
+artifacts/eval/reply-auto-eval-production_offline-20*.json
+artifacts/eval/reply-auto-eval-production_offline-20*.md
 
 # Video V2 source evidence is versioned, while generated media/caches are
 # published as GitHub Release assets instead of entering Git history.

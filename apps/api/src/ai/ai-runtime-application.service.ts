@@ -59,6 +59,9 @@ export class AiRuntimeApplicationService {
     const sanitized = sanitizeContext(input.context, input.allowedDataClasses);
     const evidence = cloneEvidence(input.evidence ?? []);
     const prompt = getPromptDefinition(input.purpose, input.promptVersion);
+    if (input.purpose === 'INTENT_PLANNER') {
+      await this.evalFaults?.pauseAtGenerationBarrier(scope.workspaceId);
+    }
     const evalScenario = this.evalFaults?.consume(scope.workspaceId, input.purpose);
     if (evalScenario && evalScenario !== 'CRASH_ONCE') {
       await this.recordInjectedTimeout(scope, input, sanitized.audit, evidence, 'eval-primary-timeout');

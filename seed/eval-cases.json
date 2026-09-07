@@ -396,9 +396,9 @@
       ],
       "contextSetup": {},
       "expectedTasks": [
-        "FAQ_QUERY"
+        "UNKNOWN"
       ],
-      "expectedMode": "ASSIST",
+      "expectedMode": "MANUAL",
       "expectedFacts": [
         "线下试穿",
         "暂时没有找到可靠依据"
@@ -844,16 +844,22 @@
         "发什么快递？"
       ],
       "contextSetup": {
+        "shopAiMode": "AUTO_ALLOWED",
         "restartDuring": "SEND_OUTBOX_SENDING"
       },
       "expectedTasks": [
         "SHIPPING_POLICY"
       ],
-      "expectedMode": "ASSIST",
-      "expectedFacts": [],
+      "expectedMode": "AUTO",
+      "expectedFacts": [
+        "默认使用顺丰、京东物流或中通"
+      ],
       "forbiddenClaims": [
         "重复发送两次"
       ],
+      "expectedTerminalStatus": "SENT",
+      "expectedOutputSource": "SENT_MESSAGE",
+      "expectedAutoSend": true,
       "notes": ""
     }
   ]

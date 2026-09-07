@@ -1,0 +1,936 @@
+{
+  "schemaVersion": "2.0",
+  "source": {
+    "path": "source/retrieval-40.v1.csv",
+    "sha256": "afc0bd45e09d4f70206cfdf92a71d077d692e7c46041e1296c47c57d44441f5f",
+    "caseCount": 40
+  },
+  "cases": [
+    {
+      "id": "Q01",
+      "sourceRow": 2,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "什么时候发货？",
+      "concept": "普通发货时效",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k001"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k016"
+        ],
+        "forbiddenShopKeys": [
+          "shop_pixel_tech"
+        ],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q02",
+      "sourceRow": 3,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "新疆发货多久？",
+      "concept": "偏远地区物流",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k002"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k001"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q03",
+      "sourceRow": 4,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "能退货吗？",
+      "concept": "退换货政策",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k007",
+          "k009"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q04",
+      "sourceRow": 5,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "开什么发票？",
+      "concept": "发票政策",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k081"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q05",
+      "sourceRow": 6,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "能放干衣机吗？",
+      "concept": "洗护/不建议烘干",
+      "notes": [
+        "语义改写"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k033"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k049",
+          "k052",
+          "k053"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": [
+          "fashion_down_coat",
+          "fashion_cardigan"
+        ]
+      }
+    },
+    {
+      "id": "Q06",
+      "sourceRow": 7,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "衣服是什么面料？",
+      "concept": "材质",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k031"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k051"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q07",
+      "sourceRow": 8,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "偏宽松还是修身？",
+      "concept": "版型",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k032"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k054"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q08",
+      "sourceRow": 9,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "适合哪个季节？",
+      "concept": "适用季节",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k034"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q09",
+      "sourceRow": 10,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "query": "支持Mac吗？",
+      "concept": "兼容性",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k058"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [
+          "shop_mia_fashion"
+        ],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q10",
+      "sourceRow": 11,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "query": "这键盘吵不吵？",
+      "concept": "静音/噪声相关知识",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k060"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q11",
+      "sourceRow": 12,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "query": "便携屏有哪些特点？",
+      "concept": "便携屏产品知识",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k061",
+          "k062",
+          "k063",
+          "k064",
+          "k065"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": [
+          "tech_silent_keyboard"
+        ]
+      }
+    },
+    {
+      "id": "Q12",
+      "sourceRow": 13,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "query": "这个屏幕适配什么设备？",
+      "concept": "兼容性/接口",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k063",
+          "k064",
+          "k065"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q13",
+      "sourceRow": 14,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "能不能机器烘干？",
+      "concept": "洗护",
+      "notes": [
+        "烘干机同义"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k033"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q14",
+      "sourceRow": 15,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "大概多久出库？",
+      "concept": "发货时效",
+      "notes": [
+        "发货 paraphrase"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k001"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q15",
+      "sourceRow": 16,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "不想要了能退吗？",
+      "concept": "退换货",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k007",
+          "k009",
+          "k015"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q16",
+      "sourceRow": 17,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "query": "Windows电脑能用吗？",
+      "concept": "兼容性",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k058"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q17",
+      "sourceRow": 18,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "query": "接笔记本可以吗？",
+      "concept": "接口/兼容",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k063",
+          "k064"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q18",
+      "sourceRow": 19,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "怎么洗比较好？",
+      "concept": "洗护",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k035"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q19",
+      "sourceRow": 20,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "我想穿松一点选什么版型？",
+      "concept": "版型/尺码",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k032"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q20",
+      "sourceRow": 21,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "偏远地区时效怎么算？",
+      "concept": "偏远地区物流",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k002"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k001"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q21",
+      "sourceRow": 22,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "支持线下试穿吗？",
+      "concept": "NONE",
+      "notes": [
+        "hard negative"
+      ],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k007"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q22",
+      "sourceRow": 23,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "500件能打几折？",
+      "concept": "NONE",
+      "notes": [],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k025"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q23",
+      "sourceRow": 24,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "防水等级是多少？",
+      "concept": "NONE",
+      "notes": [],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k036"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q24",
+      "sourceRow": 25,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "能抗零下20度吗？",
+      "concept": "NONE",
+      "notes": [],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k034",
+          "k050"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q25",
+      "sourceRow": 26,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "query": "终身保修吗？",
+      "concept": "NONE",
+      "notes": [],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k026"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q26",
+      "sourceRow": 27,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "query": "一定兼容所有Mac吗？",
+      "concept": "NONE",
+      "notes": [],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k058",
+          "k063",
+          "k065"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q27",
+      "sourceRow": 28,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "保证周五到吗？",
+      "concept": "NONE",
+      "notes": [],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k001",
+          "k002"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q28",
+      "sourceRow": 29,
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "query": "支持线下维修当天取吗？",
+      "concept": "NONE",
+      "notes": [],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k021",
+          "k022",
+          "k023",
+          "k026"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q29",
+      "sourceRow": 30,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "多久发货？",
+      "concept": "MIA发货政策",
+      "notes": [
+        "cross-shop"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k001"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k016"
+        ],
+        "forbiddenShopKeys": [
+          "shop_pixel_tech"
+        ],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q30",
+      "sourceRow": 31,
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "query": "多久发货？",
+      "concept": "Pixel发货政策",
+      "notes": [
+        "cross-shop"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k016"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k001"
+        ],
+        "forbiddenShopKeys": [
+          "shop_mia_fashion"
+        ],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q31",
+      "sourceRow": 32,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "怎么洗？",
+      "concept": "MIA商品洗护",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k035"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [
+          "shop_pixel_tech"
+        ],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q32",
+      "sourceRow": 33,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "query": "支持什么系统？",
+      "concept": "Pixel兼容性",
+      "notes": [],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k058"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [],
+        "forbiddenShopKeys": [
+          "shop_mia_fashion"
+        ],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q33",
+      "sourceRow": 34,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "什么材质？",
+      "concept": "当前Product材质",
+      "notes": [
+        "cross-product"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k031"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k051"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": [
+          "fashion_cardigan"
+        ]
+      }
+    },
+    {
+      "id": "Q34",
+      "sourceRow": 35,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_monitor",
+      "query": "有什么接口？",
+      "concept": "当前Product接口",
+      "notes": [
+        "cross-product"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k063",
+          "k064"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 3,
+        "forbiddenKnowledgeKeys": [
+          "k056",
+          "k057",
+          "k058",
+          "k059",
+          "k060"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": [
+          "tech_silent_keyboard"
+        ]
+      }
+    },
+    {
+      "id": "Q35",
+      "sourceRow": 36,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "这个怎么洗？",
+      "concept": "NONE",
+      "notes": [
+        "无product上下文应不接受产品知识"
+      ],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k033",
+          "k035",
+          "k038",
+          "k043",
+          "k049",
+          "k052",
+          "k053"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q36",
+      "sourceRow": 37,
+      "shopKey": "shop_pixel_tech",
+      "productKey": null,
+      "query": "这个支持Mac吗？",
+      "concept": "NONE",
+      "notes": [
+        "无product上下文"
+      ],
+      "expectation": {
+        "kind": "NO_EVIDENCE",
+        "allowedStatuses": [
+          "NO_EVIDENCE",
+          "AMBIGUOUS",
+          "DYNAMIC_FACT_REQUIRED"
+        ],
+        "forbiddenKnowledgeKeys": [
+          "k058",
+          "k063",
+          "k065",
+          "k073"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q37",
+      "sourceRow": 38,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "发货多久？",
+      "concept": "CONFLICT_CASE",
+      "notes": [
+        "冲突fixture应识别冲突而非静默Top1"
+      ],
+      "expectation": {
+        "kind": "CONFLICT",
+        "conflictFixtureKey": "conflict_001",
+        "expectedStatus": "CONFLICTED"
+      }
+    },
+    {
+      "id": "Q38",
+      "sourceRow": 39,
+      "shopKey": "shop_mia_fashion",
+      "productKey": "fashion_hoodie",
+      "query": "能烘干吗？",
+      "concept": "当前Product洗护",
+      "notes": [
+        "Top1质量"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k033"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 1,
+        "forbiddenKnowledgeKeys": [
+          "k049",
+          "k052",
+          "k053"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q39",
+      "sourceRow": 40,
+      "shopKey": "shop_pixel_tech",
+      "productKey": "tech_silent_keyboard",
+      "query": "支持Mac吗？",
+      "concept": "当前Product兼容性",
+      "notes": [
+        "Top1质量"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k058"
+        ],
+        "expectedScope": "PRODUCT",
+        "maxRank": 1,
+        "forbiddenKnowledgeKeys": [
+          "k063",
+          "k065",
+          "k073"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    },
+    {
+      "id": "Q40",
+      "sourceRow": 41,
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "query": "新疆一般多久到？",
+      "concept": "偏远地区政策",
+      "notes": [
+        "Top1质量"
+      ],
+      "expectation": {
+        "kind": "POSITIVE",
+        "expectedKnowledgeKeys": [
+          "k002"
+        ],
+        "expectedScope": "STORE",
+        "maxRank": 1,
+        "forbiddenKnowledgeKeys": [
+          "k001"
+        ],
+        "forbiddenShopKeys": [],
+        "forbiddenProductKeys": []
+      }
+    }
+  ]
+}

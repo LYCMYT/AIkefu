@@ -92,7 +92,13 @@ describe('Phase 04 Case 04–10 reliability harness', () => {
     const drafts = { expireDueAll: jest.fn().mockResolvedValue(0) };
     const recovery = new ReplyRecoveryService(prisma as never, sends as never, drafts as never);
 
-    await expect(recovery.recoverOnce(new Date('2026-08-30T00:00:00.000Z'))).resolves.toEqual({ recoveryPending: 1, stale: 0, uncertain: 1, expiredDrafts: 0 });
+    await expect(recovery.recoverOnce(new Date('2026-08-30T00:00:00.000Z'))).resolves.toEqual({
+      recoveryPending: 1,
+      stale: 0,
+      preTransport: 0,
+      uncertain: 1,
+      expiredDrafts: 0,
+    });
   });
 
   it('Case 04 coalescing guard: only the newest task set is actionable when the buyer adds a message', () => {

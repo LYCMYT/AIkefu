@@ -7,6 +7,7 @@ import {
   rankKnowledgeCandidates,
   assessKnowledgeRelevance,
   requiresDynamicFactLookup,
+  requiresProductDisambiguation,
   versionSwitchDecision,
 } from '../src/knowledge/knowledge.policy';
 
@@ -231,6 +232,8 @@ describe('Phase 03 knowledge policy', () => {
     expect(requiresDynamicFactLookup('物流什么时候到？')).toBe(true);
     expect(requiresDynamicFactLookup('退款进度怎么样？')).toBe(true);
     expect(requiresDynamicFactLookup('普通现货商品通常多久发货？')).toBe(false);
+    expect(requiresDynamicFactLookup('多久发货')).toBe(false);
+    expect(requiresDynamicFactLookup('什么时候发货？')).toBe(false);
     expect(requiresDynamicFactLookup('退款政策是什么？')).toBe(false);
     expect(requiresDynamicFactLookup('物流配送政策如何？')).toBe(false);
     expect(requiresDynamicFactLookup('黑色 XL 还有吗？')).toBe(true);
@@ -255,7 +258,6 @@ describe('Phase 03 knowledge policy', () => {
     '几天到货',
     '什么时候到货',
     '发货了吗',
-    '什么时候发货',
     '配送什么时候到',
     '运费多少',
     '物流什么时候更新',
@@ -292,6 +294,50 @@ describe('Phase 03 knowledge policy', () => {
     expect(productSource).toContain('稳定材质说明');
     expect(productSource).toContain('建议按标签洗护');
     expect(productSource).not.toContain(dynamicText);
+  });
+
+  it('retrieves the ordinary shipping policy for a generic pre-purchase delivery question', () => {
+    const ranked = rankKnowledgeCandidates(
+      [
+        candidate('ordinary-shipping', { scoreText: '多久发货 普通现货商品通常在24小时内发出', vectorScore: 0.93 }),
+        candidate('remote-shipping', { scoreText: '偏远地区多久发货 新疆西藏以实际物流为准', vectorScore: 0.72 }),
+      ],
+      {
+        workspaceId: 'workspace-a',
+        tenantId: 'tenant-a',
+        shopId: 'shop-a',
+        query: '今天下单什么时候发货？',
+      },
+    );
+
+    expect(assessKnowledgeRelevance(ranked)).toMatchObject({
+      status: 'RELIABLE',
+      candidates: [expect.objectContaining({ id: 'ordinary-shipping' })],
+    });
+  });
+
+  it('normalizes reviewed commerce paraphrases without admitting unsupported claims', () => {
+    const candidates = [
+      candidate('care', { scoreText: '可以烘干吗 不建议使用烘干机', vectorScore: 0 }),
+      candidate('noise', { scoreText: '声音大吗 采用静音线性轴适合安静办公', vectorScore: 0 }),
+      candidate('return', { scoreText: '支持七天无理由退货 商品需保持完好', vectorScore: 0 }),
+      candidate('warranty', { scoreText: '保修多久 保修期限以商品说明为准', vectorScore: 0 }),
+    ];
+    const rank = (query: string) => rankKnowledgeCandidates(candidates, {
+      workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a', productId: 'product-a', query,
+    });
+
+    expect(assessKnowledgeRelevance(rank('能放干衣机吗？'))).toMatchObject({ status: 'RELIABLE' });
+    expect(assessKnowledgeRelevance(rank('这键盘吵不吵？'))).toMatchObject({ status: 'RELIABLE' });
+    expect(assessKnowledgeRelevance(rank('不想要了能退吗？'))).toMatchObject({ status: 'RELIABLE' });
+    expect(assessKnowledgeRelevance(rank('终身保修吗？'))).toMatchObject({ status: 'NO_EVIDENCE' });
+  });
+
+  it('requires product context for deictic product capability questions', () => {
+    expect(requiresProductDisambiguation('这个支持Mac吗？', undefined)).toBe(true);
+    expect(requiresProductDisambiguation('这个怎么洗？', undefined)).toBe(true);
+    expect(requiresProductDisambiguation('这个支持Mac吗？', 'product-a')).toBe(false);
+    expect(requiresProductDisambiguation('支持Mac吗？', undefined)).toBe(false);
   });
 
   it('removes concrete presale fulfillment promises from product-learning source', () => {

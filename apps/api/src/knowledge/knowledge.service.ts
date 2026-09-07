@@ -33,6 +33,7 @@ import {
   knowledgeFingerprint,
   normalizeKnowledgeText,
   rankKnowledgeCandidates,
+  requiresProductDisambiguation,
   requiresDynamicFactLookup,
   tokenizeKnowledge,
   versionSwitchDecision,
@@ -1095,6 +1096,9 @@ export class KnowledgeService {
     if (input.productId && input.scope !== 'STORE') await this.assertProduct(scope, input.shopId, input.productId);
     if (requiresDynamicFactLookup(input.query)) {
       return { status: 'DYNAMIC_FACT_REQUIRED', evidence: [], conflictItemIds: [] };
+    }
+    if (requiresProductDisambiguation(input.query, input.productId)) {
+      return { status: 'AMBIGUOUS', evidence: [], conflictItemIds: [] };
     }
 
     const now = new Date();

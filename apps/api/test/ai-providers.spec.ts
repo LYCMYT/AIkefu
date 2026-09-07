@@ -43,7 +43,7 @@ describe('server AI providers', () => {
     expect(plan.output).toEqual({
       tasks: [
         { intent: 'INVENTORY_QUERY', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU'], requiredTools: ['GET_INVENTORY'] },
-        { intent: 'SIZE_RECOMMENDATION', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU', 'CUSTOMER_MEMORY'], requiredTools: ['GET_PRODUCT'] },
+        { intent: 'SIZE_RECOMMENDATION', riskLevel: 'LOW', requiredContext: ['PRODUCT', 'SKU', 'CUSTOMER_MEMORY'], requiredKnowledge: ['STORE', 'PRODUCT'], requiredTools: ['GET_PRODUCT'] },
       ],
       summary: '库存与尺码咨询',
     });

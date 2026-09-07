@@ -1480,6 +1480,17 @@
       "indexStatus": "READY",
       "question": "适合谁？",
       "answer": "适合开发者和桌搭用户。"
+    },
+    {
+      "key": "k081",
+      "shopKey": "shop_mia_fashion",
+      "productKey": null,
+      "scope": "STORE",
+      "sourceType": "MANUAL",
+      "businessStatus": "ENABLED",
+      "indexStatus": "READY",
+      "question": "可以开发票吗？",
+      "answer": "开票类型和所需抬头资料需结合订单与店铺规则，由人工确认。"
     }
   ],
   "customerMemories": [

@@ -224,4 +224,23 @@ describe('SendOutboxService', () => {
       data: { status: 'FAILED', failureCode: 'CONTEXT_STALE', failureReason: 'SEND_GUARD_REJECTED' },
     });
   });
+
+  it('requeues a stale pre-transport SENDING claim without treating it as an uncertain delivery', async () => {
+    const prisma = { sendOutbox: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } };
+    const service = new SendOutboxService(prisma as never);
+    const staleBefore = new Date('2026-09-07T00:00:00.000Z');
+
+    await expect((service as unknown as {
+      recoverPreTransportClaims(value: Date): Promise<number>;
+    }).recoverPreTransportClaims(staleBefore)).resolves.toBe(1);
+
+    expect(prisma.sendOutbox.updateMany).toHaveBeenCalledWith({
+      where: {
+        status: 'SENDING',
+        transportStartedAt: null,
+        updatedAt: { lt: staleBefore },
+      },
+      data: { status: 'PENDING', failureCode: null, failureReason: null },
+    });
+  });
 });

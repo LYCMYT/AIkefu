@@ -264,7 +264,7 @@ describe('Phase 04 production-service integration', () => {
     const newSends = { enqueueInTransaction: jest.fn().mockResolvedValue({ id: 'send-fresh' }) };
     const runtime = new ReplyRuntimeService(runtimePrisma as never, knowledge as never, { runStructured: jest.fn().mockResolvedValueOnce({ output: { tasks: [{ intent: 'SHIPPING_POLICY', riskLevel: 'LOW', requiredContext: [], requiredTools: [] }] } }).mockResolvedValueOnce({ output: { riskLevel: 'LOW', reasons: [], recommendedMode: 'AUTO' } }) } as never, {} as never, newSends as never);
     await expect(runtime.process(scope, 'reply-new')).resolves.toEqual({ status: 'READY_TO_SEND' });
-    expect(knowledge.search).toHaveBeenCalledWith(scope, expect.objectContaining({ query: '什么时候发货？\n我是新疆的' }));
+    expect(knowledge.search).toHaveBeenCalledWith(scope, expect.objectContaining({ query: '多久发货' }));
     expect(newSends.enqueueInTransaction).toHaveBeenCalledWith(runtimeTx, scope, expect.objectContaining({ text: '偏远地区通常 72 小时内发货。', replyJobId: 'reply-new' }));
   });
 
@@ -618,7 +618,7 @@ describe('Phase 04 production-service integration', () => {
     const recovery = new ReplyRecoveryService(prisma as never, { recoverUncertain: jest.fn().mockResolvedValue(0) } as never, { expireDueAll: jest.fn().mockResolvedValue(0) } as never, runtime as never);
     const now = new Date('2026-09-01T00:04:00.000Z');
 
-    await expect(recovery.recoverOnce(now)).resolves.toEqual({ recoveryPending: 1, stale: 0, uncertain: 0, expiredDrafts: 0 });
+    await expect(recovery.recoverOnce(now)).resolves.toEqual({ recoveryPending: 1, stale: 0, preTransport: 0, uncertain: 0, expiredDrafts: 0 });
     expect(prisma.replyJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'RECOVERY_PENDING', staleReason: null } }));
     expect(runtime.process).toHaveBeenCalledWith(scope, 'reply-a');
   });

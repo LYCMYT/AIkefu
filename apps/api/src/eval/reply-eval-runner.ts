@@ -35,7 +35,12 @@ export type ReplyEvalExecution = {
     sourceType: string;
     text: string;
     retrievalScore: number | null;
+    knowledgeKey?: string;
+    productKey?: string | null;
   }>;
+  tools?: string[];
+  oldReplySent?: boolean;
+  taskDetails?: Array<{ intent: string; status: string; result: unknown }>;
   outputSource?: 'SENT_MESSAGE' | 'SEND_OUTBOX' | 'DRAFT' | 'TASK_RESULT' | 'NONE';
   terminalStatus?: string;
   trace?: {

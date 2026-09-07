@@ -35,7 +35,13 @@ export class ReplyRecoveryService implements OnModuleInit, OnApplicationShutdown
     if (this.timer) clearInterval(this.timer);
   }
 
-  async recoverOnce(now = new Date()): Promise<{ recoveryPending: number; stale: number; uncertain: number; expiredDrafts: number }> {
+  async recoverOnce(now = new Date()): Promise<{
+    recoveryPending: number;
+    stale: number;
+    preTransport: number;
+    uncertain: number;
+    expiredDrafts: number;
+  }> {
     const jobs = await this.prisma.replyJob.findMany({
       where: {
         OR: [
@@ -96,9 +102,18 @@ export class ReplyRecoveryService implements OnModuleInit, OnApplicationShutdown
         }
       }));
     }
-    const uncertain = await this.sendOutboxes.recoverUncertain(new Date(now.getTime() - RECOVERY_INTERVAL_MS));
+    const sendRecoveryBefore = new Date(now.getTime() - RECOVERY_INTERVAL_MS);
+    // A claim can be durable before the final transport fence runs. That
+    // interval has no platform side effect, so restore it to PENDING before
+    // quarantining only rows whose transport start marker was committed.
+    // Focused unit ports from older reliability slices may not model the
+    // outbox repository; the real SendOutboxService always provides it.
+    const preTransport = await (this.sendOutboxes as unknown as {
+      recoverPreTransportClaims?: (staleBefore: Date) => Promise<number>;
+    }).recoverPreTransportClaims?.(sendRecoveryBefore) ?? 0;
+    const uncertain = await this.sendOutboxes.recoverUncertain(sendRecoveryBefore);
     const expiredDrafts = await this.drafts.expireDueAll(now);
-    return { recoveryPending, stale, uncertain, expiredDrafts };
+    return { recoveryPending, stale, preTransport, uncertain, expiredDrafts };
   }
 
   private errorMessage(error: unknown): string {

@@ -92,6 +92,66 @@ describe('MockDouyinSendWorker', () => {
     expect(outboxes.deliverWithConversationFence).toHaveBeenCalledWith(scope, 'send-a', false, expect.any(Function));
   });
 
+  it('leaves a claimed send before the transport fence when the isolated restart harness simulates a crash', async () => {
+    const scope = { workspaceId: 'workspace-restart', tenantId: 'tenant-restart', shopId: 'shop-restart' };
+    const outbox = {
+      id: 'send-restart', replyJobId: 'reply-restart', status: 'PENDING', ...scope,
+      conversationId: 'conversation-restart', payloadJson: { text: '24小时内发货。' },
+    };
+    const prisma = {
+      sendOutbox: { findMany: jest.fn().mockResolvedValue([outbox]) },
+      shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [] }) },
+    };
+    const outboxes = {
+      claim: jest.fn().mockResolvedValue({ claimed: true, sendOutbox: outbox }),
+      deliverWithConversationFence: jest.fn(async (_scope, _id, _blocked, transport) => ({
+        delivered: true,
+        conversationId: 'conversation-restart',
+        buyerId: 'buyer-restart',
+        text: '24小时内发货。',
+        senderRole: 'AI',
+        receipt: await transport({
+          outbox,
+          conversation: { id: 'conversation-restart', externalConversationId: 'mock-restart', buyer: { externalBuyerId: 'buyer-restart' } },
+          text: '24小时内发货。',
+          senderRole: 'AI',
+        }),
+      })),
+    };
+    const adapter = { sendMessage: jest.fn().mockResolvedValue({ payload: { message: { externalMessageId: 'mock-restart', sentAt: '2026-09-07T00:00:00.000Z' } } }) };
+    const faults = { consumeSendBeforeTransport: jest.fn().mockReturnValue(true) };
+    const WorkerWithFaults = MockDouyinSendWorker as unknown as new (...args: unknown[]) => MockDouyinSendWorker;
+    const worker = new WorkerWithFaults(prisma, outboxes, adapter, undefined, undefined, faults);
+
+    await expect(worker.dispatchOnce()).resolves.toEqual({ sent: 0, skipped: 1, failed: 0 });
+    expect(faults.consumeSendBeforeTransport).toHaveBeenCalledWith(scope.workspaceId);
+    expect(outboxes.deliverWithConversationFence).not.toHaveBeenCalled();
+    expect(adapter.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not consume the reply restart fault for a scheduled welcome outbox', async () => {
+    const scope = { workspaceId: 'workspace-welcome', tenantId: 'tenant-welcome', shopId: 'shop-welcome' };
+    const outbox = {
+      id: 'send-welcome', replyJobId: null, status: 'PENDING', ...scope,
+      conversationId: 'conversation-welcome', payloadJson: { text: '欢迎光临。', senderRole: 'AI' },
+    };
+    const prisma = {
+      sendOutbox: { findMany: jest.fn().mockResolvedValue([outbox]) },
+      shopSettings: { findFirst: jest.fn().mockResolvedValue({ forbiddenTermsJson: [] }) },
+    };
+    const outboxes = {
+      claim: jest.fn().mockResolvedValue({ claimed: true, sendOutbox: outbox }),
+      deliverWithConversationFence: jest.fn().mockResolvedValue({ delivered: false, uncertain: false }),
+    };
+    const faults = { consumeSendBeforeTransport: jest.fn().mockReturnValue(true) };
+    const WorkerWithFaults = MockDouyinSendWorker as unknown as new (...args: unknown[]) => MockDouyinSendWorker;
+    const worker = new WorkerWithFaults(prisma, outboxes, {}, undefined, undefined, faults);
+
+    await expect(worker.dispatchOnce()).resolves.toEqual({ sent: 0, skipped: 1, failed: 0 });
+    expect(faults.consumeSendBeforeTransport).not.toHaveBeenCalled();
+    expect(outboxes.deliverWithConversationFence).toHaveBeenCalledTimes(1);
+  });
+
   it('does not invoke the platform when SendGuard rejects a stale or human-taken-over row', async () => {
     const scope = { workspaceId: 'workspace-a', tenantId: 'tenant-a', shopId: 'shop-a' };
     const outbox = { id: 'send-a', workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: scope.shopId, conversationId: 'conversation-a', payloadJson: { text: 'x' } };

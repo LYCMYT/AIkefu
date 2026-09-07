@@ -32,6 +32,8 @@ type TaskEvidenceLookup = {
   conflictItemIds: string[];
 };
 
+type TaskBoundEvidenceSnapshot = ReplyEvidenceSnapshot & { taskKey?: string };
+
 /**
  * The durable reply executor. Network/model work happens only after a
  * PENDING claim and every consumer-facing transition rechecks the source
@@ -63,7 +65,29 @@ export class ReplyRuntimeService {
       throw new ConflictException({ code: 'REPLY_JOB_NOT_RUNNABLE', message: 'Reply job is not runnable' });
     }
     const staleReason = staleReasonFor(job);
-    if (staleReason) return this.stale(scope, job.id, job.status, staleReason);
+    if (staleReason) {
+      if (staleReason === 'HUMAN_ACTIVE') {
+        const explicitTasks = inferExplicitIntentTasks(job.userTurn.normalizedText);
+        if (explicitTasks.length) {
+          // Human takeover forbids every model/composer/send call, but keeping
+          // deterministic intent metadata lets the operator inbox retain the
+          // customer's requested work and required read tools.
+          await this.persistTasks(scope, job.id, job.conversationId, job.userTurnId, explicitTasks.map((task, index) => ({
+            id: `human-active:${index}`,
+            intent: task.intent,
+            operation: 'READ' as const,
+            riskLevel: task.riskLevel,
+            requiredContext: task.requiredContext,
+            requiredKnowledge: task.requiredKnowledge,
+            requiredTools: task.requiredTools,
+            status: 'CANCELLED',
+            errorCode: 'HUMAN_ACTIVE',
+            blocking: isTaskBlocking(task.requiredTools, task.riskLevel),
+          })), false);
+        }
+      }
+      return this.stale(scope, job.id, job.status, staleReason);
+    }
     if (job.mode === 'MANUAL' || job.mode === 'HOLD') {
       return this.waitForHuman(scope, job, 'MANUAL_REQUIRED');
     }
@@ -81,6 +105,7 @@ export class ReplyRuntimeService {
     let output: ReplyGeneration | undefined;
     try {
       const contextSupport = safeSocial ? {} : await this.buildContextSupport(scope, job);
+      const inferenceText = intentInferenceText(job.userTurn.normalizedText, contextSupport.recentMessages);
       let plannedTasks: IntentPlanTask[];
       let classifierRisk: 'LOW' | 'MEDIUM' | 'HIGH';
       let recommendedMode: 'AUTO' | 'ASSIST' | 'MANUAL' | undefined;
@@ -102,7 +127,7 @@ export class ReplyRuntimeService {
           customerMemory: contextSupport.customerMemory,
         });
         void this.recordTrace(scope, job, 'CONTEXT_BUDGET', { purpose: 'INTENT_PLANNER', characters: plannerContext.characterCount, omittedSections: plannerContext.omittedSections, truncatedSections: plannerContext.truncatedSections });
-        const explicitTasks = inferExplicitIntentTasks(job.userTurn.normalizedText);
+        const explicitTasks = inferExplicitIntentTasks(inferenceText);
         let intentInvocation: { invocationId: string; provider: string; model: string; fallbackUsed: boolean } | undefined;
         let modelPlannedTasks: IntentPlanTask[];
         try {
@@ -111,7 +136,7 @@ export class ReplyRuntimeService {
             allowedDataClasses: ['turn', 'recentMessages', 'structuredFacts', 'summary', 'customerMemory'], promptVersion: 'reply-intent-plan-v1', evidence: [], ragStrategy: 'NONE', contextVersion: job.sourceContextVersion,
           });
           intentInvocation = intent;
-          modelPlannedTasks = augmentExplicitIntentTasks(job.userTurn.normalizedText, intent.output.tasks);
+          modelPlannedTasks = augmentExplicitIntentTasks(inferenceText, intent.output.tasks);
         } catch (error) {
           if (!safeKnowledgeIntent && explicitTasks.length === 0) throw error;
           // Structured model output is advisory for lexically unambiguous
@@ -177,6 +202,28 @@ export class ReplyRuntimeService {
       const { taskContexts, clarification } = resolvedContexts;
       void this.recordTrace(scope, job, 'CONTEXT', { contexts: [...taskContexts.entries()].map(([taskId, context]) => ({ taskId, status: context.status, entitySelected: Boolean(context.entity), manualRequired: context.manualRequired })) });
       if (clarification) {
+        // Store policies remain useful and auditable while an entity is still
+        // ambiguous (for example, an address-change request that first needs
+        // an order choice). Product evidence is still skipped until a unique
+        // product is resolved, so this cannot attach evidence to the wrong item.
+        const clarificationLookup = safeSocial
+          ? { byTaskId: new Map<string, ReplyEvidenceSnapshot[]>(), evidence: [], hasConflict: false, conflictItemIds: [] }
+          : await this.retrieveAndFreezeTaskEvidence(scope, job, taskBundle.tasks, taskContexts);
+        void this.recordTrace(scope, job, 'EVIDENCE', {
+          evidenceCount: clarificationLookup.evidence.length,
+          knowledgeVersionIds: clarificationLookup.evidence.map((entry) => entry.versionId),
+          evidenceRefs: clarificationLookup.evidence.map((entry) => ({
+            itemId: entry.itemId,
+            versionId: entry.versionId,
+            scope: entry.scope,
+            productId: entry.productId,
+          })),
+          conflicted: clarificationLookup.hasConflict,
+          tasks: [...clarificationLookup.byTaskId.entries()].map(([taskId, entries]) => ({
+            taskId,
+            knowledgeVersionIds: entries.map((entry) => entry.versionId),
+          })),
+        });
         const shop = await this.prisma.shop.findFirst({
           where: { id: scope.shopId, workspaceId: scope.workspaceId, tenantId: scope.tenantId },
           select: {
@@ -256,16 +303,21 @@ export class ReplyRuntimeService {
         if (context && context.status !== 'RESOLVED') {
           return { status: 'AMBIGUOUS' as const, errorCode: `CONTEXT_${context.status}` };
         }
-        const dynamicReplyText = context?.entity ? dynamicReply(task.intent, context.entity as unknown as Record<string, unknown>) : undefined;
+        const dynamicReplyText = context?.entity
+          ? dynamicReply(task.intent, context.entity as unknown as Record<string, unknown>, job.userTurn.normalizedText)
+          : undefined;
+        const shippingBoundaryText = task.intent === 'SHIPPING_POLICY'
+          ? shippingPromiseBoundaryReply(job.userTurn.normalizedText)
+          : undefined;
         const builtInReplyText = safeSocial && task.intent === `SAFE_SOCIAL_${safeSocial.intent}` ? safeSocial.text : undefined;
         const imageObservationText = renderImageObservationReply(task.intent, job.userTurn.normalizedText);
-        const deterministicReplyText = builtInReplyText ?? imageObservationText ?? dynamicReplyText;
+        const deterministicReplyText = builtInReplyText ?? imageObservationText ?? dynamicReplyText ?? shippingBoundaryText;
         const taskEvidence = lookup.byTaskId.get(task.id) ?? [];
         if (taskEvidence.length === 0 && !deterministicReplyText) return { status: 'FAILED' as const, errorCode: 'NO_EVIDENCE' };
         return {
           status: 'RESOLVED' as const,
           facts: {
-            reply: deterministicReplyText ?? taskEvidence[0]!.contentSnapshot.answer,
+            reply: deterministicReplyText ?? selectEvidenceReply(taskEvidence, job.userTurn.normalizedText),
             ...(builtInReplyText ? { source: 'SYSTEM_SAFE_REPLY' } : imageObservationText ? { source: 'SANITIZED_IMAGE_ANALYSIS' } : {}),
             ...(context?.entity ? { context: context.entity } : {}),
           },
@@ -314,6 +366,8 @@ export class ReplyRuntimeService {
           },
         }),
       ]);
+      const allTasksNoEvidence = execution.tasks.length > 0
+        && execution.tasks.every((task) => task.status === 'FAILED' && task.errorCode === 'NO_EVIDENCE');
       const policy = decideReplyPolicy({
         shopMode: shop?.aiMode === 'MANUAL_ONLY'
           ? 'MANUAL_ONLY'
@@ -327,28 +381,23 @@ export class ReplyRuntimeService {
         hasEvidence: evidence.length > 0 || workflow.hasWorkflowResult || execution.tasks.some((task) => typeof task.facts?.reply === 'string'),
         hasBlockingFailure: execution.hasBlockingFailure,
         hasPartialFailure: execution.tasks.some((task) => task.status === 'FAILED' || task.status === 'AMBIGUOUS'),
+        allTasksFailedNoEvidence: allTasksNoEvidence,
         userRequestedHuman: transferRequested(job.userTurn.normalizedText, settings?.transferKeywordsJson),
         hasConflict: lookup.hasConflict,
         recommendedMode,
       });
-      void this.recordTrace(scope, job, 'REPLY_POLICY', { mode: policy.mode, reasons: policy.reasons, evidenceCount: evidence.length, taskStatuses: execution.tasks.map((task) => task.status) });
+      await this.recordTrace(scope, job, 'REPLY_POLICY', { mode: policy.mode, reasons: policy.reasons, evidenceCount: evidence.length, taskStatuses: execution.tasks.map((task) => task.status) });
       if (policy.mode === 'MANUAL') {
         const reason = policy.reasons.join(',') || 'MANUAL_REQUIRED';
-        return this.waitForHuman(scope, job, reason, customerFacingHandoffText(
-          execution.tasks.map((task) => task.intent),
-          reason,
-        ));
-      }
-      if (execution.tasks.length > 0 && execution.tasks.every((task) => task.status === 'FAILED' && task.errorCode === 'NO_EVIDENCE')) {
-        // With no grounded fact there is nothing safe for a Composer to
-        // paraphrase. A fixed customer-facing handoff prevents the model from
-        // turning absence of evidence into an unsupported positive or
-        // negative business claim.
+        const intents = execution.tasks.map((task) => task.intent);
+        const hasSpecificHandoff = intents.some((intent) => /COMPLAINT|HUMAN_REQUEST|REFUND|RETURN|COMPENSATION/i.test(intent));
         return this.waitForHuman(
           scope,
           job,
-          'NO_EVIDENCE',
-          noEvidenceHandoffText(job.userTurn.normalizedText),
+          reason,
+          allTasksNoEvidence && !hasSpecificHandoff
+            ? noEvidenceHandoffText(job.userTurn.normalizedText)
+            : customerFacingHandoffText(intents, reason),
         );
       }
       const composeFinalReply = async () => {
@@ -423,12 +472,13 @@ export class ReplyRuntimeService {
       }]).map((task, index) => ({
         id: `${job.id}:runtime-failure:${index}`, intent: task.intent, operation: 'READ' as const,
         riskLevel: task.riskLevel, requiredContext: task.requiredContext,
-        requiredKnowledge: task.requiredKnowledge, requiredTools: task.requiredTools,
-        status: 'FAILED', errorCode: 'AI_RUNTIME_FAILED', blocking: isTaskBlocking(task.requiredTools, task.riskLevel),
+        requiredKnowledge: task.requiredKnowledge,
+        requiredTools: [...new Set([...task.requiredTools, 'TRANSFER_HUMAN'])],
+        status: 'FAILED', errorCode: 'AI_RUNTIME_FAILED', blocking: true,
       }));
       await this.persistTasks(scope, job.id, job.conversationId, job.userTurnId, failedTasks, false);
       void this.recordTrace(scope, job, 'TASKS', { tasks: failedTasks.map((task) => ({ intent: task.intent, status: task.status, errorCode: task.errorCode })) });
-      void this.recordTrace(scope, job, 'REPLY_POLICY', { mode: 'ASSIST', reasons: ['AI_RUNTIME_FAILED'] });
+      void this.recordTrace(scope, job, 'REPLY_POLICY', { mode: 'MANUAL', reasons: ['AI_RUNTIME_FAILED'] });
       return this.waitForHuman(
         scope, job, 'AI_RUNTIME_FAILED',
         customerFacingHandoffText(failedTasks.map((task) => task.intent), 'AI_RUNTIME_FAILED'),
@@ -553,12 +603,15 @@ export class ReplyRuntimeService {
   private async retrieveAndFreezeTaskEvidence(
     scope: ReplyJobScope,
     job: { id: string; userTurn: { normalizedText: string }; evidences: Array<Parameters<typeof toEvidence>[0]> },
-    tasks: Array<{ id: string; intent: string; requiredKnowledge?: Array<'STORE' | 'PRODUCT'> }>,
+    tasks: Array<{ id: string; intent: string; requiredContext: string[]; requiredKnowledge?: Array<'STORE' | 'PRODUCT'> }>,
     contexts: Map<string, ReturnType<typeof resolveContext>>,
   ): Promise<TaskEvidenceLookup> {
     const existing = job.evidences.map(toEvidence);
     const byTaskId = new Map<string, ReplyEvidenceSnapshot[]>();
-    const collected = new Map<string, ReplyEvidenceSnapshot>(existing.map((entry) => [entry.versionId, entry]));
+    const activeTaskKeys = new Set(tasks.map(evidenceTaskBindingKey));
+    const collected = new Map<string, TaskBoundEvidenceSnapshot>(existing
+      .filter((entry) => entry.taskKey && activeTaskKeys.has(entry.taskKey))
+      .map((entry) => [taskEvidenceKey(entry.taskKey!, entry.versionId), entry]));
     const conflictItemIds = new Set<string>();
     let hasConflict = false;
 
@@ -569,7 +622,8 @@ export class ReplyRuntimeService {
         continue;
       }
       const productId = resolvedProductId(contexts.get(task.id));
-      const reusable = existing.filter((entry) => scopes.includes(entry.scope) && (entry.scope !== 'PRODUCT' || entry.productId === productId));
+      const taskKey = evidenceTaskBindingKey(task);
+      const reusable = taskBoundReusableEvidence(existing, taskKey, scopes, productId);
       if (reusable.length) {
         byTaskId.set(task.id, reusable);
         continue;
@@ -579,7 +633,7 @@ export class ReplyRuntimeService {
         if (knowledgeScope === 'PRODUCT' && !productId) continue;
         const result = await this.knowledge.search(scope, {
           shopId: scope.shopId,
-          query: job.userTurn.normalizedText,
+          query: knowledgeRetrievalQuery(job.userTurn.normalizedText, task.intent),
           scope: knowledgeScope,
           ...(knowledgeScope === 'PRODUCT' && productId ? { productId } : {}),
           topK: 3,
@@ -591,24 +645,29 @@ export class ReplyRuntimeService {
         }
         if (result.status !== 'EVIDENCE') continue;
         for (const entry of result.evidence) {
-          const frozen = { ...entry, contentSnapshot: { ...entry.contentSnapshot } };
-          collected.set(frozen.versionId, frozen);
+          const frozen: TaskBoundEvidenceSnapshot = { ...entry, taskKey, contentSnapshot: { ...entry.contentSnapshot } };
+          collected.set(taskEvidenceKey(taskKey, frozen.versionId), frozen);
           taskEvidence.push(frozen);
         }
       }
       byTaskId.set(task.id, uniqueEvidence(taskEvidence));
     }
 
-    const evidence = [...collected.values()];
-    const existingIds = new Set(existing.map((entry) => entry.versionId));
-    const newEvidence = evidence.filter((entry) => !existingIds.has(entry.versionId));
+    const boundEvidence = [...collected.values()];
+    const evidence = uniqueEvidence(boundEvidence);
+    const existingKeys = new Set(existing.flatMap((entry) => entry.taskKey
+      ? [taskEvidenceKey(entry.taskKey, entry.versionId)]
+      : []));
+    const newEvidence = boundEvidence.filter((entry) => entry.taskKey
+      && !existingKeys.has(taskEvidenceKey(entry.taskKey, entry.versionId)));
     if (newEvidence.length > 0) {
       await this.prisma.replyEvidence.createMany({
         data: newEvidence.map((entry) => ({
-          ...scope, replyJobId: job.id, knowledgeItemId: entry.itemId, knowledgeVersionId: entry.versionId,
+          ...scope, replyJobId: job.id, taskKey: entry.taskKey, knowledgeItemId: entry.itemId, knowledgeVersionId: entry.versionId,
           knowledgeVersionNumber: entry.version, sourceType: entry.source, scope: entry.scope,
           productId: entry.productId, retrievedContentSnapshotJson: cloneJson(entry.contentSnapshot), retrievalScore: entry.retrievalScore,
         })),
+        skipDuplicates: true,
       });
     }
     return { byTaskId, evidence, hasConflict, conflictItemIds: [...conflictItemIds] };
@@ -662,17 +721,12 @@ export class ReplyRuntimeService {
     tasks: Array<{ id: string; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; requiredContext: string[] }>,
   ): Promise<Map<string, ReturnType<typeof resolveContext>>> {
     const result = new Map<string, ReturnType<typeof resolveContext>>();
-    // Dynamic answers need the most specific live entity.  A planner commonly
-    // asks for PRODUCT+SKU; choosing PRODUCT first loses inventory entirely.
-    const kindFor = (requirements: string[]) => requirements.includes('ORDER') ? 'ORDER' as const
-      : requirements.includes('SKU') ? 'SKU' as const
-        : requirements.includes('PRODUCT') ? 'PRODUCT' as const : undefined;
     const sourceMessageIds = Array.isArray(job.userTurn.sourceMessageIdsJson)
       ? job.userTurn.sourceMessageIdsJson.filter((id): id is string => typeof id === 'string')
       : [];
     const repository = this.prisma as unknown as {
       message?: { findMany(input: unknown): Promise<Array<{ kind: string; contentJson: unknown }>> };
-      product?: { findMany(input: unknown): Promise<Array<{ id: string; title: string }>>; findFirst?: (input: unknown) => Promise<{ id: string; title: string } | null> };
+      product?: { findMany(input: unknown): Promise<Array<ProductContextRow>>; findFirst?: (input: unknown) => Promise<ProductContextRow | null> };
       productSku?: { findMany(input: unknown): Promise<Array<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown; product?: { title: string } }>>; findFirst?: (input: unknown) => Promise<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown; product?: { title: string } } | null> };
       order?: { findMany(input: unknown): Promise<Array<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } }>>; findFirst?: (input: unknown) => Promise<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } } | null> };
     };
@@ -683,10 +737,62 @@ export class ReplyRuntimeService {
         })
       : [];
     for (const task of tasks) {
-      const kind = kindFor(task.requiredContext);
+      const productCard = cardContextSelection(cards, 'PRODUCT');
+      const productChoiceId = clarificationChoiceId(job.conversation.clarificationRoundsJson, 'PRODUCT', job.userTurn.normalizedText ?? '');
+      // PRODUCT+SKU means "resolve a SKU within this product", not "search
+      // every SKU in the shop". Without one unambiguous product selection,
+      // resolve PRODUCT first so the buyer never sees internal SKU choices.
+      const hasProductSelection = !productCard.ambiguous && Boolean(
+        productCard.id || productChoiceId || job.conversation.currentProductId,
+      );
+      const hasExplicitSkuSelection = Boolean(cardContextSelection(cards, 'SKU').id)
+        || explicitSkuReference(job.userTurn.normalizedText ?? '');
+      if (
+        task.requiredContext.includes('PRODUCT')
+        && task.requiredContext.includes('SKU')
+        && !hasProductSelection
+        && !hasExplicitSkuSelection
+        && !productCard.ambiguous
+      ) {
+        const productCandidates = await this.contextCandidates(repository, scope, job.conversation.buyerId, 'PRODUCT', {
+          text: job.userTurn.normalizedText ?? '',
+        });
+        const productContext = resolveContext({
+          kind: 'PRODUCT', riskLevel: task.riskLevel, candidates: productCandidates,
+          clarificationRounds: clarificationRounds(job.conversation.clarificationRoundsJson, 'PRODUCT'),
+          contextVersion: job.sourceContextVersion, currentContextVersion: job.conversation.contextVersion,
+        });
+        if (productContext.status !== 'RESOLVED' || !productContext.entity) {
+          result.set(task.id, productContext);
+          continue;
+        }
+        const skuCandidates = await this.contextCandidates(repository, scope, job.conversation.buyerId, 'SKU', {
+          preferredId: productContext.entity.id,
+          text: job.userTurn.normalizedText ?? '',
+        });
+        const scopedSkuCandidates = skuCandidates.filter((candidate) => {
+          const dynamic = jsonRecord((candidate as unknown as Record<string, unknown>).dynamic);
+          return dynamic?.productId === productContext.entity!.id;
+        });
+        result.set(task.id, resolveContext({
+          kind: 'SKU', riskLevel: task.riskLevel, candidates: scopedSkuCandidates,
+          clarificationRounds: clarificationRounds(job.conversation.clarificationRoundsJson, 'SKU'),
+          contextVersion: job.sourceContextVersion, currentContextVersion: job.conversation.contextVersion,
+        }));
+        continue;
+      }
+      const kind = task.requiredContext.includes('ORDER') ? 'ORDER' as const
+        : task.requiredContext.includes('SKU') && (!task.requiredContext.includes('PRODUCT') || hasProductSelection || hasExplicitSkuSelection)
+          ? 'SKU' as const
+          : task.requiredContext.includes('PRODUCT') ? 'PRODUCT' as const : undefined;
       if (!kind) continue;
-      const cardId = cardContextId(cards, kind);
-      const preferredId = kind === 'ORDER' ? job.conversation.currentOrderId : job.conversation.currentProductId;
+      const card = cardContextSelection(cards, kind);
+      const cardId = card.id;
+      // Two distinct current-turn cards are an explicit ambiguity. They must
+      // not silently inherit an older conversation selection.
+      const preferredId = card.ambiguous
+        ? undefined
+        : kind === 'ORDER' ? job.conversation.currentOrderId : job.conversation.currentProductId;
       const choiceId = clarificationChoiceId(job.conversation.clarificationRoundsJson, kind, job.userTurn.normalizedText ?? '');
       const candidates = await this.contextCandidates(repository, scope, job.conversation.buyerId, kind, {
         preferredId, cardId, choiceId, text: job.userTurn.normalizedText ?? '',
@@ -704,7 +810,7 @@ export class ReplyRuntimeService {
 
   private async contextCandidates(
     repository: {
-      product?: { findMany(input: unknown): Promise<Array<{ id: string; title: string }>>; findFirst?: (input: unknown) => Promise<{ id: string; title: string } | null> };
+      product?: { findMany(input: unknown): Promise<ProductContextRow[]>; findFirst?: (input: unknown) => Promise<ProductContextRow | null> };
       productSku?: { findMany(input: unknown): Promise<Array<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown }>>; findFirst?: (input: unknown) => Promise<{ id: string; productId: string; externalSkuId: string; inventory: number; price: unknown; attributesJson: unknown } | null> };
       order?: { findMany(input: unknown): Promise<Array<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } }>>; findFirst?: (input: unknown) => Promise<{ id: string; externalOrderId: string; status: string; logisticsSnapshotJson: unknown; version: number; product?: { title: string } } | null> };
     },
@@ -739,6 +845,10 @@ export class ReplyRuntimeService {
         return row ? [skuCandidate(row)] : [];
       }
       const select = { id: true, productId: true, externalSkuId: true, inventory: true, price: true, attributesJson: true, product: { select: { title: true } } };
+      // A two-color follow-up is about the product already selected in this
+      // conversation. Aggregate its live SKU rows before any broad text
+      // matching so an unrelated product with the same color cannot affect
+      // the customer-facing availability statement.
       // Textual attributes (for example “黑色 XL”) are a current-turn
       // selection.  Match them across the scoped SKU set before falling back
       // to the conversation's older product.  `preferredId` is a product id,
@@ -746,6 +856,10 @@ export class ReplyRuntimeService {
       const scopedRows = await repository.productSku.findMany({
         where: { ...scope }, orderBy: { updatedAt: 'desc' }, take: 25, select,
       });
+      if (options.preferredId) {
+        const inventoryByColor = requestedColorInventory(scopedRows, options.preferredId, options.text);
+        if (inventoryByColor) return [skuColorInventoryCandidate(options.preferredId, inventoryByColor)];
+      }
       const textMatches = explicitSkuMatches(scopedRows, options.text);
       if (textMatches.length) return textMatches.map(skuCandidate);
       if (options.preferredId) {
@@ -757,23 +871,24 @@ export class ReplyRuntimeService {
       return selectSkuMatches(scopedRows, options.text).map(skuCandidate);
     }
     if (kind === 'PRODUCT' && repository.product) {
+      const productSelect = { id: true, title: true, description: true, status: true, skus: { select: { price: true } } };
       if (exactId && repository.product.findFirst) {
-        const row = await repository.product.findFirst({ where: { id: exactId, ...scope }, select: { id: true, title: true } });
-        return row ? [{ id: row.id, kind, label: row.title }] : [];
+        const row = await repository.product.findFirst({ where: { id: exactId, ...scope }, select: productSelect });
+        return row ? [productCandidate(row)] : [];
       }
-      const rows = await repository.product.findMany({ where: { ...scope, ...(exactId ? { id: exactId } : {}) }, orderBy: { updatedAt: 'desc' }, take: exactId ? 1 : 25, select: { id: true, title: true } });
+      const rows = await repository.product.findMany({ where: { ...scope, ...(exactId ? { id: exactId } : {}) }, orderBy: { updatedAt: 'desc' }, take: exactId ? 1 : 25, select: productSelect });
       const textMatches = explicitProductMatches(rows, options.text);
-      if (textMatches.length) return textMatches.map((row) => ({ id: row.id, kind, label: row.title }));
+      if (textMatches.length) return textMatches.map(productCandidate);
       // Pronoun-only follow-ups such as “那白色呢” refer to the conversation's
       // selected product.  An explicit product phrase above still wins, so a
       // buyer can switch products without being pinned to stale context.
       if (options.preferredId && repository.product.findFirst) {
         const row = await repository.product.findFirst({
-          where: { id: options.preferredId, ...scope }, select: { id: true, title: true },
+          where: { id: options.preferredId, ...scope }, select: productSelect,
         });
-        return row ? [{ id: row.id, kind, label: row.title }] : [];
+        return row ? [productCandidate(row)] : [];
       }
-      return rows.slice(0, 3).map((row) => ({ id: row.id, kind, label: row.title }));
+      return rows.slice(0, 3).map(productCandidate);
     }
     return [];
   }
@@ -1101,16 +1216,48 @@ function staleReasonFor(job: { conversation: { contextVersion: number; humanActi
 }
 
 function toEvidence(value: {
+  taskKey?: string | null;
   knowledgeItemId: string; knowledgeVersionId: string; knowledgeVersionNumber: number; sourceType: ReplyEvidenceSnapshot['source'];
   scope: ReplyEvidenceSnapshot['scope']; productId: string | null; retrievedContentSnapshotJson: unknown; retrievalScore: number | null;
-}): ReplyEvidenceSnapshot {
+}): TaskBoundEvidenceSnapshot {
   const snapshot = value.retrievedContentSnapshotJson as { question?: unknown; answer?: unknown };
   return {
+    ...(value.taskKey ? { taskKey: value.taskKey } : {}),
     itemId: value.knowledgeItemId, versionId: value.knowledgeVersionId, version: value.knowledgeVersionNumber,
     source: value.sourceType, scope: value.scope, productId: value.productId,
     contentSnapshot: { question: String(snapshot.question ?? ''), answer: String(snapshot.answer ?? '') },
     retrievalScore: value.retrievalScore ?? 0,
   };
+}
+
+function taskEvidenceKey(taskKey: string, versionId: string): string {
+  return `${taskKey}\u0000${versionId}`;
+}
+
+/** Stable across planner task reordering; changing task semantics forces a fresh retrieval. */
+export function evidenceTaskBindingKey(task: {
+  intent: string;
+  requiredContext: readonly string[];
+  requiredKnowledge?: ReadonlyArray<'STORE' | 'PRODUCT'>;
+}): string {
+  const intent = task.intent.normalize('NFKC').trim().toLocaleUpperCase();
+  const context = [...new Set(task.requiredContext.map((entry) => entry.normalize('NFKC').trim().toLocaleUpperCase()))]
+    .filter(Boolean)
+    .sort();
+  const knowledge = [...new Set(task.requiredKnowledge ?? [])].sort();
+  return JSON.stringify([intent, context, knowledge]);
+}
+
+/** Recovery may reuse a frozen row only when it belongs to this exact task. */
+export function taskBoundReusableEvidence(
+  evidence: readonly TaskBoundEvidenceSnapshot[],
+  taskKey: string,
+  scopes: ReadonlyArray<'STORE' | 'PRODUCT'>,
+  productId?: string,
+): TaskBoundEvidenceSnapshot[] {
+  return evidence.filter((entry) => entry.taskKey === taskKey
+    && scopes.includes(entry.scope)
+    && (entry.scope !== 'PRODUCT' || entry.productId === productId));
 }
 
 function cloneJson(value: Record<string, unknown>): Prisma.InputJsonValue {
@@ -1160,12 +1307,24 @@ function stringValues(value: unknown): string[] {
     .map((entry) => entry.trim());
 }
 
-function cardContextId(cards: Array<{ kind: string; contentJson: unknown }>, kind: 'PRODUCT' | 'SKU' | 'ORDER'): string | undefined {
-  const card = cards.find((entry) => (kind === 'ORDER' ? entry.kind === 'ORDER_CARD' : entry.kind === 'GOODS_CARD'));
-  if (!card?.contentJson || typeof card.contentJson !== 'object' || Array.isArray(card.contentJson)) return undefined;
-  const content = card.contentJson as Record<string, unknown>;
+function cardContextSelection(
+  cards: Array<{ kind: string; contentJson: unknown }>,
+  kind: 'PRODUCT' | 'SKU' | 'ORDER',
+): { id?: string; ambiguous: boolean } {
   const key = kind === 'ORDER' ? 'orderId' : kind === 'PRODUCT' ? 'productId' : 'skuId';
-  return typeof content[key] === 'string' ? content[key] : undefined;
+  const ids = [...new Set(cards.flatMap((entry) => {
+    if ((kind === 'ORDER' ? entry.kind === 'ORDER_CARD' : entry.kind === 'GOODS_CARD') === false) return [];
+    if (!entry.contentJson || typeof entry.contentJson !== 'object' || Array.isArray(entry.contentJson)) return [];
+    const id = (entry.contentJson as Record<string, unknown>)[key];
+    return typeof id === 'string' && id.trim() ? [id] : [];
+  }))];
+  return ids.length === 1 ? { id: ids[0], ambiguous: false } : { ambiguous: ids.length > 1 };
+}
+
+/** A named SKU or size/color combination is an explicit buyer selection. */
+function explicitSkuReference(text: string): boolean {
+  return /\b(?:xs|s|m|l|xl|xxl|xxxl)\b/iu.test(text)
+    || /\b[a-z][a-z0-9]*[-_][a-z0-9-]+\b/iu.test(text);
 }
 
 function contextPolicyStatus(
@@ -1188,6 +1347,33 @@ function orderCandidate(row: { id: string; externalOrderId: string; status: stri
     id: row.id, kind: 'ORDER' as const,
     label: row.product?.title ? `${row.product.title}（订单 ${row.externalOrderId}）` : row.externalOrderId,
     dynamic: { externalOrderId: row.externalOrderId, status: row.status, logistics: jsonRecord(row.logisticsSnapshotJson), version: row.version },
+  };
+}
+
+type ProductContextRow = {
+  id: string;
+  title: string;
+  description?: string;
+  status?: string;
+  skus?: Array<{ price: unknown }>;
+};
+
+function productCandidate(row: ProductContextRow) {
+  const prices = (row.skus ?? [])
+    .map((sku) => Number(sku.price))
+    .filter((price) => Number.isFinite(price) && price >= 0);
+  const dynamic = row.status
+    ? {
+      status: row.status,
+      ...(row.description?.trim() ? { description: row.description.trim() } : {}),
+      ...(prices.length ? { priceRange: { min: String(Math.min(...prices)), max: String(Math.max(...prices)) } } : {}),
+    }
+    : undefined;
+  return {
+    id: row.id,
+    kind: 'PRODUCT' as const,
+    label: row.title,
+    ...(dynamic ? { dynamic } : {}),
   };
 }
 
@@ -1374,16 +1560,128 @@ function orderReferenceTokens(text: string): string[] {
     .filter((token) => /[\p{Script=Han}]{2,}/u.test(token) || /^[a-z0-9]{3,}$/iu.test(token)))];
 }
 
-function knowledgeScopesForTask(
+export function knowledgeScopesForTask(
   task: { intent: string; requiredKnowledge?: Array<'STORE' | 'PRODUCT'> },
   context: ReturnType<typeof resolveContext> | undefined,
 ): Array<'STORE' | 'PRODUCT'> {
-  if (isDynamicFactIntent(task.intent) || /REFUND|EXCHANGE|COMPLAINT|HUMAN/i.test(task.intent)) return [];
+  // Inventory and logistics are live operational facts. A model-supplied RAG
+  // scope must never turn them into stale knowledge answers. ORDER_QUERY may
+  // still explicitly require STORE policy for action requests such as an
+  // address change, so keep that narrower case below.
+  if (/(?:^|_)(?:INVENTORY|STOCK|LOGISTICS|SHIPMENT)(?:_|$)/i.test(task.intent) || /SKU_INVENTORY/i.test(task.intent)) return [];
   if (task.requiredKnowledge?.length) return [...new Set(task.requiredKnowledge)];
+  if (isDynamicFactIntent(task.intent) || /REFUND|EXCHANGE|COMPLAINT|HUMAN/i.test(task.intent)) return [];
   if (/PRODUCT|SIZE|CARE|MATERIAL|SPECIFICATION|RECOMMENDATION/i.test(task.intent)) {
     return resolvedProductId(context) ? ['PRODUCT'] : [];
   }
   return ['STORE'];
+}
+
+function skuColorInventoryCandidate(productId: string, inventoryByColor: Record<string, number>) {
+  return {
+    id: `color-inventory:${productId}`, kind: 'SKU' as const, label: Object.keys(inventoryByColor).join('、'),
+    dynamic: { productId, inventoryByColor },
+  };
+}
+
+/**
+ * Returns aggregate live availability only for multiple color values that the
+ * buyer named, and only for the already selected product. The caller renders
+ * statuses rather than these quantities, so exact stock remains internal.
+ */
+export function requestedColorInventory<T extends { productId: string; inventory: number; attributesJson: unknown }>(
+  rows: readonly T[],
+  productId: string,
+  text: string,
+): Record<string, number> | undefined {
+  const normalized = text.toLocaleLowerCase();
+  const colorRows = rows.flatMap((row) => {
+    if (row.productId !== productId || !Number.isFinite(row.inventory)) return [];
+    const attributes = jsonRecord(row.attributesJson);
+    const color = typeof attributes?.color === 'string'
+      ? attributes.color.trim()
+      : typeof attributes?.颜色 === 'string' ? attributes.颜色.trim() : '';
+    return color && normalized.includes(color.toLocaleLowerCase()) ? [{ color, inventory: row.inventory }] : [];
+  });
+  const colors = [...new Set(colorRows.map((row) => row.color))]
+    .sort((left, right) => normalized.indexOf(left.toLocaleLowerCase()) - normalized.indexOf(right.toLocaleLowerCase()));
+  if (colors.length < 2) return undefined;
+  return Object.fromEntries(colors.map((color) => [
+    color,
+    colorRows.filter((row) => row.color === color).reduce((total, row) => total + Math.max(0, row.inventory), 0),
+  ]));
+}
+
+export function knowledgeRetrievalQuery(turnText: string, intent?: string): string {
+  const normalized = turnText
+    .replace(/\[(?:商品卡|订单卡|图片(?:\s+[A-Z_]+)?)\]/giu, ' ')
+    .replace(/(?:今天|现在)(?:下单|购买|买了?)[，,、\s]*(?=(?:什么时候|何时)发货)/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  // A request to promise an arrival date is not a live-order lookup. Retrieve
+  // the shop's fulfilment boundary so the reply can explicitly decline a
+  // guarantee instead of fabricating an ETA or dropping to no-evidence.
+  if (intent === 'SHIPPING_POLICY' && /(?:(?:多久|几天|多长时间|什么时候|何时).{0,4}发(?:货|出)?|发(?:货|出).{0,4}(?:多久|几天|多长时间|什么时候|何时))/u.test(normalized)) {
+    return '多久发货';
+  }
+  if (intent === 'AFTER_SALES_QUERY' && /(?:退货|退换|退款|售后|7\s*天无理由)/u.test(normalized)) {
+    return '支持退货';
+  }
+  if (intent === 'REFUND_REQUEST' && /(?:退款|退钱|退货)/u.test(normalized)) return '可以退款吗';
+  if (intent === 'PRODUCT_QUERY' && /烘干/u.test(normalized)) return '可以烘干吗';
+  if (intent === 'PRODUCT_QUERY' && /(?:材质|面料)/u.test(normalized)) return '材质';
+  if (/(?:保证|确保|能否).{0,10}(?:周[一二三四五六日天]|今天|明天|后天|\d+[号日]).{0,6}(?:送到|到货)/u.test(normalized)) {
+    return '多久发货';
+  }
+  if (/(?:水洗|怎么洗|洗涤)/u.test(normalized)) return '怎么洗';
+  return normalized;
+}
+
+/** PRODUCT_QUERY has both live and knowledge-backed variants. Only price and
+ * sale-state wording may be fulfilled from live product context; care/material
+ * questions must retain product-scoped Evidence. */
+export function productQuestionNeedsLiveFact(turnText: string): boolean {
+  return /(?:多少钱|价格|售价|还能买吗|可以买吗|能买(?:吗)?|可售|在售|下架|上架)/u.test(turnText);
+}
+
+/** Uses a scoped product catalog description only for broad feature asks. */
+export function productCatalogReply(turnText: string, dynamic: Record<string, unknown>): string | undefined {
+  if (!/(?:特点|介绍|功能|参数|怎么样)/u.test(turnText)) return undefined;
+  if (/(?:材质|面料|烘干|水洗|洗涤|版型|偏大|偏小|防水|季节)/u.test(turnText)) return undefined;
+  const description = typeof dynamic.description === 'string'
+    ? dynamic.description.replace(/<[^>]*>/gu, ' ').replace(/[\r\n\t]+/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, 240)
+    : '';
+  return description ? `这款商品的主要特点是：${description}` : undefined;
+}
+
+/** Adds the preceding buyer ask only for a narrow pronoun-only continuation. */
+export function intentInferenceText(currentTurn: string, recentMessages: unknown): string {
+  const current = currentTurn.trim();
+  if (!/^(?:还是(?:它|这个|那个|这款|那款)|就(?:它|这个|那个)|它呢|这个呢|那个呢)[。！？?!\s]*$/u.test(current)) {
+    return currentTurn;
+  }
+  if (!Array.isArray(recentMessages)) return currentTurn;
+  const prior = recentMessages
+    .flatMap((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+      const record = entry as Record<string, unknown>;
+      return record.role === 'BUYER' && typeof record.text === 'string' && record.text.trim()
+        ? [record.text.trim()]
+        : [];
+    })
+    .reverse()
+    .find((text) => text !== current);
+  return prior ? `${prior}\n${currentTurn}` : currentTurn;
+}
+
+/**
+ * A date-guarantee question is answered with the stable fulfilment boundary,
+ * never with a guessed carrier ETA. Evidence still supplies the normal
+ * dispatch policy, while this fixed clause makes the operational limit clear.
+ */
+export function shippingPromiseBoundaryReply(turnText: string): string | undefined {
+  if (!/(?:保证|确保|能否).{0,10}(?:周[一二三四五六日天]|今天|明天|后天|\d+[号日]).{0,6}(?:送到|到货)/u.test(turnText)) return undefined;
+  return '普通现货商品通常会尽快发出，但受收货地区和物流进度影响，不能保证具体到达日期，请以订单物流信息为准。';
 }
 
 function isDynamicFactIntent(intent: string): boolean {
@@ -1402,6 +1700,31 @@ function uniqueEvidence(evidence: ReplyEvidenceSnapshot[]): ReplyEvidenceSnapsho
   return [...new Map(evidence.map((entry) => [entry.versionId, entry])).values()];
 }
 
+/** Selects only among already-frozen Evidence, favoring exact buyer wording. */
+export function selectEvidenceReply(
+  evidence: ReadonlyArray<{ contentSnapshot: { question: string; answer: string } }>,
+  turnText: string,
+): string {
+  if (!evidence.length) return '';
+  const queryTerms = lexicalTerms(turnText);
+  const ranked = evidence.map((entry, index) => {
+    const questionTerms = lexicalTerms(entry.contentSnapshot.question);
+    const answerTerms = lexicalTerms(entry.contentSnapshot.answer);
+    const questionMatches = queryTerms.filter((term) => questionTerms.includes(term)).length;
+    const answerMatches = queryTerms.filter((term) => answerTerms.includes(term)).length;
+    return { entry, index, score: questionMatches * 3 + answerMatches };
+  }).sort((left, right) => right.score - left.score || left.index - right.index);
+  return ranked[0]!.entry.contentSnapshot.answer;
+}
+
+function lexicalTerms(value: string): string[] {
+  const normalized = value.normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  const han = [...normalized.replace(/[^\u3400-\u9fff]/gu, '')];
+  const bigrams = Array.from({ length: Math.max(0, han.length - 1) }, (_, index) => `${han[index]}${han[index + 1]}`);
+  const latin = normalized.match(/[a-z0-9]{2,}/gu) ?? [];
+  return [...new Set([...bigrams, ...latin])];
+}
+
 function messageText(value: unknown): string | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
@@ -1413,8 +1736,13 @@ function messageText(value: unknown): string | undefined {
 }
 
 /** Controlled local rendering of current operational facts; never RAG/model truth. */
-function dynamicReply(intent: string, entity: Record<string, unknown>): string | undefined {
+function dynamicReply(intent: string, entity: Record<string, unknown>, turnText?: string): string | undefined {
   const dynamic = jsonRecord(entity.dynamic);
   if (!dynamic) return undefined;
+  if (intent === 'PRODUCT_QUERY' && turnText !== undefined) {
+    const catalogReply = productCatalogReply(turnText, dynamic);
+    if (catalogReply) return catalogReply;
+    if (!productQuestionNeedsLiveFact(turnText)) return undefined;
+  }
   return renderCustomerFactReply(intent, dynamic);
 }

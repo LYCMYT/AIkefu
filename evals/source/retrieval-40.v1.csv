@@ -1,0 +1,41 @@
+ID,Shop,Product_Context,Query,Expected_Knowledge_Concept,Expected_Scope,Positive,Max_Rank,Forbidden_Scope_or_Concept,Notes
+Q01,MIA,-,什么时候发货？,普通发货时效,STORE,YES,3,Pixel STORE,
+Q02,MIA,-,新疆发货多久？,偏远地区物流,STORE,YES,3,普通24h作为最终依据,
+Q03,MIA,-,能退货吗？,退换货政策,STORE,YES,3,,
+Q04,MIA,-,开什么发票？,发票政策,STORE,YES,3,,
+Q05,MIA,fashion_hoodie,能放干衣机吗？,洗护/不建议烘干,PRODUCT,YES,3,其他商品洗护,语义改写
+Q06,MIA,fashion_hoodie,衣服是什么面料？,材质,PRODUCT,YES,3,其他商品材质,
+Q07,MIA,fashion_hoodie,偏宽松还是修身？,版型,PRODUCT,YES,3,,
+Q08,MIA,fashion_hoodie,适合哪个季节？,适用季节,PRODUCT,YES,3,,
+Q09,Pixel,silentkey84,支持Mac吗？,兼容性,PRODUCT,YES,3,MIA知识,
+Q10,Pixel,silentkey84,这键盘吵不吵？,静音/噪声相关知识,PRODUCT,YES,3,,
+Q11,Pixel,portable_monitor,便携屏有哪些特点？,便携屏产品知识,PRODUCT,YES,3,其他产品,
+Q12,Pixel,portable_monitor,这个屏幕适配什么设备？,兼容性/接口,PRODUCT,YES,3,,
+Q13,MIA,fashion_hoodie,能不能机器烘干？,洗护,PRODUCT,YES,3,,烘干机同义
+Q14,MIA,-,大概多久出库？,发货时效,STORE,YES,3,,发货 paraphrase
+Q15,MIA,-,不想要了能退吗？,退换货,STORE,YES,3,,
+Q16,Pixel,silentkey84,Windows电脑能用吗？,兼容性,PRODUCT,YES,3,,
+Q17,Pixel,portable_monitor,接笔记本可以吗？,接口/兼容,PRODUCT,YES,3,,
+Q18,MIA,fashion_hoodie,怎么洗比较好？,洗护,PRODUCT,YES,3,,
+Q19,MIA,fashion_hoodie,我想穿松一点选什么版型？,版型/尺码,PRODUCT,YES,3,,
+Q20,MIA,-,偏远地区时效怎么算？,偏远地区物流,STORE,YES,3,普通地区固定时效,
+Q21,MIA,-,支持线下试穿吗？,NONE,NONE,NO,0,7天无理由,hard negative
+Q22,MIA,-,500件能打几折？,NONE,NONE,NO,0,任意折扣政策,
+Q23,MIA,fashion_hoodie,防水等级是多少？,NONE,NONE,NO,0,其他产品防水,
+Q24,MIA,fashion_hoodie,能抗零下20度吗？,NONE,NONE,NO,0,季节知识扩写成温度能力,
+Q25,Pixel,silentkey84,终身保修吗？,NONE,NONE,NO,0,普通售后政策冒充终身保修,
+Q26,Pixel,portable_monitor,一定兼容所有Mac吗？,NONE,NONE,NO,0,有限兼容性被扩写,
+Q27,MIA,-,保证周五到吗？,NONE,NONE,NO,0,一般物流政策被当保证,
+Q28,Pixel,-,支持线下维修当天取吗？,NONE,NONE,NO,0,售后知识冒充维修SLA,
+Q29,MIA,-,多久发货？,MIA发货政策,STORE,YES,3,Pixel发货政策,cross-shop
+Q30,Pixel,-,多久发货？,Pixel发货政策,STORE,YES,3,MIA发货政策,cross-shop
+Q31,MIA,fashion_hoodie,怎么洗？,MIA商品洗护,PRODUCT,YES,3,Pixel知识,
+Q32,Pixel,silentkey84,支持什么系统？,Pixel兼容性,PRODUCT,YES,3,MIA知识,
+Q33,MIA,fashion_hoodie,什么材质？,当前Product材质,PRODUCT,YES,3,相似MIA其他Product材质,cross-product
+Q34,Pixel,portable_monitor,有什么接口？,当前Product接口,PRODUCT,YES,3,SilentKey知识,cross-product
+Q35,MIA,-,这个怎么洗？,NONE,NONE,NO,0,任意商品洗护,无product上下文应不接受产品知识
+Q36,Pixel,-,这个支持Mac吗？,NONE,NONE,NO,0,任意产品兼容性,无product上下文
+Q37,MIA,-,发货多久？,CONFLICT_CASE,STORE,YES,3,,冲突fixture应识别冲突而非静默Top1
+Q38,MIA,fashion_hoodie,能烘干吗？,当前Product洗护,PRODUCT,YES,1,另一商品洗护,Top1质量
+Q39,Pixel,silentkey84,支持Mac吗？,当前Product兼容性,PRODUCT,YES,1,另一商品兼容性,Top1质量
+Q40,MIA,-,新疆一般多久到？,偏远地区政策,STORE,YES,1,普通地区24h,Top1质量
