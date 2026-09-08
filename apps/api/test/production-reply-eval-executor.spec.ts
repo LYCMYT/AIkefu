@@ -4,6 +4,7 @@ import {
   projectProductionReplyExecution,
   type ProductionReplyEvalPort,
 } from '../src/eval/production-reply-eval-executor';
+import { AiEvalFaultRegistry } from '../src/eval/ai-eval-fault-registry';
 
 describe('PrismaProductionReplyEvalPort', () => {
   it('loads scoped AI invocations without requiring a conversation id that runtime calls do not persist', async () => {
@@ -162,6 +163,49 @@ describe('PrismaProductionReplyEvalPort', () => {
 
     expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'send-restart', ...scope, status: 'SENDING', transportStartedAt: null },
+    }));
+    expect(recovery.recoverOnce).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for the injected generation crash and recovers only the claimed reply job', async () => {
+    const scope = { workspaceId: 'workspace-generation-restart', tenantId: 'tenant-generation-restart', shopId: 'shop-generation-restart' };
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const recovery = { recoverOnce: jest.fn().mockResolvedValue({ recoveryPending: 1, stale: 0, preTransport: 0, uncertain: 0, expiredDrafts: 0 }) };
+    const faults = new AiEvalFaultRegistry();
+    const port = new PrismaProductionReplyEvalPort(
+      {} as never,
+      {} as never,
+      { replyJob: { updateMany } } as never,
+      { timeoutMs: 50, pollMs: 1 },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      faults,
+      undefined,
+      recovery as never,
+      undefined,
+    );
+    await port.prepareRestart({ ...scope, buyerId: 'buyer-generation-restart', phase: 'GENERATING' });
+
+    const resumed = port.resumeAfterRestart({
+      ...scope,
+      buyerId: 'buyer-generation-restart',
+      conversationId: 'conversation-generation-restart',
+      phase: 'GENERATING',
+      replyJobId: 'reply-generation-restart',
+    });
+    faults.markRestartCrash(scope.workspaceId);
+    await expect(resumed).resolves.toBeUndefined();
+
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: 'reply-generation-restart',
+        ...scope,
+        conversationId: 'conversation-generation-restart',
+        status: 'GENERATING',
+      },
     }));
     expect(recovery.recoverOnce).toHaveBeenCalledTimes(1);
   });
@@ -428,7 +472,10 @@ describe('ProductionReplyEvalExecutor', () => {
       }),
       configureProviderScenario: async () => { calls.push('provider'); },
       prepareRestart: async () => { calls.push('prepare'); },
-      resumeAfterRestart: async () => { calls.push('resume'); },
+      prepareGenerationBarrier: async () => { calls.push('barrier:prepare'); },
+      waitForGenerationBarrier: async () => { calls.push('barrier:reached'); return { replyJobId: 'reply-fault' }; },
+      releaseGenerationBarrier: async () => { calls.push('barrier:release'); },
+      resumeAfterRestart: async (input: { replyJobId?: string }) => { calls.push(`resume:${input.replyJobId ?? 'none'}`); },
       sendText: async () => { calls.push('send'); return { conversationId: 'conversation-fault' }; },
       sendProductCard: async () => { throw new Error('not expected'); },
       sendOrderCard: async () => { throw new Error('not expected'); },
@@ -445,7 +492,10 @@ describe('ProductionReplyEvalExecutor', () => {
       expectedTasks: ['PRODUCT_QUERY'], expectedMode: 'ASSIST', expectedFacts: [], forbiddenClaims: [],
     });
 
-    expect(calls).toEqual(['provider', 'prepare', 'send', 'resume', 'delete']);
+    expect(calls).toEqual([
+      'provider', 'prepare', 'barrier:prepare', 'send', 'barrier:reached',
+      'barrier:release', 'resume:reply-fault', 'delete',
+    ]);
   });
 
   it('activates a frozen knowledge conflict through the production setup port before sending the turn', async () => {

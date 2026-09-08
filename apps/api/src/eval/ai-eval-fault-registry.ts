@@ -21,11 +21,17 @@ type GenerationBarrier = {
   release(): void;
 };
 
+type RestartCrashSignal = {
+  crashed: Promise<void>;
+  markCrashed(): void;
+};
+
 /** Process-local, non-HTTP fault seam used only by the isolated eval CLI. */
 @Injectable()
 export class AiEvalFaultRegistry {
   private readonly scenarios = new Map<string, AiEvalProviderScenario>();
   private readonly generationBarriers = new Map<string, GenerationBarrier>();
+  private readonly restartCrashSignals = new Map<string, RestartCrashSignal>();
 
   configure(workspaceId: string, scenario: AiEvalProviderScenario): void {
     this.scenarios.set(workspaceId, scenario);
@@ -71,8 +77,26 @@ export class AiEvalFaultRegistry {
     barrier.release();
   }
 
+  prepareRestartCrash(workspaceId: string): void {
+    if (this.restartCrashSignals.has(workspaceId)) throw new Error('EVAL_RESTART_CRASH_ALREADY_ACTIVE');
+    this.restartCrashSignals.set(workspaceId, restartCrashSignal());
+  }
+
+  async waitForRestartCrash(workspaceId: string): Promise<void> {
+    const signal = this.restartCrashSignals.get(workspaceId);
+    if (!signal) throw new Error('EVAL_RESTART_CRASH_NOT_PREPARED');
+    await signal.crashed;
+  }
+
+  markRestartCrash(workspaceId: string): void {
+    this.restartCrashSignals.get(workspaceId)?.markCrashed();
+  }
+
   clear(workspaceId: string): void {
     this.releaseGenerationBarrier(workspaceId);
+    const restartCrash = this.restartCrashSignals.get(workspaceId);
+    this.restartCrashSignals.delete(workspaceId);
+    restartCrash?.markCrashed();
     this.scenarios.delete(workspaceId);
   }
 }
@@ -83,4 +107,10 @@ function generationBarrier(): GenerationBarrier {
   const reached = new Promise<void>((resolve) => { markReached = resolve; });
   const releaseSignal = new Promise<void>((resolve) => { release = resolve; });
   return { reached, releaseSignal, markReached, release };
+}
+
+function restartCrashSignal(): RestartCrashSignal {
+  let markCrashed!: () => void;
+  const crashed = new Promise<void>((resolve) => { markCrashed = resolve; });
+  return { crashed, markCrashed };
 }

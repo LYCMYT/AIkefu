@@ -112,7 +112,12 @@ export type ProductionReplyEvalPort = {
     afterReplyJobId?: string;
     invalidatedReplyJobId?: string;
   }): Promise<ProductionReplyEvalProjection>;
-  resumeAfterRestart?(input: EvalMessageInput & { conversationId: string; phase: string; projection?: ProductionReplyEvalProjection }): Promise<void>;
+  resumeAfterRestart?(input: EvalMessageInput & {
+    conversationId: string;
+    phase: string;
+    replyJobId?: string;
+    projection?: ProductionReplyEvalProjection;
+  }): Promise<void>;
   staleWorkflowBeforeApproval?(input: EvalMessageInput & { conversationId: string }): Promise<void>;
   prepareWorkflowApproval?(input: EvalMessageInput): Promise<void>;
   waitForProjection(input: {
@@ -207,11 +212,19 @@ export class ProductionReplyEvalExecutor {
       const logisticsChange = record(contextSetup.changeLogisticsDuringGeneration);
       const mutationDuringGeneration = [inventoryChange, orderChange, logisticsChange]
         .some((change) => Object.keys(change).length > 0);
+      const restartDuringGeneration = restartDuring === 'GENERATING';
+      if (restartDuringGeneration && mutationDuringGeneration) {
+        throw new Error('EXECUTOR_UNSUPPORTED:restartWithGenerationMutation');
+      }
+      const generationBarrierRequired = mutationDuringGeneration || restartDuringGeneration;
       if (
-        mutationDuringGeneration
+        generationBarrierRequired
         && (!this.port.prepareGenerationBarrier || !this.port.waitForGenerationBarrier || !this.port.releaseGenerationBarrier)
       ) {
         throw new Error('EXECUTOR_UNSUPPORTED:generationBarrier');
+      }
+      if (restartDuringGeneration && !this.port.resumeAfterRestart) {
+        throw new Error('EXECUTOR_UNSUPPORTED:restartDuring');
       }
       const transportTexts = testCase.messages.flatMap((message) => {
         if (typeof message === 'string') return [message];
@@ -225,7 +238,7 @@ export class ProductionReplyEvalExecutor {
       // message invalidates old work but deliberately creates no new turn.
       let previousOperationPlansReply = false;
       for (const [messageIndex, message] of testCase.messages.entries()) {
-        if (mutationDuringGeneration && messageIndex === testCase.messages.length - 1) {
+        if (generationBarrierRequired && messageIndex === testCase.messages.length - 1) {
           generationBarrierInput = { ...scope, conversationId };
           await this.port.prepareGenerationBarrier!(generationBarrierInput);
           generationBarrierPrepared = true;
@@ -329,9 +342,12 @@ export class ProductionReplyEvalExecutor {
         if (!this.port.setHumanActive) throw new Error('EXECUTOR_UNSUPPORTED:humanActive');
         await this.port.setHumanActive({ ...scope, conversationId });
       }
-      if (restartDuring === 'GENERATING') {
-        if (!this.port.resumeAfterRestart) throw new Error('EXECUTOR_UNSUPPORTED:restartDuring');
-        await this.port.resumeAfterRestart({ ...scope, conversationId, phase: restartDuring });
+      if (restartDuringGeneration) {
+        const barrier = await this.port.waitForGenerationBarrier!({ ...scope, conversationId });
+        const replyJobId = required(barrier?.replyJobId, 'EXECUTOR_GENERATION_BARRIER_JOB_NOT_FOUND');
+        await this.port.releaseGenerationBarrier!({ ...scope, conversationId });
+        generationBarrierPrepared = false;
+        await this.port.resumeAfterRestart!({ ...scope, conversationId, phase: restartDuring, replyJobId });
       }
       let invalidatedReplyJobId: string | undefined;
       if (mutationDuringGeneration) {
@@ -513,6 +529,7 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
     if (input.phase === 'GENERATING') {
       if (!this.evalFaults) throw new Error('EXECUTOR_PROVIDER_FAULTS_UNAVAILABLE');
       this.evalFaults.configure(input.workspaceId, 'CRASH_ONCE');
+      this.evalFaults.prepareRestartCrash(input.workspaceId);
       return;
     }
     if (input.phase === 'SEND_OUTBOX_SENDING') {
@@ -780,29 +797,36 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
     throw new Error('EXECUTOR_WORKFLOW_PROPOSAL_TIMEOUT');
   }
 
-  async resumeAfterRestart(input: EvalMessageInput & { conversationId: string; phase: string; projection?: ProductionReplyEvalProjection }): Promise<void> {
+  async resumeAfterRestart(input: EvalMessageInput & {
+    conversationId: string;
+    phase: string;
+    replyJobId?: string;
+    projection?: ProductionReplyEvalProjection;
+  }): Promise<void> {
     if (!this.recovery) throw new Error('EXECUTOR_RECOVERY_SERVICE_UNAVAILABLE');
     const scope = { ...evalScope(input), shopId: input.shopId };
     if (input.phase === 'GENERATING') {
-      const deadline = Date.now() + this.timeoutMs;
-      while (Date.now() < deadline) {
-        const job = await this.prisma.replyJob.findFirst({
-          where: { ...scope, conversationId: input.conversationId, status: 'GENERATING' },
-          orderBy: { createdAt: 'desc' }, select: { id: true },
-        });
-        if (job) {
-          const now = new Date();
-          await this.prisma.replyJob.updateMany({
-            where: { id: job.id, ...scope, status: 'GENERATING' },
-            data: { updatedAt: new Date(now.getTime() - 4 * 60_000) },
-          });
-          const recovered = await this.recovery.recoverOnce(now);
-          if (recovered.recoveryPending < 1) throw new Error('EXECUTOR_GENERATING_RECOVERY_NOT_CLAIMED');
-          return;
-        }
-        await delay(this.pollMs);
-      }
-      throw new Error('EXECUTOR_GENERATING_STATE_TIMEOUT');
+      if (!this.evalFaults) throw new Error('EXECUTOR_PROVIDER_FAULTS_UNAVAILABLE');
+      const replyJobId = required(input.replyJobId, 'EXECUTOR_GENERATING_REPLY_JOB_REQUIRED');
+      await withTimeout(
+        this.evalFaults.waitForRestartCrash(input.workspaceId),
+        this.timeoutMs,
+        'EXECUTOR_RESTART_CRASH_TIMEOUT',
+      );
+      const now = new Date();
+      const aged = await this.prisma.replyJob.updateMany({
+        where: {
+          id: replyJobId,
+          ...scope,
+          conversationId: input.conversationId,
+          status: 'GENERATING',
+        },
+        data: { updatedAt: new Date(now.getTime() - 4 * 60_000) },
+      });
+      if (!aged.count) throw new Error('EXECUTOR_GENERATING_RECOVERY_JOB_NOT_FOUND');
+      const recovered = await this.recovery.recoverOnce(now);
+      if (recovered.recoveryPending < 1) throw new Error('EXECUTOR_GENERATING_RECOVERY_NOT_CLAIMED');
+      return;
     }
     if (input.phase === 'SEND_OUTBOX_SENDING') {
       const sending = input.projection?.replyJob.sendOutbox;

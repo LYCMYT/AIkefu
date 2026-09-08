@@ -1,5 +1,6 @@
 import { AiRuntime, AiRuntimeFailure, type AiProvider, type AiProviderRequest } from '@ai-customer-service/core';
 import { AiRuntimeApplicationService } from '../src/ai/ai-runtime-application.service';
+import { AiEvalFaultRegistry } from '../src/eval/ai-eval-fault-registry';
 
 describe('AiRuntimeApplicationService', () => {
   it('sanitizes provider context and persists scoped usage with immutable evidence', async () => {
@@ -102,6 +103,37 @@ describe('AiRuntimeApplicationService', () => {
     expect(ledger.start).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
       provider: 'unresolved', model: 'unresolved',
     }));
+  });
+
+  it('acknowledges an injected restart crash only after persisting the running invocation', async () => {
+    const order: string[] = [];
+    const faults = new AiEvalFaultRegistry();
+    faults.configure('workspace-restart', 'CRASH_ONCE');
+    faults.prepareRestartCrash('workspace-restart');
+    const ledger = {
+      start: jest.fn(async () => { order.push('STARTED'); return { id: 'invocation-restart' }; }),
+      complete: jest.fn(),
+      recordUsage: jest.fn(),
+    };
+    const service = new AiRuntimeApplicationService(
+      { runStructured: jest.fn() } as never,
+      ledger as never,
+      undefined,
+      faults,
+    );
+
+    const crashed = faults.waitForRestartCrash('workspace-restart').then(() => { order.push('CRASHED'); });
+    await expect(service.runStructured(
+      { workspaceId: 'workspace-restart', tenantId: 'tenant-restart', shopId: 'shop-restart' },
+      {
+        purpose: 'INTENT_PLANNER', schema: 'IntentPlan', context: { text: '什么时候发货？' },
+        allowedDataClasses: ['text'], promptVersion: 'reply-intent-plan-v1',
+      },
+    )).rejects.toMatchObject({ message: 'EVAL_SIMULATED_PROCESS_CRASH' });
+    await crashed;
+
+    expect(order).toEqual(['STARTED', 'CRASHED']);
+    expect(ledger.complete).not.toHaveBeenCalled();
   });
 
   it('preserves a stable runtime failure while recording only non-sensitive failure metadata', async () => {
