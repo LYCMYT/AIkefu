@@ -61,6 +61,17 @@ test('CI has a non-skipped real infrastructure and browser gate', () => {
   assert.match(workflow, /playwright install --with-deps chromium/);
 });
 
+test('CI keeps fixture infrastructure alive until integration tests finish', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  const configuredAt = workflow.indexOf('- name: Configure Eval V2 fixture infrastructure');
+  const integrationAt = workflow.indexOf('- name: Run integration tests (real infra opt-in)');
+  const stoppedAt = workflow.indexOf('- name: Stop Eval V2 fixture infrastructure');
+
+  assert.ok(configuredAt >= 0, 'checks job must start fixture infrastructure');
+  assert.ok(integrationAt > configuredAt, 'checks job must run integration after infrastructure starts');
+  assert.ok(stoppedAt > integrationAt, 'checks job must stop infrastructure only after integration finishes');
+});
+
 test('portfolio release documentation is complete and does not advertise localhost as public', () => {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const historicalReleaseNotes = readFileSync(new URL('../docs/RELEASE_V1.0.0_DEMO.md', import.meta.url), 'utf8');

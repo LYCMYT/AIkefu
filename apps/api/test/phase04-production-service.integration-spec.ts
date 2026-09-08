@@ -301,12 +301,12 @@ describe('Phase 04 production-service integration', () => {
     const retrieve = runtime as unknown as { retrieveAndFreezeTaskEvidence(
       s: typeof scope,
       job: { id: string; userTurn: { normalizedText: string }; evidences: [] },
-      tasks: Array<{ id: string; intent: string; requiredKnowledge: Array<'STORE'> }>,
+      tasks: Array<{ id: string; intent: string; requiredContext: string[]; requiredKnowledge: Array<'STORE'> }>,
       contexts: Map<string, never>,
     ): Promise<unknown> };
     await Promise.all([
-      retrieve.retrieveAndFreezeTaskEvidence(scope, { id: 'reply-buyer-a', userTurn: { normalizedText: '同一个问题' }, evidences: [] }, [{ id: 'task-a', intent: 'FAQ_QUERY', requiredKnowledge: ['STORE'] }], new Map<string, never>()),
-      retrieve.retrieveAndFreezeTaskEvidence(shopB, { id: 'reply-buyer-b', userTurn: { normalizedText: '同一个问题' }, evidences: [] }, [{ id: 'task-b', intent: 'FAQ_QUERY', requiredKnowledge: ['STORE'] }], new Map<string, never>()),
+      retrieve.retrieveAndFreezeTaskEvidence(scope, { id: 'reply-buyer-a', userTurn: { normalizedText: '同一个问题' }, evidences: [] }, [{ id: 'task-a', intent: 'FAQ_QUERY', requiredContext: [], requiredKnowledge: ['STORE'] }], new Map<string, never>()),
+      retrieve.retrieveAndFreezeTaskEvidence(shopB, { id: 'reply-buyer-b', userTurn: { normalizedText: '同一个问题' }, evidences: [] }, [{ id: 'task-b', intent: 'FAQ_QUERY', requiredContext: [], requiredKnowledge: ['STORE'] }], new Map<string, never>()),
     ]);
     expect(knowledge.search).toHaveBeenCalledWith(scope, { shopId: scope.shopId, query: '同一个问题', scope: 'STORE', topK: 3 });
     expect(knowledge.search).toHaveBeenCalledWith(shopB, { shopId: shopB.shopId, query: '同一个问题', scope: 'STORE', topK: 3 });

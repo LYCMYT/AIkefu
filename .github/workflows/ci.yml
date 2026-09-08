@@ -79,15 +79,15 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Stop Eval V2 fixture infrastructure
-        if: always()
-        run: docker compose -f docker-compose.yml down -v
-
       - name: Run integration tests (real infra opt-in)
         run: pnpm test:integration
 
       - name: Build packages and applications
         run: pnpm build
+
+      - name: Stop Eval V2 fixture infrastructure
+        if: always()
+        run: docker compose -f docker-compose.yml down -v
 
   real-infra:
     name: Real infrastructure and browser gate
