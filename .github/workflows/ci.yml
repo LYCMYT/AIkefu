@@ -19,11 +19,11 @@ jobs:
     env:
       # Real PostgreSQL/Redis/MinIO suites are opt-in in this repository.
       RUN_REAL_INFRA_INTEGRATION: '0'
-      # AppModule intentionally fails closed when object-storage credentials are
-      # absent. These non-production placeholders let the mocked HTTP contract
-      # suites compile the full Nest module without contacting MinIO.
-      S3_ACCESS_KEY: ci-demo-access
-      S3_SECRET_KEY: ci-demo-secret
+      # The checks job now runs attachment-backed Eval V2 cases against the
+      # disposable MinIO service, so these demo-only credentials must match
+      # docker-compose.yml rather than compile-only placeholders.
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -50,17 +50,44 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
+      - name: Configure Eval V2 fixture infrastructure
+        run: |
+          cp .env.example .env
+          docker compose -f docker-compose.yml up -d --wait --wait-timeout 180
+          pnpm db:deploy
+
       - name: Typecheck
         run: pnpm typecheck
 
       - name: Run unit tests
         run: pnpm test:unit
 
+      - name: Validate Eval V2 canonical files are current
+        run: |
+          pnpm eval:v2:convert
+          git diff --exit-code -- evals/canonical
+
+      - name: Run Eval V2 offline fixture gate
+        run: pnpm eval:v2:offline
+
+      - name: Upload Eval V2 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-v2-diagnostics-${{ github.run_id }}
+          path: artifacts/eval-v2
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Run integration tests (real infra opt-in)
         run: pnpm test:integration
 
       - name: Build packages and applications
         run: pnpm build
+
+      - name: Stop Eval V2 fixture infrastructure
+        if: always()
+        run: docker compose -f docker-compose.yml down -v
 
   real-infra:
     name: Real infrastructure and browser gate
@@ -72,6 +99,7 @@ jobs:
       RUN_REAL_INFRA_E2E: '1'
       E2E_BASE_URL: http://127.0.0.1:5173
       PLAYWRIGHT_BROWSER_CHANNEL: chromium
+      AIKEFU_EVAL_REAL_PROVIDER_API_KEY: ${{ secrets.AIKEFU_EVAL_REAL_PROVIDER_API_KEY }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -116,6 +144,19 @@ jobs:
       - name: Run real infrastructure integration tests
         run: pnpm exec dotenv -e .env -- pnpm test:integration
 
+      - name: Run Eval V2 production path against real infrastructure
+        run: pnpm exec dotenv -e .env -- pnpm eval:v2:offline
+
+      - name: Run Eval V2 external-provider gate when explicitly configured
+        if: ${{ env.AIKEFU_EVAL_REAL_PROVIDER_API_KEY != '' && vars.AIKEFU_EVAL_REAL_PROVIDER_NAME != '' }}
+        env:
+          AI_PROVIDER: ${{ vars.AIKEFU_EVAL_REAL_PROVIDER_NAME }}
+          AI_BASE_URL: ${{ vars.AIKEFU_EVAL_REAL_PROVIDER_BASE_URL }}
+          AI_MODEL_NAME: ${{ vars.AIKEFU_EVAL_REAL_PROVIDER_MODEL }}
+          AI_API_KEY: ${{ env.AIKEFU_EVAL_REAL_PROVIDER_API_KEY }}
+          AI_OFFLINE_MODE: '0'
+        run: pnpm exec dotenv -e .env -- pnpm eval:v2:real
+
       - name: Start API and Web
         run: |
           nohup pnpm dev > /tmp/aikefu-dev.log 2>&1 &
@@ -141,6 +182,7 @@ jobs:
           path: |
             /tmp/aikefu-dev.log
             test-results
+            artifacts/eval-v2
           if-no-files-found: ignore
 
       - name: Show container logs on failure

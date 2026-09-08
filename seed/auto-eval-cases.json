@@ -46,7 +46,7 @@
     {
       "id": "A008", "category": "AUTO_NO_EVIDENCE_BLOCK", "shopKey": "shop_mia_fashion", "buyerKey": "buyer_001",
       "messages": ["你们支持线下试穿吗？"], "contextSetup": { "shopAiMode": "AUTO_ALLOWED" },
-      "expectedTasks": ["FAQ_QUERY"], "expectedMode": "ASSIST", "expectedFacts": ["暂时没有找到可靠依据"],
+      "expectedTasks": ["UNKNOWN"], "expectedMode": "MANUAL", "expectedFacts": ["暂时没有找到可靠依据"],
       "forbiddenClaims": ["支持线下试穿"], "expectedTerminalStatus": "WAITING_HUMAN", "expectedOutputSource": "DRAFT", "expectedAutoSend": false,
       "noEvidenceExpected": true, "customerFacingRequired": true
     },

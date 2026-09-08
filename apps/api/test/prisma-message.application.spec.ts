@@ -61,6 +61,197 @@ describe('PrismaMessageApplication buyer shop scope', () => {
 });
 
 describe('PrismaMessageApplication memory invalidation', () => {
+  it('persists a versioned replacement turn and reply-plan after editing a flushed buyer text', async () => {
+    const original = {
+      id: 'message-1',
+      workspaceId: scope.workspaceId,
+      tenantId: scope.tenantId,
+      shopId: 'shop-1',
+      conversationId: 'conversation-1',
+      buyerId: 'buyer-1',
+      externalMessageId: 'external-message-1',
+      sequence: 4,
+      kind: 'TEXT',
+      status: 'ACTIVE',
+      role: 'BUYER',
+      contentJson: { text: '原来的问题' },
+      _count: { versions: 0 },
+    };
+    const updated = { ...original, status: 'EDITED', contentJson: { text: '编辑后的问题' } };
+    const turn = {
+      id: 'turn-edited-v1',
+      workspaceId: scope.workspaceId,
+      tenantId: scope.tenantId,
+      shopId: 'shop-1',
+      conversationId: 'conversation-1',
+      sourceMessageIdsJson: ['message-1'],
+      firstSequence: 4,
+      lastSequence: 4,
+      normalizedText: '编辑后的问题',
+      turnKey: 'edited:message-1:v1',
+    };
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      message: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce({ conversationId: 'conversation-1' })
+          .mockResolvedValueOnce(original),
+        update: jest.fn().mockResolvedValue(updated),
+        create: jest.fn(),
+      },
+      messageVersion: { create: jest.fn().mockResolvedValue({ id: 'version-1' }) },
+      conversation: {
+        update: jest.fn().mockResolvedValue({ id: 'conversation-1', contextVersion: 8 }),
+      },
+      conversationTurnBuffer: {
+        findUnique: jest.fn().mockResolvedValue({
+          conversationId: 'conversation-1',
+          firstSequence: 4,
+          latestSequence: 4,
+          status: 'FLUSHED',
+        }),
+      },
+      userTurn: { upsert: jest.fn().mockResolvedValue(turn) },
+      processingOutbox: { upsert: jest.fn().mockResolvedValue({ id: 'reply-plan-edited-v1' }) },
+      conversationMemory: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    };
+    const prisma = {
+      message: {
+        findFirst: jest.fn().mockResolvedValue({
+          shopId: 'shop-1',
+          conversationId: 'conversation-1',
+          externalMessageId: 'external-message-1',
+          role: 'BUYER',
+        }),
+      },
+      $transaction: jest.fn(async (work: (client: typeof tx) => Promise<unknown>) => work(tx)),
+    };
+    const replyDrafts = { staleForContext: jest.fn().mockResolvedValue(undefined) };
+    const app = new PrismaMessageApplication(
+      prisma as never,
+      { publish: jest.fn() } as never,
+      { editMessage: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      undefined,
+      replyDrafts as never,
+    );
+    jest.spyOn(app as any, 'publishMessage').mockImplementation(() => undefined);
+    jest.spyOn(app as any, 'publishConversation').mockResolvedValue(undefined);
+
+    await app.editMessage(scope, 'message-1', '编辑后的问题');
+
+    expect(replyDrafts.staleForContext).toHaveBeenCalledWith(
+      tx,
+      { workspaceId: scope.workspaceId, tenantId: scope.tenantId, shopId: 'shop-1' },
+      'conversation-1',
+      'MESSAGE_EDITED',
+    );
+    expect(tx.message.create).not.toHaveBeenCalled();
+    expect(tx.userTurn.upsert).toHaveBeenCalledWith({
+      where: { turnKey: 'edited:message-1:v1' },
+      update: {},
+      create: {
+        workspaceId: scope.workspaceId,
+        tenantId: scope.tenantId,
+        shopId: 'shop-1',
+        conversationId: 'conversation-1',
+        sourceMessageIdsJson: ['message-1'],
+        firstSequence: 4,
+        lastSequence: 4,
+        normalizedText: '编辑后的问题',
+        turnKey: 'edited:message-1:v1',
+      },
+    });
+    expect(tx.processingOutbox.upsert).toHaveBeenCalledWith({
+      where: { eventId: 'reply-plan:turn-edited-v1' },
+      update: {},
+      create: expect.objectContaining({
+        workspaceId: scope.workspaceId,
+        tenantId: scope.tenantId,
+        shopId: 'shop-1',
+        eventId: 'reply-plan:turn-edited-v1',
+        aggregateType: 'USER_TURN',
+        aggregateId: 'turn-edited-v1',
+        eventType: 'USER_TURN_READY',
+        payloadJson: {
+          conversationId: 'conversation-1',
+          userTurnId: 'turn-edited-v1',
+          sourceLastMessageId: 'message-1',
+          sourceSequence: 4,
+          sourceContextVersion: 8,
+        },
+      }),
+    });
+  });
+
+  it('leaves an edited buyer text to its active turn buffer instead of creating a duplicate replacement turn', async () => {
+    const original = {
+      id: 'message-1',
+      workspaceId: scope.workspaceId,
+      tenantId: scope.tenantId,
+      shopId: 'shop-1',
+      conversationId: 'conversation-1',
+      buyerId: 'buyer-1',
+      externalMessageId: 'external-message-1',
+      sequence: 4,
+      kind: 'TEXT',
+      status: 'ACTIVE',
+      role: 'BUYER',
+      contentJson: { text: '原来的问题' },
+      _count: { versions: 0 },
+    };
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      message: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce({ conversationId: 'conversation-1' })
+          .mockResolvedValueOnce(original),
+        update: jest.fn().mockResolvedValue({ ...original, status: 'EDITED', contentJson: { text: '编辑后的问题' } }),
+      },
+      messageVersion: { create: jest.fn().mockResolvedValue({ id: 'version-1' }) },
+      conversation: { update: jest.fn().mockResolvedValue({ id: 'conversation-1', contextVersion: 8 }) },
+      conversationTurnBuffer: {
+        findUnique: jest.fn().mockResolvedValue({
+          conversationId: 'conversation-1',
+          firstSequence: 4,
+          latestSequence: 4,
+          status: 'BUFFERING',
+        }),
+      },
+      userTurn: { upsert: jest.fn() },
+      processingOutbox: { upsert: jest.fn() },
+      conversationMemory: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    };
+    const prisma = {
+      message: {
+        findFirst: jest.fn().mockResolvedValue({
+          shopId: 'shop-1',
+          conversationId: 'conversation-1',
+          externalMessageId: 'external-message-1',
+          role: 'BUYER',
+        }),
+      },
+      $transaction: jest.fn(async (work: (client: typeof tx) => Promise<unknown>) => work(tx)),
+    };
+    const app = new PrismaMessageApplication(
+      prisma as never,
+      { publish: jest.fn() } as never,
+      { editMessage: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      undefined,
+      { staleForContext: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+    jest.spyOn(app as any, 'publishMessage').mockImplementation(() => undefined);
+    jest.spyOn(app as any, 'publishConversation').mockResolvedValue(undefined);
+
+    await app.editMessage(scope, 'message-1', '编辑后的问题');
+
+    expect(tx.userTurn.upsert).not.toHaveBeenCalled();
+    expect(tx.processingOutbox.upsert).not.toHaveBeenCalled();
+  });
+
   it('rejects an outgoing role before the buyer adapter recall is attempted', async () => {
     const adapter = { editMessage: jest.fn(), recallMessage: jest.fn() };
     const app = new PrismaMessageApplication(
@@ -113,6 +304,16 @@ describe('PrismaMessageApplication memory invalidation', () => {
       },
       messageVersion: { create: jest.fn().mockResolvedValue({ id: 'version-1' }) },
       conversation: { update: jest.fn().mockResolvedValue({ id: 'conversation-1' }) },
+      conversationTurnBuffer: {
+        findUnique: jest.fn().mockResolvedValue({
+          conversationId: 'conversation-1',
+          firstSequence: 4,
+          latestSequence: 4,
+          status: 'BUFFERING',
+        }),
+      },
+      userTurn: { upsert: jest.fn() },
+      processingOutbox: { upsert: jest.fn() },
       conversationMemory: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     const prisma = {

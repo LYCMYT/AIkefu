@@ -39,6 +39,7 @@ describe('resolveSafeKnowledgeIntent', () => {
     '有运费险吗',
     '偏远地区多久发货',
     '新疆多久发货',
+    '今天下单什么时候发货？',
   ])('recognizes an exact static shipping-policy question: %s', (text) => {
     expect(resolveSafeKnowledgeIntent(text)).toBe('SHIPPING_POLICY');
   });

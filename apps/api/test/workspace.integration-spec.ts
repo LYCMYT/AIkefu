@@ -145,7 +145,7 @@ describe('Phase 01 workspace integration', () => {
     expect(firstResetOperation.body).toMatchObject({ status: 'ACCEPTED' });
     expect(secondResetOperation.body).toMatchObject({ status: 'ACCEPTED' });
     expect(firstReset.body.seed.counts).toEqual(secondReset.body.seed.counts);
-    expect(firstReset.body.seed.counts).toMatchObject({ shops: 2, buyers: 4, products: 10, orders: 10, knowledge: 80, workflows: 2 });
+    expect(firstReset.body.seed.counts).toMatchObject({ shops: 2, buyers: 4, products: 10, orders: 10, knowledge: 81, workflows: 2 });
     expect(repository.runtimeConversationCount(sessionA.workspace.id)).toBe(0);
     expect(repository.runtimeConversationCount(sessionB.workspace.id)).toBe(1);
     expect(bootstrapB.body.workspace.id).toBe(sessionB.workspace.id);

@@ -16,7 +16,7 @@ describe('synthetic seed catalog', () => {
       orders: seed.orders.length,
       knowledge: seed.knowledge.length,
       workflows: seed.workflows.length,
-    }).toEqual({ shops: 2, buyers: 4, products: 10, orders: 10, knowledge: 80, workflows: 2 });
+    }).toEqual({ shops: 2, buyers: 4, products: 10, orders: 10, knowledge: 81, workflows: 2 });
 
     const shopKeys = new Set(seed.shops.map(({ key }) => key));
     const buyerKeys = new Set(seed.buyers.map(({ key }) => key));
@@ -41,12 +41,12 @@ describe('synthetic seed catalog', () => {
 
     const byShop = Object.fromEntries([...shopKeys].map((shopKey) => [shopKey, seed.knowledge.filter((entry) => entry.shopKey === shopKey)]));
     expect(Object.fromEntries(Object.entries(byShop).map(([shopKey, entries]) => [shopKey, entries.length]))).toEqual({
-      shop_mia_fashion: 40,
+      shop_mia_fashion: 41,
       shop_pixel_tech: 40,
     });
-    expect(seed.knowledge.filter((entry) => entry.scope === 'STORE')).toHaveLength(30);
+    expect(seed.knowledge.filter((entry) => entry.scope === 'STORE')).toHaveLength(31);
     expect(seed.knowledge.filter((entry) => entry.scope === 'PRODUCT')).toHaveLength(50);
-    expect(seed.knowledge.filter((entry) => entry.sourceType === 'MANUAL')).toHaveLength(50);
+    expect(seed.knowledge.filter((entry) => entry.sourceType === 'MANUAL')).toHaveLength(51);
     expect(seed.knowledge.filter((entry) => entry.sourceType === 'AUTO_LEARNED')).toHaveLength(20);
     expect(seed.knowledge.filter((entry) => entry.sourceType === 'HUMAN_REVIEWED')).toHaveLength(10);
     expect(seed.knowledge.filter((entry) => entry.scope === 'STORE').every((entry) => entry.productKey === null)).toBe(true);
@@ -86,6 +86,27 @@ describe('synthetic seed catalog', () => {
     });
     expect(seed.evalCases.every((entry) => entry.expected && entry.assertions)).toBe(true);
     expect(seed.evalCases.every((entry) => !entry.shopKey || seed.shops.some((shop) => shop.key === entry.shopKey))).toBe(true);
+  });
+
+  it('keeps legacy evaluation expectations aligned with the stricter Eval V2 safety and restart contracts', () => {
+    const repositoryRoot = resolve(__dirname, '../../..');
+    const fixed = JSON.parse(readFileSync(resolve(repositoryRoot, 'seed/eval-cases.json'), 'utf8')) as {
+      cases: Array<Record<string, unknown>>;
+    };
+    const auto = JSON.parse(readFileSync(resolve(repositoryRoot, 'seed/auto-eval-cases.json'), 'utf8')) as {
+      cases: Array<Record<string, unknown>>;
+    };
+
+    expect(fixed.cases.find((entry) => entry.id === 'E017')).toMatchObject({
+      expectedTasks: ['UNKNOWN'], expectedMode: 'MANUAL', noEvidenceExpected: true,
+    });
+    expect(auto.cases.find((entry) => entry.id === 'A008')).toMatchObject({
+      expectedTasks: ['UNKNOWN'], expectedMode: 'MANUAL', expectedAutoSend: false, noEvidenceExpected: true,
+    });
+    expect(fixed.cases.find((entry) => entry.id === 'E036')).toMatchObject({
+      contextSetup: { shopAiMode: 'AUTO_ALLOWED', restartDuring: 'SEND_OUTBOX_SENDING' },
+      expectedMode: 'AUTO', expectedTerminalStatus: 'SENT', expectedOutputSource: 'SENT_MESSAGE', expectedAutoSend: true,
+    });
   });
 
   it('keeps showcase, no-answer, fixture and Eval assets outside runtime knowledge', async () => {

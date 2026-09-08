@@ -124,7 +124,7 @@ export class SeedCatalog {
       ['buyers', 4],
       ['products', 10],
       ['orders', 10],
-      ['knowledge', 80],
+      ['knowledge', 81],
       ['workflows', 2],
     ];
     for (const [key, count] of expected) {

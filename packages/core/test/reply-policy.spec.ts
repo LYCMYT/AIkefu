@@ -35,6 +35,20 @@ describe('ReplyPolicy', () => {
     });
   });
 
+  it('treats an all-task no-evidence outcome as MANUAL without changing partial failures', () => {
+    expect(decideReplyPolicy({
+      ...automatic,
+      hasEvidence: false,
+      hasPartialFailure: true,
+      allTasksFailedNoEvidence: true,
+    })).toMatchObject({ mode: 'MANUAL', reasons: ['NO_EVIDENCE'] });
+    expect(decideReplyPolicy({
+      ...automatic,
+      hasEvidence: false,
+      hasPartialFailure: true,
+    })).toMatchObject({ mode: 'ASSIST', reasons: ['PARTIAL_TASK_RESULT'] });
+  });
+
   it('keeps early ambiguity in ASSIST but requires MANUAL after the resolver exhausts two rounds', () => {
     expect(decideReplyPolicy({ ...automatic, contextStatus: 'AMBIGUOUS' })).toMatchObject({ mode: 'ASSIST' });
     expect(decideReplyPolicy({ ...automatic, contextStatus: 'AMBIGUOUS', contextManualRequired: true })).toMatchObject({

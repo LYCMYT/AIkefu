@@ -19,6 +19,8 @@ export interface ReplyPolicyInput {
   hasBlockingFailure: boolean;
   /** A non-blocking task still failed/needs clarification: never hide it in AUTO. */
   hasPartialFailure?: boolean;
+  /** Every planned task failed specifically because no grounded evidence exists. */
+  allTasksFailedNoEvidence?: boolean;
   userRequestedHuman: boolean;
   /** Model may only request a stricter mode; it can never relax policy. */
   recommendedMode?: ReplyMode;
@@ -51,6 +53,8 @@ export function decideReplyPolicy(input: ReplyPolicyInput): ReplyPolicyDecision 
     mode = 'MANUAL'; reasons.push('HIGH_RISK_TASK');
   } else if (input.contextManualRequired) {
     mode = 'MANUAL'; reasons.push('CONTEXT_MANUAL_REQUIRED');
+  } else if (input.allTasksFailedNoEvidence) {
+    mode = 'MANUAL'; reasons.push('NO_EVIDENCE');
   } else if (input.hasBlockingFailure) {
     mode = 'ASSIST'; reasons.push('BLOCKING_TASK_FAILURE');
   } else if (input.hasPartialFailure) {

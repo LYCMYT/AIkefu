@@ -890,7 +890,7 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
             ? { currentProductId: typeof latestContent.productId === 'string' ? latestContent.productId : null }
             : { currentOrderId: typeof latestContent.orderId === 'string' ? latestContent.orderId : null };
       }
-      await tx.conversation.update({
+      const updatedConversation = await tx.conversation.update({
         where: { id: message.conversationId },
         data: { contextVersion: { increment: 1 }, needsReplan: true, ...recalledContext },
       });
@@ -913,6 +913,42 @@ export class PrismaMessageApplication implements MessageApplication, OnModuleIni
         },
         data: { status: 'DIRTY' },
       });
+      if (status === 'EDITED') {
+        const buffer = await tx.conversationTurnBuffer.findUnique({ where: { conversationId: message.conversationId } });
+        const editWillBeFlushed = buffer?.status === TurnBufferStatus.BUFFERING
+          && buffer.firstSequence <= message.sequence
+          && message.sequence <= buffer.latestSequence;
+        // A buffered turn reads the current Message row when it flushes, so
+        // creating another turn here would plan the same buyer input twice.
+        // Once the original turn has flushed, its normalized text is stale.
+        // Persist a versioned replacement turn and plan intent atomically so
+        // crash recovery can dispatch the replan without duplicating it.
+        if (!editWillBeFlushed) {
+          const version = message._count.versions + 1;
+          const turn = await tx.userTurn.upsert({
+            where: { turnKey: `edited:${message.id}:v${version}` },
+            update: {},
+            create: {
+              ...this.scope(scope),
+              shopId: message.shopId,
+              conversationId: message.conversationId,
+              sourceMessageIdsJson: [message.id],
+              firstSequence: message.sequence,
+              lastSequence: message.sequence,
+              normalizedText: this.messageText(message.kind, updated.contentJson),
+              turnKey: `edited:${message.id}:v${version}`,
+            },
+          });
+          await this.enqueueReplyPlanning(tx, {
+            workspaceId: scope.workspaceId,
+            tenantId: scope.tenantId,
+            shopId: message.shopId,
+            conversation: updatedConversation,
+            turn,
+            sourceLastMessageId: message.id,
+          });
+        }
+      }
       return {
         message: { ...updated, entityVersion: message._count.versions + 2 } as unknown as Record<string, unknown>,
         ...(dirtied.count > 0

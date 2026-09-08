@@ -6,6 +6,7 @@ import { SendOutboxService } from './send-outbox.service';
 import { WorkspaceGateway } from '../websocket/workspace.gateway';
 import { randomUUID } from 'node:crypto';
 import { TraceService } from '../trace/trace.service';
+import { AiEvalFaultRegistry } from '../eval/ai-eval-fault-registry';
 
 /**
  * V1's sole platform dispatcher. It keeps the synthetic transport outside the
@@ -24,6 +25,7 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
     private readonly adapter: MockDouyinAdapter,
     private readonly gateway?: WorkspaceGateway,
     @Optional() private readonly traces?: TraceService,
+    @Optional() private readonly evalFaults?: AiEvalFaultRegistry,
   ) {}
 
   onModuleInit(): void {
@@ -60,6 +62,13 @@ export class MockDouyinSendWorker implements OnModuleInit, OnModuleDestroy {
       const forbiddenTermBlocked = !checkForbiddenTerms(textBeforeClaim, forbiddenRules(settings?.forbiddenTermsJson)).allowed;
       const claim = await this.outboxes.claim(scope, row.id, forbiddenTermBlocked);
       if (!claim.claimed) {
+        skipped += 1;
+        continue;
+      }
+      // Eval-only simulated process crash after durable claim but before the
+      // transport fence. No platform call has started, so recovery may safely
+      // requeue this original outbox exactly once.
+      if (claim.sendOutbox.replyJobId && this.evalFaults?.consumeSendBeforeTransport(scope.workspaceId)) {
         skipped += 1;
         continue;
       }

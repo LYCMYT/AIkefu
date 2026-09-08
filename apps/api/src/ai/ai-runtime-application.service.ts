@@ -59,6 +59,9 @@ export class AiRuntimeApplicationService {
     const sanitized = sanitizeContext(input.context, input.allowedDataClasses);
     const evidence = cloneEvidence(input.evidence ?? []);
     const prompt = getPromptDefinition(input.purpose, input.promptVersion);
+    if (input.purpose === 'INTENT_PLANNER') {
+      await this.evalFaults?.pauseAtGenerationBarrier(scope.workspaceId);
+    }
     const evalScenario = this.evalFaults?.consume(scope.workspaceId, input.purpose);
     if (evalScenario && evalScenario !== 'CRASH_ONCE') {
       await this.recordInjectedTimeout(scope, input, sanitized.audit, evidence, 'eval-primary-timeout');
@@ -82,7 +85,10 @@ export class AiRuntimeApplicationService {
     const invocationId = requireInvocationId(invocation);
     // The isolated production-eval restart case intentionally leaves this
     // durable RUNNING row and its GENERATING ReplyJob for recovery to claim.
-    if (evalScenario === 'CRASH_ONCE') throw new AiEvalSimulatedCrash();
+    if (evalScenario === 'CRASH_ONCE') {
+      this.evalFaults?.markRestartCrash(scope.workspaceId);
+      throw new AiEvalSimulatedCrash();
+    }
 
     try {
       const result = await this.runtime.runStructured<T>({

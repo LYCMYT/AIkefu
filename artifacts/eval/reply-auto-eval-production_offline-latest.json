@@ -1,7 +1,7 @@
 {
   "sourceVersion": "1.0",
   "executionBoundary": "APP_MODULE_PRISMA_REPLY_RUNTIME",
-  "generatedAt": "2026-08-30T17:36:22.117Z",
+  "generatedAt": "2026-09-07T17:48:01.860Z",
   "mode": "PRODUCTION_OFFLINE",
   "provider": "offline-structured-demo",
   "model": "offline-structured-v1",
@@ -15,7 +15,7 @@
     "inputTokens": 0,
     "outputTokens": 0,
     "totalCost": null,
-    "averageLatencyMs": 26
+    "averageLatencyMs": 20
   },
   "cases": [
     {
@@ -35,45 +35,64 @@
           "productId": null,
           "sourceType": "MANUAL",
           "text": "默认使用顺丰或中通，具体承运方以订单物流信息为准。",
-          "retrievalScore": 0.938148
+          "retrievalScore": 0.938148,
+          "knowledgeKey": "k003",
+          "productKey": null
         },
         {
           "scope": "STORE",
           "productId": null,
           "sourceType": "MANUAL",
           "text": "是否支持指定快递需要人工确认，AI不做确定承诺。",
-          "retrievalScore": 0.59199
+          "retrievalScore": 0.594336,
+          "knowledgeKey": "k004",
+          "productKey": null
+        }
+      ],
+      "tools": [],
+      "taskDetails": [
+        {
+          "intent": "SHIPPING_POLICY",
+          "status": "RESOLVED",
+          "result": {
+            "reply": "默认使用顺丰或中通，具体承运方以订单物流信息为准。",
+            "evidenceVersionIds": [
+              "cmtrj9j3l003auzasorc1luod",
+              "cmtrj9j3u003euzas2hamiz15"
+            ]
+          }
         }
       ],
       "provider": "offline-structured-demo",
       "model": "offline-structured-v1",
       "inputTokens": 0,
       "outputTokens": 0,
-      "latencyMs": 29,
+      "latencyMs": 24,
       "cost": null,
       "outputSource": "SENT_MESSAGE",
       "terminalStatus": "SENT",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3bnna0000uz6wln3ulbcg",
-        "conversationId": "cmtg3bohd00f0uz6wb2xofbxi",
-        "replyJobId": "cmtg3bqef00imuz6wi8g5qc44",
-        "userTurnId": "cmtg3bq5w00iguz6w8vhrhtwx",
+        "workspaceId": "cmtrj9iy90000uzasyd0z0v1m",
+        "conversationId": "cmtrj9jqg00ewuzaswcdfcaye",
+        "replyJobId": "cmtrj9loh00myuzasiysxmgnk",
+        "userTurnId": "cmtrj9lgo00luuzas34qxbe0a",
         "taskIds": [
-          "reply-task:cmtg3bqef00imuz6wi8g5qc44:cmtg3bqef00imuz6wi8g5qc44:0"
+          "reply-task:cmtrj9loh00myuzasiysxmgnk:cmtrj9loh00myuzasiysxmgnk:0"
         ],
         "evidenceIds": [
-          "cmtg3bqkr00j7uz6wwzl0c65z",
-          "cmtg3bqkr00j8uz6wbo1rrh8h"
+          "cmtrj9ltr00o5uzasz5dpzbas",
+          "cmtrj9ltr00o6uzasetcwk837"
         ],
         "knowledgeVersionIds": [
-          "cmtg3bnt9003auz6wtco56ql9",
-          "cmtg3bnti003euz6wy3gk0w96"
+          "cmtrj9j3l003auzasorc1luod",
+          "cmtrj9j3u003euzas2hamiz15"
         ],
-        "sendOutboxId": "cmtg3bqmp00jkuz6wd8hh2xe8",
-        "sentMessageId": "cmtg3bqrt00k4uz6wp8xcwfej",
+        "sendOutboxId": "cmtrj9lvw00oiuzas9r4rdanl",
+        "sentMessageId": "cmtrj9m1h00owuzascmi69top",
         "invocationIds": [
-          "cmtg3bqfo00iwuz6w786e6l1u",
-          "cmtg3bqh000j0uz6wp37ij380"
+          "cmtrj9lpl00ncuzaswu8linqr",
+          "cmtrj9lqt00nmuzasnep6yhw9"
         ]
       },
       "passed": true,
@@ -102,45 +121,64 @@
           "productId": null,
           "sourceType": "MANUAL",
           "text": "数码商品通常在48小时内发出；预售或定制商品以商品页说明为准。",
-          "retrievalScore": 0.92274
+          "retrievalScore": 0.915031,
+          "knowledgeKey": "k016",
+          "productKey": null
         },
         {
           "scope": "STORE",
           "productId": null,
           "sourceType": "MANUAL",
           "text": "保修期限以商品说明和订单凭证为准。",
-          "retrievalScore": 0.604381
+          "retrievalScore": 0.606229,
+          "knowledgeKey": "k026",
+          "productKey": null
+        }
+      ],
+      "tools": [],
+      "taskDetails": [
+        {
+          "intent": "SHIPPING_POLICY",
+          "status": "RESOLVED",
+          "result": {
+            "reply": "数码商品通常在48小时内发出；预售或定制商品以商品页说明为准。",
+            "evidenceVersionIds": [
+              "cmtrj9mfi00vbuzasi96n1gr7",
+              "cmtrj9mhl00wnuzass44ygdmq"
+            ]
+          }
         }
       ],
       "provider": "offline-structured-demo",
       "model": "offline-structured-v1",
       "inputTokens": 0,
       "outputTokens": 0,
-      "latencyMs": 22,
+      "latencyMs": 24,
       "cost": null,
       "outputSource": "SENT_MESSAGE",
       "terminalStatus": "SENT",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3bqw200kpuz6wn6no26ia",
-        "conversationId": "cmtg3brqs010juz6w3ie7ixxa",
-        "replyJobId": "cmtg3btid013juz6wszs5ha9f",
-        "userTurnId": "cmtg3btfe013duz6wstp2o4io",
+        "workspaceId": "cmtrj9m6o00pnuzasamgh0si9",
+        "conversationId": "cmtrj9mxs0171uzasdzeoddpm",
+        "replyJobId": "cmtrj9orm01ebuzas6p4h8z7e",
+        "userTurnId": "cmtrj9onc01dnuzasxmho82fe",
         "taskIds": [
-          "reply-task:cmtg3btid013juz6wszs5ha9f:cmtg3btid013juz6wszs5ha9f:0"
+          "reply-task:cmtrj9orm01ebuzas6p4h8z7e:cmtrj9orm01ebuzas6p4h8z7e:0"
         ],
         "evidenceIds": [
-          "cmtg3btmz0144uz6wzz95rkd9",
-          "cmtg3btmz0145uz6ws90c16u1"
+          "cmtrj9ow801fiuzasjcljrlsb",
+          "cmtrj9ow801fjuzasm8hzw805"
         ],
         "knowledgeVersionIds": [
-          "cmtg3br4k00pnuz6wfztzn8wx",
-          "cmtg3br6s00qruz6wwi4gy9hz"
+          "cmtrj9mfi00vbuzasi96n1gr7",
+          "cmtrj9mhl00wnuzass44ygdmq"
         ],
-        "sendOutboxId": "cmtg3btop014huz6wfv1ay334",
-        "sentMessageId": "cmtg3btuq014zuz6wlu2q3cms",
+        "sendOutboxId": "cmtrj9oy101fzuzas3xfrnz4v",
+        "sentMessageId": "cmtrj9p5r01ghuzasjr8wf1i3",
         "invocationIds": [
-          "cmtg3btjf013tuz6wtcxlpqlw",
-          "cmtg3btkg013xuz6wibsatk89"
+          "cmtrj9osk01eruzasgbg18scm",
+          "cmtrj9otk01ezuzasz3majf79"
         ]
       },
       "passed": true,
@@ -165,39 +203,70 @@
       "evidenceDetails": [
         {
           "scope": "PRODUCT",
-          "productId": "cmtg3btyx0162uz6w4g4w46vi",
+          "productId": "cmtrj9pad01houzasflcwn2oq",
           "sourceType": "HUMAN_REVIEWED",
           "text": "不建议使用烘干机。",
-          "retrievalScore": 0.971144
+          "retrievalScore": 0.997233,
+          "knowledgeKey": "k033",
+          "productKey": "fashion_hoodie"
+        }
+      ],
+      "tools": [
+        "GET_PRODUCT"
+      ],
+      "taskDetails": [
+        {
+          "intent": "PRODUCT_QUERY",
+          "status": "RESOLVED",
+          "result": {
+            "reply": "不建议使用烘干机。",
+            "context": {
+              "id": "cmtrj9pad01houzasflcwn2oq",
+              "kind": "PRODUCT",
+              "label": "轻薄连帽卫衣",
+              "dynamic": {
+                "status": "ON_SHELF",
+                "priceRange": {
+                  "max": "199",
+                  "min": "199"
+                },
+                "description": "70%棉、30%聚酯纤维，宽松版型，适合春秋日常穿着。建议冷水手洗，不建议烘干。"
+              }
+            },
+            "evidenceVersionIds": [
+              "cmtrj9pka01p0uzasdbrs2ndr"
+            ]
+          }
         }
       ],
       "provider": "offline-structured-demo",
       "model": "offline-structured-v1",
       "inputTokens": 0,
       "outputTokens": 0,
-      "latencyMs": 20,
+      "latencyMs": 21,
       "cost": null,
       "outputSource": "SENT_MESSAGE",
       "terminalStatus": "SENT",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3btxu015euz6wrwkggtio",
-        "conversationId": "cmtg3buty01lguz6w9zoqasac",
-        "replyJobId": "cmtg3bwzz01oyuz6w11jgn5bh",
-        "userTurnId": "cmtg3bwlv01o8uz6w3c6squbv",
+        "workspaceId": "cmtrj9p9h01h2uzas7rf5rxi7",
+        "conversationId": "cmtrj9pyr01y4uzasf1u7603e",
+        "replyJobId": "cmtrj9ruq025wuzaszcffpf6z",
+        "userTurnId": "cmtrj9rog024wuzas39gxa78z",
         "taskIds": [
-          "reply-task:cmtg3bwzz01oyuz6w11jgn5bh:cmtg3bwzz01oyuz6w11jgn5bh:0"
+          "reply-task:cmtrj9ruq025wuzaszcffpf6z:cmtrj9ruq025wuzaszcffpf6z:0"
         ],
         "evidenceIds": [
-          "cmtg3bx5j01q1uz6weobxv6cf"
+          "cmtrj9ryd026vuzasr58o2wnw"
         ],
         "knowledgeVersionIds": [
-          "cmtg3buay01cguz6wobj38qs2"
+          "cmtrj9pka01p0uzasdbrs2ndr"
         ],
-        "sendOutboxId": "cmtg3bx7s01qbuz6wn4wdlvld",
-        "sentMessageId": "cmtg3bxlh01qjuz6wzkd37ssj",
+        "sendOutboxId": "cmtrj9s00027buzash8trzmrh",
+        "sentMessageId": "cmtrj9s9t027ruzasj6d3ap8s",
         "invocationIds": [
-          "cmtg3bx1101pcuz6witkp07gw",
-          "cmtg3bx2001pkuz6we6rglch4"
+          "cmtrj9rvm026auzasmz250smq",
+          "cmtrj9rwh026guzas1wq6qzl7"
         ]
       },
       "passed": true,
@@ -222,10 +291,40 @@
       "evidenceDetails": [
         {
           "scope": "PRODUCT",
-          "productId": "cmtg3bxs901ssuz6wct20809u",
+          "productId": "cmtrj9shy02aeuzasuq6wveoy",
           "sourceType": "HUMAN_REVIEWED",
           "text": "支持Windows和macOS。",
-          "retrievalScore": 0.996563
+          "retrievalScore": 1.018436,
+          "knowledgeKey": "k058",
+          "productKey": "tech_silent_keyboard"
+        }
+      ],
+      "tools": [
+        "GET_PRODUCT"
+      ],
+      "taskDetails": [
+        {
+          "intent": "PRODUCT_QUERY",
+          "status": "RESOLVED",
+          "result": {
+            "reply": "支持Windows和macOS。",
+            "context": {
+              "id": "cmtrj9shy02aeuzasuq6wveoy",
+              "kind": "PRODUCT",
+              "label": "SilentKey 84 静音键盘",
+              "dynamic": {
+                "status": "ON_SHELF",
+                "priceRange": {
+                  "max": "299",
+                  "min": "299"
+                },
+                "description": "84键布局，静音线性轴，支持Windows与macOS，蓝牙/2.4G/有线三模连接，内置4000mAh电池。"
+              }
+            },
+            "evidenceVersionIds": [
+              "cmtrj9sx602jouzasi4y7gyvb"
+            ]
+          }
         }
       ],
       "provider": "offline-structured-demo",
@@ -236,25 +335,26 @@
       "cost": null,
       "outputSource": "SENT_MESSAGE",
       "terminalStatus": "SENT",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3bxpp01quuz6wo36xosu9",
-        "conversationId": "cmtg3byl2026wuz6w6h1ll8nl",
-        "replyJobId": "cmtg3c0hw02a8uz6wwzg396hf",
-        "userTurnId": "cmtg3c0ci02a2uz6wkjo0d4v7",
+        "workspaceId": "cmtrj9sf6028guzashj3apll3",
+        "conversationId": "cmtrj9t6s02pwuzas07hkyh2b",
+        "replyJobId": "cmtrj9vc102xwuzaspx8vxglx",
+        "userTurnId": "cmtrj9uxq02wwuzaskgh44yfd",
         "taskIds": [
-          "reply-task:cmtg3c0hw02a8uz6wwzg396hf:cmtg3c0hw02a8uz6wwzg396hf:0"
+          "reply-task:cmtrj9vc102xwuzaspx8vxglx:cmtrj9vc102xwuzaspx8vxglx:0"
         ],
         "evidenceIds": [
-          "cmtg3c0n702atuz6w7wqsgouv"
+          "cmtrj9vh002z3uzashi9u7xk1"
         ],
         "knowledgeVersionIds": [
-          "cmtg3bya40212uz6wp5swszqe"
+          "cmtrj9sx602jouzasi4y7gyvb"
         ],
-        "sendOutboxId": "cmtg3c0p102b3uz6wm2i18bmb",
-        "sentMessageId": "cmtg3c10f02cduz6w0qhzqigl",
+        "sendOutboxId": "cmtrj9vip02zluzasr928f258",
+        "sentMessageId": "cmtrj9voh030juzask36ky2uh",
         "invocationIds": [
-          "cmtg3c0j102aiuz6whv6c179l",
-          "cmtg3c0k202amuz6wfg9tyr30"
+          "cmtrj9vda02ycuzaser91o56u",
+          "cmtrj9ve602ykuzasaelgdgqs"
         ]
       },
       "passed": true,
@@ -268,36 +368,65 @@
     },
     {
       "id": "A005",
-      "text": "这个规格目前有现货，可以正常下单。",
+      "text": "黑色目前有现货，可以正常下单。",
       "tasks": [
         "INVENTORY_QUERY"
       ],
       "mode": "AUTO",
       "evidence": [],
       "evidenceDetails": [],
+      "tools": [
+        "GET_INVENTORY"
+      ],
+      "taskDetails": [
+        {
+          "intent": "INVENTORY_QUERY",
+          "status": "RESOLVED",
+          "result": {
+            "reply": "黑色目前有现货，可以正常下单。",
+            "context": {
+              "id": "cmtrj9vup0324uzasrsmmcg96",
+              "kind": "SKU",
+              "label": "P-F-001-BLACK-XL",
+              "dynamic": {
+                "price": "199",
+                "inventory": 8,
+                "productId": "cmtrj9vuf031wuzas2ephcelb",
+                "attributes": {
+                  "size": "XL",
+                  "color": "黑色"
+                },
+                "externalSkuId": "P-F-001-BLACK-XL"
+              }
+            },
+            "evidenceVersionIds": []
+          }
+        }
+      ],
       "provider": "offline-structured-demo",
       "model": "offline-structured-v1",
       "inputTokens": 0,
       "outputTokens": 0,
-      "latencyMs": 34,
+      "latencyMs": 19,
       "cost": null,
       "outputSource": "SENT_MESSAGE",
       "terminalStatus": "SENT",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3c13t02cguz6wfbzvdtqt",
-        "conversationId": "cmtg3c1xk02s4uz6whdvjw9uk",
-        "replyJobId": "cmtg3c3zn02vmuz6wr7013v8r",
-        "userTurnId": "cmtg3c3ov02uuuz6waoifdp64",
+        "workspaceId": "cmtrj9vtm031auzas1pa9bin9",
+        "conversationId": "cmtrj9wja03icuzastpxovs6a",
+        "replyJobId": "cmtrj9yfu03p8uzasqp5phn7g",
+        "userTurnId": "cmtrj9y9y03oyuzasvpefhj2j",
         "taskIds": [
-          "reply-task:cmtg3c3zn02vmuz6wr7013v8r:cmtg3c3zn02vmuz6wr7013v8r:0"
+          "reply-task:cmtrj9yfu03p8uzasqp5phn7g:cmtrj9yfu03p8uzasqp5phn7g:0"
         ],
         "evidenceIds": [],
         "knowledgeVersionIds": [],
-        "sendOutboxId": "cmtg3c46b02wwuz6w1cawz76k",
-        "sentMessageId": "cmtg3c4g202x4uz6w36z0as6r",
+        "sendOutboxId": "cmtrj9yk603qkuzas51oourp8",
+        "sentMessageId": "cmtrj9ysa03ruuzascrwsml5h",
         "invocationIds": [
-          "cmtg3c40q02vyuz6wfehmgmuh",
-          "cmtg3c42d02w8uz6w1ki9lnxz"
+          "cmtrj9ygl03pmuzaso59rl48q",
+          "cmtrj9yhh03psuzasb0krkh4a"
         ]
       },
       "passed": true,
@@ -318,29 +447,60 @@
       "mode": "AUTO",
       "evidence": [],
       "evidenceDetails": [],
+      "tools": [
+        "GET_ORDER",
+        "GET_LOGISTICS"
+      ],
+      "taskDetails": [
+        {
+          "intent": "LOGISTICS_QUERY",
+          "status": "RESOLVED",
+          "result": {
+            "reply": "这笔订单已经发货，最新物流到达广州分拨中心。",
+            "context": {
+              "id": "cmtrj9z0303vnuzasoni3v3wo",
+              "kind": "ORDER",
+              "label": "SilentKey 84 静音键盘（订单 PT-20260824-006）",
+              "dynamic": {
+                "status": "SHIPPED",
+                "version": 1,
+                "logistics": {
+                  "status": "IN_TRANSIT",
+                  "carrier": "京东物流",
+                  "lastNode": "广州分拨中心",
+                  "updatedAt": "2026-08-26T08:00:00+00:00"
+                },
+                "externalOrderId": "PT-20260824-006"
+              }
+            },
+            "evidenceVersionIds": []
+          }
+        }
+      ],
       "provider": "offline-structured-demo",
       "model": "offline-structured-v1",
       "inputTokens": 0,
       "outputTokens": 0,
-      "latencyMs": 23,
+      "latencyMs": 17,
       "cost": null,
       "outputSource": "SENT_MESSAGE",
       "terminalStatus": "SENT",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3c4jg02x7uz6wfes2x8zn",
-        "conversationId": "cmtg3c5cl03cvuz6wll4chh2d",
-        "replyJobId": "cmtg3c7hp03gtuz6wd4sws7ay",
-        "userTurnId": "cmtg3c74903g5uz6wuqz4c0zx",
+        "workspaceId": "cmtrj9ywj03sjuzase843z47y",
+        "conversationId": "cmtrj9zl8049huzascofrjlnx",
+        "replyJobId": "cmtrja1jm04gjuzasib72nwux",
+        "userTurnId": "cmtrja1b704g9uzasu3xnid1m",
         "taskIds": [
-          "reply-task:cmtg3c7hp03gtuz6wd4sws7ay:cmtg3c7hp03gtuz6wd4sws7ay:0"
+          "reply-task:cmtrja1jm04gjuzasib72nwux:cmtrja1jm04gjuzasib72nwux:0"
         ],
         "evidenceIds": [],
         "knowledgeVersionIds": [],
-        "sendOutboxId": "cmtg3c7me03hnuz6whc924k4m",
-        "sentMessageId": "cmtg3c7wc03iduz6w2tokwpnb",
+        "sendOutboxId": "cmtrja1oa04hxuzasl9odf77m",
+        "sentMessageId": "cmtrja1vn04izuzasuivdmrwm",
         "invocationIds": [
-          "cmtg3c7im03h3uz6wmhmgonml",
-          "cmtg3c7jn03h7uz6wystedme5"
+          "cmtrja1ki04gxuzas4w60rx31",
+          "cmtrja1la04h3uzas10vmjowv"
         ]
       },
       "passed": true,
@@ -360,54 +520,73 @@
       ],
       "mode": "AUTO",
       "evidence": [
-        "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
-        "普通现货商品通常在24小时内发出；预售商品以商品说明为准。"
+        "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+        "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。"
       ],
       "evidenceDetails": [
         {
           "scope": "STORE",
           "productId": null,
           "sourceType": "MANUAL",
-          "text": "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
-          "retrievalScore": 0.919194
+          "text": "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
+          "retrievalScore": 0.915996,
+          "knowledgeKey": "k001",
+          "productKey": null
         },
         {
           "scope": "STORE",
           "productId": null,
           "sourceType": "MANUAL",
-          "text": "普通现货商品通常在24小时内发出；预售商品以商品说明为准。",
-          "retrievalScore": 0.783152
+          "text": "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
+          "retrievalScore": 0.812069,
+          "knowledgeKey": "k002",
+          "productKey": null
+        }
+      ],
+      "tools": [],
+      "taskDetails": [
+        {
+          "intent": "SHIPPING_POLICY",
+          "status": "RESOLVED",
+          "result": {
+            "reply": "新疆、西藏等偏远地区的履约时效以实际物流信息为准，不作固定时效承诺。",
+            "evidenceVersionIds": [
+              "cmtrja23d04n2uzasyjrtqgj7",
+              "cmtrja23o04n8uzas0q4bv267"
+            ]
+          }
         }
       ],
       "provider": "offline-structured-demo",
       "model": "offline-structured-v1",
       "inputTokens": 0,
       "outputTokens": 0,
-      "latencyMs": 28,
+      "latencyMs": 18,
       "cost": null,
       "outputSource": "SENT_MESSAGE",
       "terminalStatus": "SENT",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3c84103j0uz6wz7an0kga",
-        "conversationId": "cmtg3c91p03youz6w9oksny7g",
-        "replyJobId": "cmtg3cazr042auz6w3bkm0m4h",
-        "userTurnId": "cmtg3card041guz6wttallo5h",
+        "workspaceId": "cmtrja1yx04jguzasjctb0nii",
+        "conversationId": "cmtrja2or050quzaszxpg73vb",
+        "replyJobId": "cmtrja4ng057wuzas6zt18hs8",
+        "userTurnId": "cmtrja4by057auzas787js6gc",
         "taskIds": [
-          "reply-task:cmtg3cazr042auz6w3bkm0m4h:cmtg3cazr042auz6w3bkm0m4h:0"
+          "reply-task:cmtrja4ng057wuzas6zt18hs8:cmtrja4ng057wuzas6zt18hs8:0"
         ],
         "evidenceIds": [
-          "cmtg3cb4k0439uz6wn3gchmow",
-          "cmtg3cb4k043auz6weschhtsc"
+          "cmtrja4rt058zuzas7i203jqd",
+          "cmtrja4rt0590uzas75fhh3af"
         ],
         "knowledgeVersionIds": [
-          "cmtg3c8ad03m6uz6w59j87gb8",
-          "cmtg3c89w03m2uz6w2n8e8h4j"
+          "cmtrja23d04n2uzasyjrtqgj7",
+          "cmtrja23o04n8uzas0q4bv267"
         ],
-        "sendOutboxId": "cmtg3cb6t043kuz6wfycfllh0",
-        "sentMessageId": "cmtg3cbk4043suz6w60yx74u0",
+        "sendOutboxId": "cmtrja4ta059iuzasqtq0cazn",
+        "sentMessageId": "cmtrja4zz05akuzasklsgx9dc",
         "invocationIds": [
-          "cmtg3cb12042muz6wmbdwnp0m",
-          "cmtg3cb2f042wuz6wr2ehs1kf"
+          "cmtrja4o60588uzasd2jot44h",
+          "cmtrja4p3058guzasogb5k8rl"
         ]
       },
       "passed": true,
@@ -421,36 +600,46 @@
     },
     {
       "id": "A008",
-      "text": "关于“线下试穿”，暂时没有找到可靠依据，已转入人工确认。",
+      "text": "关于线下试穿，暂时没有找到可靠依据，我已转入人工确认，避免给您错误答复。",
       "tasks": [
-        "FAQ_QUERY"
+        "UNKNOWN"
       ],
-      "mode": "ASSIST",
+      "mode": "MANUAL",
       "evidence": [],
       "evidenceDetails": [],
+      "tools": [
+        "TRANSFER_HUMAN"
+      ],
+      "taskDetails": [
+        {
+          "intent": "UNKNOWN",
+          "status": "FAILED",
+          "result": null
+        }
+      ],
       "provider": "offline-structured-demo",
       "model": "offline-structured-v1",
       "inputTokens": 0,
       "outputTokens": 0,
-      "latencyMs": 26,
+      "latencyMs": 19,
       "cost": null,
       "outputSource": "DRAFT",
       "terminalStatus": "WAITING_HUMAN",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3cbnd043zuz6wifxx3hcd",
-        "conversationId": "cmtg3ccih04jzuz6wucyvktmf",
-        "replyJobId": "cmtg3cehh04njuz6wng0emrrn",
-        "userTurnId": "cmtg3ce6k04nduz6wkopaih0e",
+        "workspaceId": "cmtrja53c05b3uzasla8w080f",
+        "conversationId": "cmtrja5sc05s3uzas7l4ygdzy",
+        "replyJobId": "cmtrja7ru05zduzaswh5vrly7",
+        "userTurnId": "cmtrja7fz05yvuzas1lj3o4ec",
         "taskIds": [
-          "reply-task:cmtg3cehh04njuz6wng0emrrn:cmtg3cehh04njuz6wng0emrrn:0"
+          "reply-task:cmtrja7ru05zduzaswh5vrly7:cmtrja7ru05zduzaswh5vrly7:0"
         ],
         "evidenceIds": [],
         "knowledgeVersionIds": [],
-        "draftId": "cmtg3cemu04oluz6wpjpm9tt1",
+        "draftId": "cmtrja7w8060puzas0jb09g0o",
         "invocationIds": [
-          "cmtg3ceic04ntuz6wcen9exv9",
-          "cmtg3cej404nxuz6ww32s8yo9",
-          "cmtg3celf04ofuz6wqmpjddu0"
+          "cmtrja7sq05zruzas2xkceakd",
+          "cmtrja7ti05zxuzaswbee3pmn"
         ]
       },
       "passed": true,
@@ -471,28 +660,37 @@
       "mode": "MANUAL",
       "evidence": [],
       "evidenceDetails": [],
+      "tools": [],
+      "taskDetails": [
+        {
+          "intent": "SHIPPING_POLICY",
+          "status": "FAILED",
+          "result": null
+        }
+      ],
       "provider": "offline-structured-demo",
       "model": "offline-structured-v1",
       "inputTokens": 0,
       "outputTokens": 0,
-      "latencyMs": 18,
+      "latencyMs": 20,
       "cost": null,
       "outputSource": "DRAFT",
       "terminalStatus": "WAITING_HUMAN",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3ceq804oouz6wktmxi59r",
-        "conversationId": "cmtg3cfnx055cuz6wn79aj390",
-        "replyJobId": "cmtg3chl8058muz6whms6ch1u",
-        "userTurnId": "cmtg3chd7058guz6wv3gdjzaa",
+        "workspaceId": "cmtrja822061euzasu9935suq",
+        "conversationId": "cmtrja8v506jguzas2t8uzacz",
+        "replyJobId": "cmtrjaauy06qsuzasl3k3mzu1",
+        "userTurnId": "cmtrjaajl06q8uzasf33xuezy",
         "taskIds": [
-          "reply-task:cmtg3chl8058muz6whms6ch1u:cmtg3chl8058muz6whms6ch1u:0"
+          "reply-task:cmtrjaauy06qsuzasl3k3mzu1:cmtrjaauy06qsuzasl3k3mzu1:0"
         ],
         "evidenceIds": [],
         "knowledgeVersionIds": [],
-        "draftId": "cmtg3chpa059euz6w0o1blhh1",
+        "draftId": "cmtrjaaym06rwuzasu9b9ztqk",
         "invocationIds": [
-          "cmtg3chm4058wuz6w5du9pfcv",
-          "cmtg3chn20590uz6wlz3pz23n"
+          "cmtrjaavm06r4uzasctzd4pos",
+          "cmtrjaawe06rauzas2de7npfg"
         ]
       },
       "passed": true,
@@ -511,30 +709,79 @@
         "REFUND_REQUEST"
       ],
       "mode": "MANUAL",
-      "evidence": [],
-      "evidenceDetails": [],
+      "evidence": [
+        "退款属于高风险操作，需要人工确认。"
+      ],
+      "evidenceDetails": [
+        {
+          "scope": "STORE",
+          "productId": null,
+          "sourceType": "MANUAL",
+          "text": "退款属于高风险操作，需要人工确认。",
+          "retrievalScore": 0.951743,
+          "knowledgeKey": "k030",
+          "productKey": null
+        }
+      ],
+      "tools": [
+        "GET_ORDER",
+        "TRANSFER_HUMAN"
+      ],
+      "taskDetails": [
+        {
+          "intent": "REFUND_REQUEST",
+          "status": "RESOLVED",
+          "result": {
+            "reply": "退款属于高风险操作，需要人工确认。",
+            "context": {
+              "id": "cmtrjab7l06vxuzastudva514",
+              "kind": "ORDER",
+              "label": "GaN 100W 三口充电器（订单 PT-20260818-008）",
+              "dynamic": {
+                "status": "COMPLETED",
+                "version": 1,
+                "logistics": {
+                  "status": "DELIVERED",
+                  "carrier": "顺丰",
+                  "lastNode": "已签收",
+                  "updatedAt": "2026-08-21T10:00:00+00:00"
+                },
+                "externalOrderId": "PT-20260818-008"
+              }
+            },
+            "evidenceVersionIds": [
+              "cmtrjabdz0705uzas0ibd8vj1"
+            ]
+          }
+        }
+      ],
       "provider": "offline-structured-demo",
       "model": "offline-structured-v1",
       "inputTokens": 0,
       "outputTokens": 0,
-      "latencyMs": 42,
+      "latencyMs": 18,
       "cost": null,
       "outputSource": "DRAFT",
       "terminalStatus": "WAITING_HUMAN",
+      "oldReplySent": false,
       "trace": {
-        "workspaceId": "cmtg3chrk059fuz6wd18excmw",
-        "conversationId": "cmtg3cij305p3uz6w1q7mc23a",
-        "replyJobId": "cmtg3ckc105spuz6wgkups82z",
-        "userTurnId": "cmtg3ck8x05s9uz6wglfr7gb0",
+        "workspaceId": "cmtrjab3r06snuzasczmrawzb",
+        "conversationId": "cmtrjabtf079puzasnh87qb9k",
+        "replyJobId": "cmtrjadla07gzuzasoq66ak0o",
+        "userTurnId": "cmtrjadhx07gfuzasyh6wcdlq",
         "taskIds": [
-          "reply-task:cmtg3ckc105spuz6wgkups82z:cmtg3ckc105spuz6wgkups82z:0"
+          "reply-task:cmtrjadla07gzuzasoq66ak0o:cmtrjadla07gzuzasoq66ak0o:0"
         ],
-        "evidenceIds": [],
-        "knowledgeVersionIds": [],
-        "draftId": "cmtg3ckhr05txuz6wgu9h7nl3",
+        "evidenceIds": [
+          "cmtrjador07i0uzasadp5xcgp"
+        ],
+        "knowledgeVersionIds": [
+          "cmtrjabdz0705uzas0ibd8vj1"
+        ],
+        "draftId": "cmtrjadq907iguzas0pzsitkr",
         "invocationIds": [
-          "cmtg3ckdc05t3uz6weo1jn6va",
-          "cmtg3ckeu05tbuz6w8o83vqwq"
+          "cmtrjadm607hduzas3wcu803k",
+          "cmtrjadn207hluzast2vh4ge0"
         ]
       },
       "passed": true,

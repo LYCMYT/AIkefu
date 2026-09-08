@@ -11,17 +11,20 @@ import type { AiEvalFaultRegistry } from './ai-eval-fault-registry';
 import type { WorkflowProposalService } from '../workflow/workflow-proposal.service';
 import type { ReplyRecoveryService } from '../replies/reply-recovery.service';
 import type { SendOutboxService } from '../replies/send-outbox.service';
+import { randomUUID } from 'node:crypto';
 
 type JsonRecord = Record<string, unknown>;
 
 export type ProductionReplyEvalProjection = {
   workspaceId: string;
   conversationId: string;
+  oldReplySent?: boolean;
   replyJob: {
     id: string;
     userTurnId: string;
     status: string;
     mode: string;
+    conversationHumanActive?: boolean;
     draft: { id: string; aiDraft: string; status: string } | null;
     sendOutbox: {
       id: string;
@@ -30,7 +33,7 @@ export type ProductionReplyEvalProjection = {
       receiptJson: unknown;
     } | null;
   };
-  tasks: Array<{ id: string; intent: string; status: string; resultJson: unknown }>;
+  tasks: Array<{ id: string; intent: string; status: string; resultJson: unknown; requiredToolsJson?: unknown }>;
   evidences: Array<{
     id: string;
     knowledgeItemId: string;
@@ -40,6 +43,8 @@ export type ProductionReplyEvalProjection = {
     productId: string | null;
     retrievalScore: number | null;
     retrievedContentSnapshotJson: unknown;
+    knowledgeKey?: string;
+    productKey?: string | null;
   }>;
   traceEvents: Array<{ id: string; stage: string; payloadJson: unknown }>;
   invocations: Array<{
@@ -82,16 +87,37 @@ export type ProductionReplyEvalPort = {
   sendProductCard(input: EvalMessageInput & { productId: string }): Promise<{ conversationId: string }>;
   sendOrderCard(input: EvalMessageInput & { orderId: string }): Promise<{ conversationId: string }>;
   sendImageFixture(input: EvalMessageInput & { fixture: string }): Promise<{ conversationId: string }>;
+  sendDuplicateText?(input: EvalMessageInput & { text: string }): Promise<{ conversationId: string }>;
+  sendOutOfOrderTexts?(input: EvalMessageInput & { texts: string[] }): Promise<{ conversationId: string }>;
+  prepareHumanActive?(input: EvalMessageInput): Promise<{ conversationId: string }>;
+  setHumanActive?(input: EvalMessageInput & { conversationId: string }): Promise<void>;
+  changeLogistics?(input: EvalMessageInput & { conversationId: string; orderId: string; toNode: string }): Promise<void>;
   editPreviousBuyerMessage(input: EvalMessageInput & { conversationId: string; text: string }): Promise<void>;
   recallPreviousBuyerMessage(input: EvalMessageInput & { conversationId: string }): Promise<void>;
   activateConflict?(input: EvalMessageInput & { fixture: string }): Promise<void>;
   changeSkuInventory?(input: EvalMessageInput & { skuExternalId: string; inventory: number }): Promise<void>;
   changeOrderStatus?(input: EvalMessageInput & { orderId: string; status: string }): Promise<void>;
+  prepareGenerationBarrier?(input: EvalMessageInput): Promise<void>;
+  waitForGenerationBarrier?(input: EvalMessageInput & { conversationId: string }): Promise<{ replyJobId: string } | void>;
+  releaseGenerationBarrier?(input: EvalMessageInput): Promise<void>;
   applyHumanEdit?(input: EvalMessageInput & { conversationId: string; editType: string; projection: ProductionReplyEvalProjection }): Promise<void>;
   advanceDraftTime?(input: EvalMessageInput & { conversationId: string; minutes: number }): Promise<void>;
   configureProviderScenario?(input: EvalMessageInput & { primaryProvider: string; fallback: string }): Promise<void>;
   prepareRestart?(input: EvalMessageInput & { phase: string }): Promise<void>;
-  resumeAfterRestart?(input: EvalMessageInput & { conversationId: string; phase: string; projection?: ProductionReplyEvalProjection }): Promise<void>;
+  waitForPreTransportSend?(input: {
+    workspaceId: string;
+    tenantId: string;
+    shopId: string;
+    conversationId: string;
+    afterReplyJobId?: string;
+    invalidatedReplyJobId?: string;
+  }): Promise<ProductionReplyEvalProjection>;
+  resumeAfterRestart?(input: EvalMessageInput & {
+    conversationId: string;
+    phase: string;
+    replyJobId?: string;
+    projection?: ProductionReplyEvalProjection;
+  }): Promise<void>;
   staleWorkflowBeforeApproval?(input: EvalMessageInput & { conversationId: string }): Promise<void>;
   prepareWorkflowApproval?(input: EvalMessageInput): Promise<void>;
   waitForProjection(input: {
@@ -99,6 +125,8 @@ export type ProductionReplyEvalPort = {
     tenantId: string;
     shopId: string;
     conversationId: string;
+    afterReplyJobId?: string;
+    invalidatedReplyJobId?: string;
   }): Promise<ProductionReplyEvalProjection>;
 };
 
@@ -108,6 +136,8 @@ export class ProductionReplyEvalExecutor {
 
   async execute(testCase: ReplyEvalCase): Promise<ReplyEvalExecution> {
     const fixture = await this.port.createIsolatedWorkspace();
+    let generationBarrierPrepared = false;
+    let generationBarrierInput: EvalMessageInput | undefined;
     try {
       const contextSetup = record(testCase.contextSetup);
       const conflictFixture = typeof contextSetup.activateConflict === 'string'
@@ -124,6 +154,10 @@ export class ProductionReplyEvalExecutor {
         'changeContextBeforeApproval',
         'restartDuring',
         'shopAiMode',
+        'humanActive',
+        'duplicateTransport',
+        'outOfOrderTransport',
+        'changeLogisticsDuringGeneration',
       ]);
       const setupKeys = Object.entries(contextSetup)
         .filter(([, value]) => value !== undefined && value !== false && value !== null)
@@ -165,95 +199,217 @@ export class ProductionReplyEvalExecutor {
         await this.port.activateConflict({ ...scope, fixture: conflictFixture });
       }
       let conversationId: string | undefined;
-      for (const message of testCase.messages) {
+      let humanPrepared = false;
+      if (contextSetup.humanActive === true && this.port.prepareHumanActive) {
+        const prepared = await this.port.prepareHumanActive(scope);
+        conversationId = prepared.conversationId;
+        humanPrepared = true;
+      }
+      const outOfOrderTransport = contextSetup.outOfOrderTransport === true;
+      const duplicateTransport = contextSetup.duplicateTransport === true;
+      const inventoryChange = record(contextSetup.changeInventoryDuringGeneration);
+      const orderChange = record(contextSetup.changeOrderDuringGeneration);
+      const logisticsChange = record(contextSetup.changeLogisticsDuringGeneration);
+      const mutationDuringGeneration = [inventoryChange, orderChange, logisticsChange]
+        .some((change) => Object.keys(change).length > 0);
+      const restartDuringGeneration = restartDuring === 'GENERATING';
+      if (restartDuringGeneration && mutationDuringGeneration) {
+        throw new Error('EXECUTOR_UNSUPPORTED:restartWithGenerationMutation');
+      }
+      const generationBarrierRequired = mutationDuringGeneration || restartDuringGeneration;
+      if (
+        generationBarrierRequired
+        && (!this.port.prepareGenerationBarrier || !this.port.waitForGenerationBarrier || !this.port.releaseGenerationBarrier)
+      ) {
+        throw new Error('EXECUTOR_UNSUPPORTED:generationBarrier');
+      }
+      if (restartDuringGeneration && !this.port.resumeAfterRestart) {
+        throw new Error('EXECUTOR_UNSUPPORTED:restartDuring');
+      }
+      const transportTexts = testCase.messages.flatMap((message) => {
+        if (typeof message === 'string') return [message];
+        const structured = record(message);
+        return stringField(structured, 'type') === 'TEXT' ? [required(stringField(structured, 'text'), 'TEXT_REQUIRED')] : [];
+      });
+      let activeTurn: number | undefined;
+      let previousTurnReplyJobId: string | undefined;
+      // A turn boundary only has a projection to await when its immediately
+      // preceding operation can durably plan a reply. Recalling a buyer
+      // message invalidates old work but deliberately creates no new turn.
+      let previousOperationPlansReply = false;
+      for (const [messageIndex, message] of testCase.messages.entries()) {
+        if (generationBarrierRequired && messageIndex === testCase.messages.length - 1) {
+          generationBarrierInput = { ...scope, conversationId };
+          await this.port.prepareGenerationBarrier!(generationBarrierInput);
+          generationBarrierPrepared = true;
+        }
+        const structured = typeof message === 'string' ? undefined : record(message);
+        const declaredTurn = structured ? optionalPositiveInteger(structured.turn) : undefined;
+        if (
+          declaredTurn !== undefined
+          && activeTurn !== undefined
+          && declaredTurn > activeTurn
+          && conversationId
+          && !outOfOrderTransport
+          && previousOperationPlansReply
+        ) {
+          const completedTurn = await this.port.waitForProjection({
+            ...evalScope(scope),
+            shopId,
+            conversationId,
+            afterReplyJobId: previousTurnReplyJobId,
+          });
+          previousTurnReplyJobId = completedTurn.replyJob.id;
+        }
+        if (declaredTurn !== undefined) activeTurn = declaredTurn;
         if (typeof message === 'string') {
-          const sent = await this.port.sendText({ ...scope, conversationId, text: message });
+          if (outOfOrderTransport) continue;
+          if (duplicateTransport && !this.port.sendDuplicateText) throw new Error('EXECUTOR_UNSUPPORTED:duplicateTransport');
+          const sent = duplicateTransport
+            ? await this.port.sendDuplicateText!({ ...scope, conversationId, text: message })
+            : await this.port.sendText({ ...scope, conversationId, text: message });
           conversationId = sent.conversationId;
+          previousOperationPlansReply = true;
           continue;
         }
-        const structured = record(message);
-        const type = stringField(structured, 'type');
+        const type = stringField(structured!, 'type');
+        if (type === 'TEXT') {
+          if (outOfOrderTransport) continue;
+          const text = required(stringField(structured!, 'text'), 'TEXT_REQUIRED');
+          if (duplicateTransport && !this.port.sendDuplicateText) throw new Error('EXECUTOR_UNSUPPORTED:duplicateTransport');
+          const sent = duplicateTransport
+            ? await this.port.sendDuplicateText!({ ...scope, conversationId, text })
+            : await this.port.sendText({ ...scope, conversationId, text });
+          conversationId = sent.conversationId;
+          previousOperationPlansReply = true;
+          continue;
+        }
         if (type === 'GOODS_CARD') {
-          const productKey = required(stringField(structured, 'productKey'), 'PRODUCT_KEY_REQUIRED');
+          const productKey = required(stringField(structured!, 'productKey'), 'PRODUCT_KEY_REQUIRED');
           const productId = required(fixture.products[productKey], `PRODUCT_FIXTURE_NOT_FOUND:${productKey}`);
           const sent = await this.port.sendProductCard({ ...scope, conversationId, productId });
           conversationId = sent.conversationId;
+          previousOperationPlansReply = true;
           continue;
         }
         if (type === 'ORDER_CARD') {
-          const orderKey = required(stringField(structured, 'orderKey'), 'ORDER_KEY_REQUIRED');
+          const orderKey = required(stringField(structured!, 'orderKey'), 'ORDER_KEY_REQUIRED');
           const orderId = required(fixture.orders[orderKey], `ORDER_FIXTURE_NOT_FOUND:${orderKey}`);
           const sent = await this.port.sendOrderCard({ ...scope, conversationId, orderId });
           conversationId = sent.conversationId;
+          previousOperationPlansReply = true;
           continue;
         }
         if (type === 'IMAGE') {
           const sent = await this.port.sendImageFixture({
             ...scope,
             conversationId,
-            fixture: required(stringField(structured, 'fixture'), 'IMAGE_FIXTURE_REQUIRED'),
+            fixture: required(stringField(structured!, 'fixture'), 'IMAGE_FIXTURE_REQUIRED'),
           });
           conversationId = sent.conversationId;
+          previousOperationPlansReply = true;
           continue;
         }
-        const action = stringField(structured, 'action');
+        const action = stringField(structured!, 'action');
         if (action === 'EDIT_PREVIOUS') {
           if (!conversationId) throw new Error('PREVIOUS_BUYER_MESSAGE_NOT_FOUND');
           await this.port.editPreviousBuyerMessage({
             ...scope,
             conversationId,
-            text: required(stringField(structured, 'text'), 'EDIT_TEXT_REQUIRED'),
+            text: required(stringField(structured!, 'text'), 'EDIT_TEXT_REQUIRED'),
           });
+          previousOperationPlansReply = true;
           continue;
         }
         if (action === 'RECALL_PREVIOUS') {
           if (!conversationId) throw new Error('PREVIOUS_BUYER_MESSAGE_NOT_FOUND');
           await this.port.recallPreviousBuyerMessage({ ...scope, conversationId });
+          previousOperationPlansReply = false;
           continue;
         }
         throw new Error(`EXECUTOR_UNSUPPORTED:message:${type ?? 'UNKNOWN'}`);
       }
+      if (outOfOrderTransport) {
+        if (transportTexts.length < 2) throw new Error('EXECUTOR_OUT_OF_ORDER_REQUIRES_TWO_TEXTS');
+        if (!this.port.sendOutOfOrderTexts) throw new Error('EXECUTOR_UNSUPPORTED:outOfOrderTransport');
+        const sent = await this.port.sendOutOfOrderTexts({
+          ...scope, conversationId, texts: transportTexts,
+        });
+        conversationId = sent.conversationId;
+      }
       if (!conversationId) throw new Error('CONVERSATION_NOT_CREATED');
-      if (restartDuring === 'GENERATING') {
-        if (!this.port.resumeAfterRestart) throw new Error('EXECUTOR_UNSUPPORTED:restartDuring');
-        await this.port.resumeAfterRestart({ ...scope, conversationId, phase: restartDuring });
+      if (contextSetup.humanActive === true && !humanPrepared) {
+        if (!this.port.setHumanActive) throw new Error('EXECUTOR_UNSUPPORTED:humanActive');
+        await this.port.setHumanActive({ ...scope, conversationId });
       }
-      const inventoryChange = record(contextSetup.changeInventoryDuringGeneration);
-      if (Object.keys(inventoryChange).length) {
-        if (!this.port.changeSkuInventory) throw new Error('EXECUTOR_UNSUPPORTED:changeInventoryDuringGeneration');
-        await this.port.changeSkuInventory({
-          ...scope,
-          conversationId,
-          skuExternalId: required(stringField(inventoryChange, 'sku'), 'SKU_EXTERNAL_ID_REQUIRED'),
-          inventory: requiredInteger(inventoryChange.to, 'SKU_INVENTORY_REQUIRED'),
-        });
+      if (restartDuringGeneration) {
+        const barrier = await this.port.waitForGenerationBarrier!({ ...scope, conversationId });
+        const replyJobId = required(barrier?.replyJobId, 'EXECUTOR_GENERATION_BARRIER_JOB_NOT_FOUND');
+        await this.port.releaseGenerationBarrier!({ ...scope, conversationId });
+        generationBarrierPrepared = false;
+        await this.port.resumeAfterRestart!({ ...scope, conversationId, phase: restartDuring, replyJobId });
       }
-      const orderChange = record(contextSetup.changeOrderDuringGeneration);
-      if (Object.keys(orderChange).length) {
-        if (!this.port.changeOrderStatus) throw new Error('EXECUTOR_UNSUPPORTED:changeOrderDuringGeneration');
-        const orderKey = required(stringField(orderChange, 'orderKey'), 'ORDER_KEY_REQUIRED');
-        await this.port.changeOrderStatus({
-          ...scope,
-          conversationId,
-          orderId: required(fixture.orders[orderKey], `ORDER_FIXTURE_NOT_FOUND:${orderKey}`),
-          status: required(stringField(orderChange, 'to'), 'ORDER_STATUS_REQUIRED'),
-        });
+      let invalidatedReplyJobId: string | undefined;
+      if (mutationDuringGeneration) {
+        const barrier = await this.port.waitForGenerationBarrier!({ ...scope, conversationId });
+        invalidatedReplyJobId = barrier?.replyJobId;
+        try {
+          if (Object.keys(inventoryChange).length) {
+            if (!this.port.changeSkuInventory) throw new Error('EXECUTOR_UNSUPPORTED:changeInventoryDuringGeneration');
+            await this.port.changeSkuInventory({
+              ...scope,
+              conversationId,
+              skuExternalId: required(stringField(inventoryChange, 'sku'), 'SKU_EXTERNAL_ID_REQUIRED'),
+              inventory: requiredInteger(inventoryChange.to, 'SKU_INVENTORY_REQUIRED'),
+            });
+          }
+          if (Object.keys(orderChange).length) {
+            if (!this.port.changeOrderStatus) throw new Error('EXECUTOR_UNSUPPORTED:changeOrderDuringGeneration');
+            const orderKey = required(stringField(orderChange, 'orderKey'), 'ORDER_KEY_REQUIRED');
+            await this.port.changeOrderStatus({
+              ...scope,
+              conversationId,
+              orderId: required(fixture.orders[orderKey], `ORDER_FIXTURE_NOT_FOUND:${orderKey}`),
+              status: required(stringField(orderChange, 'to'), 'ORDER_STATUS_REQUIRED'),
+            });
+          }
+          if (Object.keys(logisticsChange).length) {
+            const orderKey = required(stringField(logisticsChange, 'orderKey'), 'ORDER_KEY_REQUIRED');
+            if (!this.port.changeLogistics) throw new Error('EXECUTOR_UNSUPPORTED:changeLogisticsDuringGeneration');
+            await this.port.changeLogistics({
+              ...scope,
+              conversationId,
+              orderId: required(fixture.orders[orderKey], `ORDER_FIXTURE_NOT_FOUND:${orderKey}`),
+              toNode: required(stringField(logisticsChange, 'toNode'), 'LOGISTICS_NODE_REQUIRED'),
+            });
+          }
+        } finally {
+          await this.port.releaseGenerationBarrier!({ ...scope, conversationId });
+          generationBarrierPrepared = false;
+        }
       }
       const projectionInput = {
         workspaceId: fixture.workspaceId,
         tenantId: fixture.tenantId,
         shopId,
         conversationId,
+        afterReplyJobId: invalidatedReplyJobId ?? previousTurnReplyJobId,
+        ...(invalidatedReplyJobId ? { invalidatedReplyJobId } : {}),
       };
-      let projection = await this.port.waitForProjection(projectionInput);
+      let projection: ProductionReplyEvalProjection;
+      if (restartDuring === 'SEND_OUTBOX_SENDING') {
+        if (!this.port.waitForPreTransportSend || !this.port.resumeAfterRestart) {
+          throw new Error('EXECUTOR_UNSUPPORTED:restartDuring');
+        }
+        projection = await this.port.waitForPreTransportSend(projectionInput);
+        await this.port.resumeAfterRestart({ ...scope, conversationId, phase: restartDuring, projection });
+        projection = await this.port.waitForProjection(projectionInput);
+      } else {
+        projection = await this.port.waitForProjection(projectionInput);
+      }
       if (contextSetup.changeContextBeforeApproval === true) {
         if (!this.port.staleWorkflowBeforeApproval) throw new Error('EXECUTOR_UNSUPPORTED:changeContextBeforeApproval');
         await this.port.staleWorkflowBeforeApproval({ ...scope, conversationId });
-        projection = await this.port.waitForProjection(projectionInput);
-      }
-      if (restartDuring === 'SEND_OUTBOX_SENDING') {
-        if (!this.port.resumeAfterRestart) throw new Error('EXECUTOR_UNSUPPORTED:restartDuring');
-        await this.port.resumeAfterRestart({ ...scope, conversationId, phase: restartDuring, projection });
         projection = await this.port.waitForProjection(projectionInput);
       }
       const humanEditType = stringField(contextSetup, 'humanEditType');
@@ -273,6 +429,9 @@ export class ProductionReplyEvalExecutor {
       }
       return projectProductionReplyExecution(projection);
     } finally {
+      if (generationBarrierPrepared) {
+        await this.port.releaseGenerationBarrier?.(generationBarrierInput!);
+      }
       await this.port.deleteIsolatedWorkspace(fixture.workspaceId);
     }
   }
@@ -332,17 +491,53 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
     if (!this.evalFaults) throw new Error('EXECUTOR_PROVIDER_FAULTS_UNAVAILABLE');
     if (input.primaryProvider !== 'TIMEOUT') throw new Error(`EXECUTOR_PROVIDER_SCENARIO_UNSUPPORTED:${input.primaryProvider}`);
     if (input.fallback === 'SUCCESS') this.evalFaults.configure(input.workspaceId, 'PRIMARY_TIMEOUT_FALLBACK_SUCCESS');
-    else if (input.fallback === 'TIMEOUT') this.evalFaults.configure(input.workspaceId, 'TOTAL_TIMEOUT');
+    else if (input.fallback === 'TIMEOUT' || input.fallback === 'UNAVAILABLE') this.evalFaults.configure(input.workspaceId, 'TOTAL_TIMEOUT');
     else throw new Error(`EXECUTOR_PROVIDER_SCENARIO_UNSUPPORTED:${input.fallback}`);
+  }
+
+  async prepareGenerationBarrier(input: EvalMessageInput): Promise<void> {
+    if (!this.evalFaults) throw new Error('EXECUTOR_GENERATION_BARRIER_UNAVAILABLE');
+    this.evalFaults.prepareGenerationBarrier(input.workspaceId);
+  }
+
+  async waitForGenerationBarrier(input: EvalMessageInput & { conversationId: string }): Promise<{ replyJobId: string }> {
+    if (!this.evalFaults) throw new Error('EXECUTOR_GENERATION_BARRIER_UNAVAILABLE');
+    await withTimeout(
+      this.evalFaults.waitForGenerationBarrier(input.workspaceId),
+      this.timeoutMs,
+      'EXECUTOR_GENERATION_BARRIER_TIMEOUT',
+    );
+    const replyJob = await this.prisma.replyJob.findFirst({
+      where: {
+        ...evalScope(input),
+        shopId: input.shopId,
+        conversationId: input.conversationId,
+        status: 'GENERATING',
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (!replyJob) throw new Error('EXECUTOR_GENERATION_BARRIER_JOB_NOT_FOUND');
+    return { replyJobId: replyJob.id };
+  }
+
+  async releaseGenerationBarrier(input: EvalMessageInput): Promise<void> {
+    this.evalFaults?.releaseGenerationBarrier(input.workspaceId);
   }
 
   async prepareRestart(input: EvalMessageInput & { phase: string }): Promise<void> {
     if (input.phase === 'GENERATING') {
       if (!this.evalFaults) throw new Error('EXECUTOR_PROVIDER_FAULTS_UNAVAILABLE');
       this.evalFaults.configure(input.workspaceId, 'CRASH_ONCE');
+      this.evalFaults.prepareRestartCrash(input.workspaceId);
       return;
     }
-    if (input.phase !== 'SEND_OUTBOX_SENDING') throw new Error(`EXECUTOR_RESTART_PHASE_UNSUPPORTED:${input.phase}`);
+    if (input.phase === 'SEND_OUTBOX_SENDING') {
+      if (!this.evalFaults) throw new Error('EXECUTOR_PROVIDER_FAULTS_UNAVAILABLE');
+      this.evalFaults.configure(input.workspaceId, 'CRASH_BEFORE_TRANSPORT_ONCE');
+      return;
+    }
+    throw new Error(`EXECUTOR_RESTART_PHASE_UNSUPPORTED:${input.phase}`);
   }
 
   async prepareWorkflowApproval(input: EvalMessageInput): Promise<void> {
@@ -372,6 +567,75 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
       ...(input.conversationId ? { conversationId: input.conversationId } : {}),
     });
     return { conversationId: await this.resolveConversationId(input) };
+  }
+
+  async prepareHumanActive(input: EvalMessageInput): Promise<{ conversationId: string }> {
+    if (!this.controls) throw new Error('EXECUTOR_REPLY_CONTROL_UNAVAILABLE');
+    const conversation = await this.prisma.conversation.create({
+      data: {
+        ...evalScope(input),
+        shopId: input.shopId,
+        buyerId: input.buyerId,
+        externalConversationId: `eval-human-${randomUUID()}`,
+        idleExpiresAt: new Date(Date.now() + 30 * 60_000),
+      },
+      select: { id: true },
+    });
+    await this.controls.takeover({ ...evalScope(input), shopId: input.shopId }, conversation.id);
+    return { conversationId: conversation.id };
+  }
+
+  async sendDuplicateText(input: EvalMessageInput & { text: string }): Promise<{ conversationId: string }> {
+    const externalMessageId = `eval-duplicate-${randomUUID()}`;
+    const command = {
+      shopId: input.shopId, buyerId: input.buyerId, kind: 'TEXT' as const, text: input.text,
+      duplicateExternalMessageId: externalMessageId,
+      ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+    };
+    await this.messages.sendMessage(evalScope(input), command);
+    const conversationId = await this.resolveConversationId(input);
+    await this.messages.sendMessage(evalScope(input), { ...command, conversationId });
+    return { conversationId };
+  }
+
+  async sendOutOfOrderTexts(input: EvalMessageInput & { texts: string[] }): Promise<{ conversationId: string }> {
+    const conversationId = required(input.conversationId, 'OUT_OF_ORDER_CONVERSATION_REQUIRED');
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, ...evalScope(input), shopId: input.shopId, buyerId: input.buyerId },
+      select: { lastCommittedSequence: true },
+    });
+    if (!conversation) throw new Error('OUT_OF_ORDER_CONVERSATION_NOT_FOUND');
+    const base = conversation.lastCommittedSequence;
+    for (let index = input.texts.length - 1; index >= 0; index -= 1) {
+      await this.messages.sendMessage(evalScope(input), {
+        shopId: input.shopId, buyerId: input.buyerId, conversationId, kind: 'TEXT',
+        text: input.texts[index]!, forcedSequence: base + index + 1,
+      });
+    }
+    return { conversationId };
+  }
+
+  async setHumanActive(input: EvalMessageInput & { conversationId: string }): Promise<void> {
+    if (!this.controls) throw new Error('EXECUTOR_REPLY_CONTROL_UNAVAILABLE');
+    await this.controls.takeover({ ...evalScope(input), shopId: input.shopId }, input.conversationId);
+  }
+
+  async changeLogistics(input: EvalMessageInput & { conversationId: string; orderId: string; toNode: string }): Promise<void> {
+    if (!this.invalidation) throw new Error('EXECUTOR_INVALIDATION_SERVICE_UNAVAILABLE');
+    const order = await this.prisma.order.findFirst({
+      where: { id: input.orderId, ...evalScope(input), shopId: input.shopId, buyerId: input.buyerId },
+      select: { status: true, logisticsSnapshotJson: true },
+    });
+    if (!order) throw new Error(`ORDER_FIXTURE_NOT_FOUND:${input.orderId}`);
+    const prior = record(order.logisticsSnapshotJson);
+    await this.prisma.order.updateMany({
+      where: { id: input.orderId, ...evalScope(input), shopId: input.shopId, buyerId: input.buyerId },
+      data: { logisticsSnapshotJson: { ...prior, currentNode: input.toNode } },
+    });
+    const invalidated = await this.invalidation.updateOrderStatus(
+      { ...evalScope(input), shopId: input.shopId }, input.orderId, order.status,
+    );
+    if (!invalidated.updated) throw new Error(`LOGISTICS_MUTATION_FAILED:${input.orderId}`);
   }
 
   async sendProductCard(input: EvalMessageInput & { productId: string }): Promise<{ conversationId: string }> {
@@ -533,57 +797,131 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
     throw new Error('EXECUTOR_WORKFLOW_PROPOSAL_TIMEOUT');
   }
 
-  async resumeAfterRestart(input: EvalMessageInput & { conversationId: string; phase: string; projection?: ProductionReplyEvalProjection }): Promise<void> {
+  async resumeAfterRestart(input: EvalMessageInput & {
+    conversationId: string;
+    phase: string;
+    replyJobId?: string;
+    projection?: ProductionReplyEvalProjection;
+  }): Promise<void> {
     if (!this.recovery) throw new Error('EXECUTOR_RECOVERY_SERVICE_UNAVAILABLE');
     const scope = { ...evalScope(input), shopId: input.shopId };
     if (input.phase === 'GENERATING') {
-      const deadline = Date.now() + this.timeoutMs;
-      while (Date.now() < deadline) {
-        const job = await this.prisma.replyJob.findFirst({
-          where: { ...scope, conversationId: input.conversationId, status: 'GENERATING' },
-          orderBy: { createdAt: 'desc' }, select: { id: true },
-        });
-        if (job) {
-          const now = new Date();
-          await this.prisma.replyJob.updateMany({
-            where: { id: job.id, ...scope, status: 'GENERATING' },
-            data: { updatedAt: new Date(now.getTime() - 4 * 60_000) },
-          });
-          const recovered = await this.recovery.recoverOnce(now);
-          if (recovered.recoveryPending < 1) throw new Error('EXECUTOR_GENERATING_RECOVERY_NOT_CLAIMED');
-          return;
-        }
-        await delay(this.pollMs);
-      }
-      throw new Error('EXECUTOR_GENERATING_STATE_TIMEOUT');
+      if (!this.evalFaults) throw new Error('EXECUTOR_PROVIDER_FAULTS_UNAVAILABLE');
+      const replyJobId = required(input.replyJobId, 'EXECUTOR_GENERATING_REPLY_JOB_REQUIRED');
+      await withTimeout(
+        this.evalFaults.waitForRestartCrash(input.workspaceId),
+        this.timeoutMs,
+        'EXECUTOR_RESTART_CRASH_TIMEOUT',
+      );
+      const now = new Date();
+      const aged = await this.prisma.replyJob.updateMany({
+        where: {
+          id: replyJobId,
+          ...scope,
+          conversationId: input.conversationId,
+          status: 'GENERATING',
+        },
+        data: { updatedAt: new Date(now.getTime() - 4 * 60_000) },
+      });
+      if (!aged.count) throw new Error('EXECUTOR_GENERATING_RECOVERY_JOB_NOT_FOUND');
+      const recovered = await this.recovery.recoverOnce(now);
+      if (recovered.recoveryPending < 1) throw new Error('EXECUTOR_GENERATING_RECOVERY_NOT_CLAIMED');
+      return;
     }
     if (input.phase === 'SEND_OUTBOX_SENDING') {
-      if (!this.controls || !this.sendOutboxes || !input.projection?.replyJob.draft) {
+      const sending = input.projection?.replyJob.sendOutbox;
+      if (!sending || sending.status !== 'SENDING') {
         throw new Error('EXECUTOR_SEND_RECOVERY_BOUNDARY_UNAVAILABLE');
       }
-      const draft = input.projection.replyJob.draft;
-      const final = await this.controls.saveHumanFinal(scope, input.conversationId, {
-        text: draft.aiDraft, sourceDraftId: draft.id, editType: 'STYLE_EDIT',
-      });
-      const claim = await this.sendOutboxes.claim(scope, final.sendOutboxId);
-      if (!claim.claimed) throw new Error(`EXECUTOR_SEND_CLAIM_FAILED:${claim.failureCode}`);
-      if (!(await this.sendOutboxes.fenceBeforeTransport(scope, final.sendOutboxId))) {
-        throw new Error('EXECUTOR_SEND_TRANSPORT_FENCE_FAILED');
-      }
+      // The harness crashes after claim but before fenceBeforeTransport. At
+      // that point no transport call is permitted, so recovery may requeue
+      // the original AI outbox under its unchanged idempotency key. Creating
+      // a human final here would test a different send path and conceal the
+      // exactly-once boundary being exercised.
       const now = new Date();
-      await this.prisma.sendOutbox.updateMany({
-        where: { id: final.sendOutboxId, ...scope, status: 'SENDING', transportStartedAt: { not: null } },
+      const aged = await this.prisma.sendOutbox.updateMany({
+        where: { id: sending.id, ...scope, status: 'SENDING', transportStartedAt: null },
         data: { updatedAt: new Date(now.getTime() - 60_000) },
       });
+      if (!aged.count) throw new Error('EXECUTOR_SEND_PRE_TRANSPORT_CLAIM_NOT_FOUND');
       const recovered = await this.recovery.recoverOnce(now);
-      if (recovered.uncertain < 1) throw new Error('EXECUTOR_SEND_UNCERTAIN_NOT_RECOVERED');
-      const durable = await this.prisma.sendOutbox.findFirst({
-        where: { id: final.sendOutboxId, ...scope }, select: { status: true },
-      });
-      if (durable?.status !== 'UNCERTAIN') throw new Error(`EXECUTOR_SEND_EXPECTED_UNCERTAIN:${durable?.status ?? 'MISSING'}`);
+      // The live worker may reclaim PENDING immediately, so use the recovery
+      // transaction's affected-row count instead of racing a follow-up read.
+      if (recovered.preTransport < 1) throw new Error('EXECUTOR_SEND_PRE_TRANSPORT_NOT_REQUEUED');
       return;
     }
     throw new Error(`EXECUTOR_RESTART_PHASE_UNSUPPORTED:${input.phase}`);
+  }
+
+  async waitForPreTransportSend(input: {
+    workspaceId: string;
+    tenantId: string;
+    shopId: string;
+    conversationId: string;
+    afterReplyJobId?: string;
+  }): Promise<ProductionReplyEvalProjection> {
+    const deadline = Date.now() + this.timeoutMs;
+    let latestStatus = 'NOT_CREATED';
+    let latestOutboxStatus = 'NOT_CREATED';
+    let latestTransportFence = 'NOT_CREATED';
+    const projectionScope = {
+      workspaceId: input.workspaceId,
+      tenantId: input.tenantId,
+      shopId: input.shopId,
+      conversationId: input.conversationId,
+    };
+    while (Date.now() < deadline) {
+      const replyJob = await this.prisma.replyJob.findFirst({
+        where: {
+          ...projectionScope,
+          ...(input.afterReplyJobId ? { id: { not: input.afterReplyJobId } } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          draft: true,
+          sendOutbox: true,
+          conversation: { select: { humanActive: true } },
+        },
+      });
+      latestStatus = replyJob?.status ?? latestStatus;
+      latestOutboxStatus = replyJob?.sendOutbox?.status ?? latestOutboxStatus;
+      latestTransportFence = replyJob?.sendOutbox
+        ? replyJob.sendOutbox.transportStartedAt === null ? 'PRE_TRANSPORT' : 'STARTED'
+        : latestTransportFence;
+      if (replyJob?.sendOutbox?.status === 'SENDING' && replyJob.sendOutbox.transportStartedAt === null) {
+        return {
+          workspaceId: input.workspaceId,
+          conversationId: input.conversationId,
+          replyJob: {
+            id: replyJob.id,
+            userTurnId: replyJob.userTurnId,
+            status: replyJob.status,
+            mode: replyJob.mode,
+            conversationHumanActive: replyJob.conversation?.humanActive ?? false,
+            draft: replyJob.draft ? {
+              id: replyJob.draft.id,
+              aiDraft: replyJob.draft.aiDraft,
+              status: replyJob.draft.status,
+            } : null,
+            sendOutbox: {
+              id: replyJob.sendOutbox.id,
+              status: replyJob.sendOutbox.status,
+              payloadJson: replyJob.sendOutbox.payloadJson,
+              receiptJson: replyJob.sendOutbox.receiptJson,
+            },
+          },
+          tasks: [],
+          evidences: [],
+          traceEvents: [],
+          invocations: [],
+          assistantMessages: [],
+        };
+      }
+      await delay(this.pollMs);
+    }
+    throw new Error(
+      `EXECUTOR_SEND_PRE_TRANSPORT_BOUNDARY_TIMEOUT:${latestStatus}:${latestOutboxStatus}:${latestTransportFence}`,
+    );
   }
 
   async waitForProjection(input: {
@@ -591,25 +929,41 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
     tenantId: string;
     shopId: string;
     conversationId: string;
+    afterReplyJobId?: string;
+    invalidatedReplyJobId?: string;
   }): Promise<ProductionReplyEvalProjection> {
     const deadline = Date.now() + this.timeoutMs;
     let latestStatus = 'NOT_CREATED';
+    const projectionScope = {
+      workspaceId: input.workspaceId,
+      tenantId: input.tenantId,
+      shopId: input.shopId,
+      conversationId: input.conversationId,
+    };
     while (Date.now() < deadline) {
       const replyJob = await this.prisma.replyJob.findFirst({
-        where: { ...input },
+        where: {
+          ...projectionScope,
+          ...(input.afterReplyJobId ? { id: { not: input.afterReplyJobId } } : {}),
+        },
         orderBy: { createdAt: 'desc' },
-        include: { draft: true, sendOutbox: true, evidences: true },
+        include: {
+          draft: true,
+          sendOutbox: true,
+          evidences: true,
+          conversation: { select: { humanActive: true } },
+        },
       });
       latestStatus = replyJob?.status ?? latestStatus;
       if (replyJob && durableProjectionReady(replyJob)) {
         const [tasks, traceEvents, invocations, assistantMessages] = await Promise.all([
           this.prisma.task.findMany({
-            where: { ...input, userTurnId: replyJob.userTurnId },
+            where: { ...projectionScope, userTurnId: replyJob.userTurnId },
             orderBy: { createdAt: 'asc' },
-            select: { id: true, intent: true, status: true, resultJson: true },
+            select: { id: true, intent: true, status: true, resultJson: true, requiredToolsJson: true },
           }),
           this.prisma.traceEvent.findMany({
-            where: { ...input, replyJobId: replyJob.id },
+            where: { ...projectionScope, replyJobId: replyJob.id },
             orderBy: { createdAt: 'asc' },
             select: { id: true, stage: true, payloadJson: true },
           }),
@@ -628,7 +982,7 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
             select: { id: true, provider: true, model: true, inputTokens: true, outputTokens: true, durationMs: true },
           }),
           this.prisma.message.findMany({
-            where: { ...input, role: { in: ['ASSISTANT', 'HUMAN'] }, createdAt: { gte: replyJob.createdAt } },
+            where: { ...projectionScope, role: { in: ['ASSISTANT', 'HUMAN'] }, createdAt: { gte: replyJob.createdAt } },
             orderBy: { sequence: 'asc' },
             select: { id: true, externalMessageId: true, contentJson: true },
           }),
@@ -643,14 +997,49 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
           await delay(this.pollMs);
           continue;
         }
+        const [knowledgeItems, evidenceProducts] = await Promise.all([
+          this.prisma.knowledgeItem.findMany({
+            where: {
+              workspaceId: input.workspaceId,
+              tenantId: input.tenantId,
+              shopId: input.shopId,
+              id: { in: replyJob.evidences.map((entry) => entry.knowledgeItemId) },
+            },
+            select: { id: true, seedKey: true },
+          }),
+          this.prisma.product.findMany({
+            where: {
+              workspaceId: input.workspaceId,
+              tenantId: input.tenantId,
+              shopId: input.shopId,
+              id: { in: replyJob.evidences.flatMap((entry) => entry.productId ? [entry.productId] : []) },
+            },
+            select: { id: true, seedKey: true },
+          }),
+        ]);
+        const knowledgeKeys = new Map(knowledgeItems.map((entry) => [entry.id, entry.seedKey]));
+        const productKeys = new Map(evidenceProducts.map((entry) => [entry.id, entry.seedKey]));
+        const invalidatedReplyJobs = input.invalidatedReplyJobId
+          ? await this.prisma.replyJob.findMany({
+              where: { ...projectionScope, id: input.invalidatedReplyJobId },
+              select: {
+                id: true,
+                sendOutbox: { select: { status: true, receiptJson: true } },
+              },
+            })
+          : [];
+        const oldReplySent = invalidatedReplyJobs.some((entry) => entry.sendOutbox?.status === 'SENT'
+          && Boolean(stringField(record(entry.sendOutbox.receiptJson), 'externalMessageId')));
         return {
           workspaceId: input.workspaceId,
           conversationId: input.conversationId,
+          oldReplySent,
           replyJob: {
             id: replyJob.id,
             userTurnId: replyJob.userTurnId,
             status: replyJob.status,
             mode: replyJob.mode,
+            conversationHumanActive: replyJob.conversation?.humanActive ?? false,
             draft: replyJob.draft ? {
               id: replyJob.draft.id,
               aiDraft: replyJob.draft.aiDraft,
@@ -673,6 +1062,8 @@ export class PrismaProductionReplyEvalPort implements ProductionReplyEvalPort {
             productId: entry.productId,
             retrievalScore: entry.retrievalScore,
             retrievedContentSnapshotJson: entry.retrievedContentSnapshotJson,
+            knowledgeKey: knowledgeKeys.get(entry.knowledgeItemId),
+            productKey: entry.productId ? productKeys.get(entry.productId) ?? null : null,
           })),
           traceEvents,
           invocations,
@@ -770,7 +1161,11 @@ export function projectProductionReplyExecution(
       sourceType: entry.sourceType,
       text: textFromJson(entry.retrievedContentSnapshotJson),
       retrievalScore: entry.retrievalScore,
+      ...(entry.knowledgeKey ? { knowledgeKey: entry.knowledgeKey } : {}),
+      ...(entry.productKey !== undefined ? { productKey: entry.productKey } : {}),
     })),
+    tools: unique(projection.tasks.flatMap((task) => stringArray(task.requiredToolsJson))),
+    taskDetails: projection.tasks.map((task) => ({ intent: task.intent, status: task.status, result: task.resultJson })),
     provider: uniformValue(linkedInvocations.map((invocation) => invocation.provider)),
     model: uniformValue(linkedInvocations.map((invocation) => invocation.model)),
     inputTokens: sum(linkedInvocations.map((invocation) => invocation.inputTokens)),
@@ -779,6 +1174,7 @@ export function projectProductionReplyExecution(
     cost: null,
     outputSource: output.source,
     terminalStatus: output.status,
+    ...(projection.oldReplySent === undefined ? {} : { oldReplySent: projection.oldReplySent }),
     trace: {
       workspaceId: projection.workspaceId,
       conversationId: projection.conversationId,
@@ -801,6 +1197,10 @@ function record(value: unknown): JsonRecord {
 
 function stringField(value: JsonRecord, key: string): string | undefined {
   return typeof value[key] === 'string' && value[key] ? value[key] : undefined;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
 function textFromJson(value: unknown): string {
@@ -838,6 +1238,7 @@ function uniformValue(values: readonly string[]): string | undefined {
 }
 
 function projectedMode(replyJob: ProductionReplyEvalProjection['replyJob']): string {
+  if (replyJob.conversationHumanActive) return 'MANUAL';
   if (replyJob.draft && !['MANUAL', 'HOLD'].includes(replyJob.mode)) return 'ASSIST';
   return replyJob.mode === 'HOLD' ? 'MANUAL' : replyJob.mode;
 }
@@ -850,6 +1251,11 @@ function required<T>(value: T | undefined | null | '', code: string): T {
 function requiredInteger(value: unknown, code: string): number {
   if (!Number.isSafeInteger(value)) throw new Error(code);
   return Number(value);
+}
+
+function optionalPositiveInteger(value: unknown): number | undefined {
+  const parsed = typeof value === 'number' ? value : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function requiredPositiveNumber(value: unknown, code: string): number {
@@ -882,14 +1288,28 @@ function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+async function withTimeout<T>(promise: Promise<T>, milliseconds: number, code: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(code)), milliseconds);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
 );
 
 function imageFixtureMarker(fixture: string): string {
-  if (fixture === 'damaged_sleeve.png') return 'AICS_FIXTURE:DAMAGED_SLEEVE';
-  if (fixture === 'shipping_label.png') return 'AICS_FIXTURE:SHIPPING_LABEL';
+  if (['damaged_sleeve.png', 'product-damage.png'].includes(fixture)) return 'AICS_FIXTURE:DAMAGED_SLEEVE';
+  if (['shipping_label.png', 'shipping-label.png'].includes(fixture)) return 'AICS_FIXTURE:SHIPPING_LABEL';
   throw new Error(`EXECUTOR_UNSUPPORTED:imageFixture:${fixture}`);
 }
 

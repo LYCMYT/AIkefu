@@ -217,6 +217,11 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
 
 /** Customer-safe rendering for live facts. IDs and exact stock stay internal. */
 export function renderCustomerFactReply(intent: string, dynamic: Record<string, unknown>): string | undefined {
+  if (intent === 'PRODUCT_QUERY' && typeof dynamic.status === 'string') {
+    if (dynamic.status !== 'ON_SHELF') return '这款商品目前暂未在售。';
+    const price = liveProductPrice(dynamic.priceRange);
+    return price ? `这款商品目前在售，${price}。` : '这款商品目前在售，可以正常下单。';
+  }
   if (typeof dynamic.status === 'string' && /ORDER|LOGISTICS|SHIP/i.test(intent)) {
     const status = ORDER_STATUS_LABELS[dynamic.status] ?? '状态已更新';
     if (dynamic.status === 'SHIPPED') {
@@ -230,12 +235,55 @@ export function renderCustomerFactReply(intent: string, dynamic: Record<string, 
     }
     return `这笔订单目前${status}。`;
   }
-  if (typeof dynamic.inventory === 'number' && /SKU|INVENTORY|STOCK|PRODUCT/i.test(intent)) {
-    if (dynamic.inventory <= 0) return '这个规格目前暂时缺货，您可以看看其他规格。';
-    if (dynamic.inventory <= 5) return '这个规格目前库存较少，建议尽快下单。';
-    return '这个规格目前有现货，可以正常下单。';
+  if (/SKU|INVENTORY|STOCK|PRODUCT/i.test(intent)) {
+    const inventoryByColor = colorInventoryEntries(dynamic.inventoryByColor);
+    if (inventoryByColor.length > 0) {
+      return inventoryByColor.map(([color, inventory]) => `${color}${customerInventoryAvailability(inventory)}`).join('；');
+    }
+    if (typeof dynamic.inventory === 'number') {
+      const color = customerSkuColor(dynamic.attributes);
+      if (color) return `${color}${customerInventoryAvailability(dynamic.inventory)}`;
+      if (dynamic.inventory <= 0) return '这个规格目前暂时缺货，您可以看看其他规格。';
+      if (dynamic.inventory <= 5) return '这个规格目前库存较少，建议尽快下单。';
+      return '这个规格目前有现货，可以正常下单。';
+    }
   }
   return undefined;
+}
+
+function liveProductPrice(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const range = value as Record<string, unknown>;
+  const minimum = safeCustomerPrice(range.min);
+  const maximum = safeCustomerPrice(range.max);
+  if (!minimum || !maximum) return undefined;
+  return minimum === maximum ? `当前售价为${minimum}元` : `当前售价${minimum}-${maximum}元`;
+}
+
+function safeCustomerPrice(value: unknown): string | undefined {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1_000_000) return undefined;
+  return Number.isInteger(parsed) ? String(parsed) : parsed.toFixed(2).replace(/0+$/u, '').replace(/\.$/u, '');
+}
+
+function customerSkuColor(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const color = (value as Record<string, unknown>).color;
+  if (typeof color !== 'string') return undefined;
+  const normalized = color.replace(/[\r\n\t]+/gu, ' ').trim();
+  return normalized && normalized.length <= 20 ? normalized : undefined;
+}
+
+function colorInventoryEntries(value: unknown): Array<[string, number]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  return Object.entries(value as Record<string, unknown>)
+    .filter((entry): entry is [string, number] => entry[0].trim().length > 0 && typeof entry[1] === 'number' && Number.isFinite(entry[1]));
+}
+
+function customerInventoryAvailability(inventory: number): string {
+  if (inventory <= 0) return '目前暂时缺货';
+  if (inventory <= 5) return '目前库存较少，建议尽快下单。';
+  return '目前有现货，可以正常下单。';
 }
 
 /** Uses only the already-sanitized deterministic image analysis in UserTurn. */

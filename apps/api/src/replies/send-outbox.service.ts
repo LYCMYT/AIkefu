@@ -364,6 +364,24 @@ export class SendOutboxService {
     return updated.count;
   }
 
+  /**
+   * A claimed row has not reached transport until its start marker is durable.
+   * Restarting in that narrow pre-fence interval is safe to retry: no platform
+   * call could have happened, so preserve the original idempotency key and put
+   * it back through the normal SendGuard claim path.
+   */
+  async recoverPreTransportClaims(staleBefore: Date): Promise<number> {
+    const updated = await this.prisma.sendOutbox.updateMany({
+      where: {
+        status: 'SENDING',
+        transportStartedAt: null,
+        updatedAt: { lt: staleBefore },
+      },
+      data: { status: 'PENDING', failureCode: null, failureReason: null },
+    });
+    return updated.count;
+  }
+
   /** A failed transport after SENDING is ambiguous and must never auto-retry. */
   async markUncertain(scope: ReplyJobScope, sendOutboxId: string, failureCode = 'SEND_TRANSPORT_UNKNOWN'): Promise<boolean> {
     const updated = await this.prisma.sendOutbox.updateMany({

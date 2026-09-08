@@ -103,10 +103,34 @@ describe('reply quality primitives', () => {
     expect(renderCustomerFactReply('INVENTORY_QUERY', {
       externalSkuId: 'SKU-SECRET-1', inventory: 2,
     })).toBe('这个规格目前库存较少，建议尽快下单。');
+    expect(renderCustomerFactReply('INVENTORY_QUERY', {
+      externalSkuId: 'SKU-SECRET-2', inventory: 6, attributes: { color: '白色', size: 'L' },
+    })).toBe('白色目前有现货，可以正常下单。');
     expect(renderCustomerFactReply('LOGISTICS_QUERY', {
       externalOrderId: 'ORDER-SECRET-2', status: 'SHIPPED',
       logistics: { carrier: '京东物流', lastNode: '广州分拨中心', trackingNumber: 'TRACK-SECRET-2' },
     })).toBe('这笔订单已经发货，最新物流到达广州分拨中心。');
+  });
+
+  it('renders live product sale state and price rather than falling back to historical knowledge', () => {
+    expect(renderCustomerFactReply('PRODUCT_QUERY', {
+      status: 'ON_SHELF', priceRange: { min: '199', max: '199' },
+    })).toBe('这款商品目前在售，当前售价为199元。');
+    expect(renderCustomerFactReply('PRODUCT_QUERY', {
+      status: 'OFF_SHELF', priceRange: { min: '199', max: '269' },
+    })).toBe('这款商品目前暂未在售。');
+  });
+
+  it('renders multiple color inventory states without exposing exact stock', () => {
+    const reply = renderCustomerFactReply('SKU_INVENTORY', {
+      productId: 'product-internal-only',
+      inventoryByColor: { 黑色: 0, 白色: 7 },
+    });
+
+    expect(reply).toBe('黑色目前暂时缺货；白色目前有现货，可以正常下单。');
+    expect(reply).not.toContain('0');
+    expect(reply).not.toContain('7');
+    expect(reply).not.toContain('product-internal-only');
   });
 
   it('renders only the sanitized product-damage observation as a human-review draft fact', () => {

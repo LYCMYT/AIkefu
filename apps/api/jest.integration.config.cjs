@@ -3,6 +3,7 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   rootDir: '.',
+  setupFiles: ['<rootDir>/test/jest.integration.setup.cjs'],
   testMatch: ['<rootDir>/test/**/*.integration-spec.ts'],
   moduleNameMapper: {
     '^@ai-customer-service/contracts$': '<rootDir>/../../packages/contracts/src',

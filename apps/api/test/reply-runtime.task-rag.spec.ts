@@ -96,7 +96,7 @@ describe('ReplyRuntimeService Task-scoped RAG', () => {
     await expect(service.process(scope, 'reply-inventory')).resolves.toMatchObject({ status: 'READY_TO_SEND' });
     expect(knowledge.search).not.toHaveBeenCalled();
     expect(outboxes.enqueue).toHaveBeenCalledWith(scope, expect.objectContaining({
-      text: '这个规格目前库存较少，建议尽快下单。',
+      text: '黑色目前库存较少，建议尽快下单。',
     }));
     expect(prisma.conversation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ currentProductId: 'product-a' }),

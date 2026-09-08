@@ -1280,6 +1280,7 @@ model ReplyEvidence {
   tenantId                     String
   shopId                       String
   replyJobId                   String
+  taskKey                      String?
   knowledgeItemId              String
   knowledgeVersionId           String
   knowledgeVersionNumber       Int
@@ -1296,6 +1297,7 @@ model ReplyEvidence {
 
   @@index([workspaceId, tenantId, shopId, replyJobId])
   @@index([knowledgeItemId, knowledgeVersionId])
+  @@unique([replyJobId, taskKey, knowledgeVersionId])
 }
 
 model ReplyDraft {

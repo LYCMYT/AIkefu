@@ -25,7 +25,13 @@ describe('ReplyRecoveryService', () => {
     const service = new ReplyRecoveryService(prisma as never, sendOutboxes as never, drafts as never, runtime as never);
     const now = new Date('2026-08-29T00:01:00.000Z');
 
-    await expect(service.recoverOnce(now)).resolves.toEqual({ recoveryPending: 1, stale: 2, uncertain: 2, expiredDrafts: 1 });
+    await expect(service.recoverOnce(now)).resolves.toEqual({
+      recoveryPending: 1,
+      stale: 2,
+      preTransport: 0,
+      uncertain: 2,
+      expiredDrafts: 1,
+    });
     expect(prisma.replyJob.findMany).toHaveBeenCalledWith({
       where: expect.objectContaining({ OR: expect.arrayContaining([
         { status: 'RECOVERY_PENDING' },
@@ -100,5 +106,26 @@ describe('ReplyRecoveryService', () => {
       where: { OR: [{ status: 'RECOVERY_PENDING' }, { status: 'GENERATING', updatedAt: { lt: new Date('2026-08-29T00:00:01.000Z') } }] },
     }));
     expect(runtime.process).not.toHaveBeenCalled();
+  });
+
+  it('requeues a stale pre-transport claim before quarantining started sends as uncertain', async () => {
+    const prisma = {
+      replyJob: { findMany: jest.fn().mockResolvedValue([]) },
+      conversation: { findFirst: jest.fn() },
+    };
+    const sends = {
+      recoverPreTransportClaims: jest.fn().mockResolvedValue(1),
+      recoverUncertain: jest.fn().mockResolvedValue(2),
+    };
+    const drafts = { expireDueAll: jest.fn().mockResolvedValue(0) };
+    const service = new ReplyRecoveryService(prisma as never, sends as never, drafts as never);
+    const now = new Date('2026-09-07T00:00:00.000Z');
+    const staleBefore = new Date('2026-09-06T23:59:30.000Z');
+
+    await expect(service.recoverOnce(now)).resolves.toMatchObject({ preTransport: 1, uncertain: 2 });
+
+    expect(sends.recoverPreTransportClaims).toHaveBeenCalledWith(staleBefore);
+    expect(sends.recoverPreTransportClaims.mock.invocationCallOrder[0]!)
+      .toBeLessThan(sends.recoverUncertain.mock.invocationCallOrder[0]!);
   });
 });

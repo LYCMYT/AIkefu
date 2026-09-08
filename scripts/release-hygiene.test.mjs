@@ -54,11 +54,22 @@ test('archive filename is deterministic for a commit', () => {
 test('CI has a non-skipped real infrastructure and browser gate', () => {
   const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
   assert.match(workflow, /real-infra:/);
-  assert.match(workflow, /RUN_REAL_INFRA_INTEGRATION:\s*'0'[\s\S]*S3_ACCESS_KEY:\s*ci-demo-access[\s\S]*S3_SECRET_KEY:\s*ci-demo-secret/);
+  assert.match(workflow, /RUN_REAL_INFRA_INTEGRATION:\s*'0'[\s\S]*S3_ACCESS_KEY:\s*minioadmin[\s\S]*S3_SECRET_KEY:\s*minioadmin/);
   assert.match(workflow, /RUN_REAL_INFRA_INTEGRATION:\s*'1'/);
   assert.match(workflow, /RUN_REAL_INFRA_E2E:\s*'1'/);
   assert.match(workflow, /Build workspace libraries for runtime tests[\s\S]*@ai-customer-service\/contracts build[\s\S]*@ai-customer-service\/core build[\s\S]*@ai-customer-service\/mock-douyin build/);
   assert.match(workflow, /playwright install --with-deps chromium/);
+});
+
+test('CI keeps fixture infrastructure alive until integration tests finish', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  const configuredAt = workflow.indexOf('- name: Configure Eval V2 fixture infrastructure');
+  const integrationAt = workflow.indexOf('- name: Run integration tests (real infra opt-in)');
+  const stoppedAt = workflow.indexOf('- name: Stop Eval V2 fixture infrastructure');
+
+  assert.ok(configuredAt >= 0, 'checks job must start fixture infrastructure');
+  assert.ok(integrationAt > configuredAt, 'checks job must run integration after infrastructure starts');
+  assert.ok(stoppedAt > integrationAt, 'checks job must stop infrastructure only after integration finishes');
 });
 
 test('portfolio release documentation is complete and does not advertise localhost as public', () => {
